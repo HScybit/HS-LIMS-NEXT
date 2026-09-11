@@ -1,5 +1,6 @@
 const nextConfig = {
   poweredByHeader: false,
+  reactProductionProfiling: process.env.PROFILE_REACT === '1',
   experimental: { optimizePackageImports: ['@tabler/icons-react'] },
   async headers() {
     return [{

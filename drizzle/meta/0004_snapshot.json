@@ -1,0 +1,3423 @@
+{
+  "id": "ab409b19-9f97-4b97-8715-d034bb48ed25",
+  "prevId": "7d6502b4-02ab-4bec-8ee2-f7a90501690c",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.account_events": {
+      "name": "account_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "account_events_user_time": {
+          "name": "account_events_user_time",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "account_events_user_id_users_id_fk": {
+          "name": "account_events_user_id_users_id_fk",
+          "tableFrom": "account_events",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "account_events_organization_id_organizations_id_fk": {
+          "name": "account_events_organization_id_organizations_id_fk",
+          "tableFrom": "account_events",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "account_events_kind": {
+          "name": "account_events_kind",
+          "value": "\"account_events\".\"kind\" in ('sign_in', 'sign_out', 'profile_changed', 'password_changed', 'password_reset', 'mfa_enabled', 'mfa_disabled')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.credentials": {
+      "name": "credentials",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "credentials_user_id_users_id_fk": {
+          "name": "credentials_user_id_users_id_fk",
+          "tableFrom": "credentials",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.login_limits": {
+      "name": "login_limits",
+      "schema": "",
+      "columns": {
+        "lookup_hash": {
+          "name": "lookup_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "window_started_at": {
+          "name": "window_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.membership_roles": {
+      "name": "membership_roles",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role_id": {
+          "name": "role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "membership_roles_organization_id_user_id_memberships_organization_id_user_id_fk": {
+          "name": "membership_roles_organization_id_user_id_memberships_organization_id_user_id_fk",
+          "tableFrom": "membership_roles",
+          "columnsFrom": [
+            "organization_id",
+            "user_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "membership_roles_organization_id_role_id_roles_organization_id_id_fk": {
+          "name": "membership_roles_organization_id_role_id_roles_organization_id_id_fk",
+          "tableFrom": "membership_roles",
+          "columnsFrom": [
+            "organization_id",
+            "role_id"
+          ],
+          "tableTo": "roles",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "membership_roles_organization_id_user_id_role_id_pk": {
+          "name": "membership_roles_organization_id_user_id_role_id_pk",
+          "columns": [
+            "organization_id",
+            "user_id",
+            "role_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.memberships": {
+      "name": "memberships",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "memberships_default_user_key": {
+          "name": "memberships_default_user_key",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"memberships\".\"is_default\"",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "memberships_organization_id_organizations_id_fk": {
+          "name": "memberships_organization_id_organizations_id_fk",
+          "tableFrom": "memberships",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "memberships_user_id_users_id_fk": {
+          "name": "memberships_user_id_users_id_fk",
+          "tableFrom": "memberships",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "memberships_organization_id_user_id_pk": {
+          "name": "memberships_organization_id_user_id_pk",
+          "columns": [
+            "organization_id",
+            "user_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.organizations": {
+      "name": "organizations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "organizations_code_key": {
+          "name": "organizations_code_key",
+          "columns": [
+            {
+              "expression": "lower(\"code\")",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.password_resets": {
+      "name": "password_resets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_revision": {
+          "name": "credential_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "password_resets_token_key": {
+          "name": "password_resets_token_key",
+          "columns": [
+            {
+              "expression": "token_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "password_resets_user": {
+          "name": "password_resets_user",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "password_resets_user_id_users_id_fk": {
+          "name": "password_resets_user_id_users_id_fk",
+          "tableFrom": "password_resets",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "password_resets_hash_length": {
+          "name": "password_resets_hash_length",
+          "value": "\"password_resets\".\"token_hash\" ~ '^[a-f0-9]{64}$'"
+        },
+        "password_resets_expiry": {
+          "name": "password_resets_expiry",
+          "value": "\"password_resets\".\"expires_at\" > \"password_resets\".\"created_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.permissions": {
+      "name": "permissions",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.role_permissions": {
+      "name": "role_permissions",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role_id": {
+          "name": "role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "permission_code": {
+          "name": "permission_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "role_permissions_permission_code_permissions_code_fk": {
+          "name": "role_permissions_permission_code_permissions_code_fk",
+          "tableFrom": "role_permissions",
+          "columnsFrom": [
+            "permission_code"
+          ],
+          "tableTo": "permissions",
+          "columnsTo": [
+            "code"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "role_permissions_organization_id_role_id_roles_organization_id_id_fk": {
+          "name": "role_permissions_organization_id_role_id_roles_organization_id_id_fk",
+          "tableFrom": "role_permissions",
+          "columnsFrom": [
+            "organization_id",
+            "role_id"
+          ],
+          "tableTo": "roles",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "role_permissions_organization_id_role_id_permission_code_pk": {
+          "name": "role_permissions_organization_id_role_id_permission_code_pk",
+          "columns": [
+            "organization_id",
+            "role_id",
+            "permission_code"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.roles": {
+      "name": "roles",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "roles_name_key": {
+          "name": "roles_name_key",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"name\")",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "roles_organization_id_organizations_id_fk": {
+          "name": "roles_organization_id_organizations_id_fk",
+          "tableFrom": "roles",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "roles_organization_id_id_pk": {
+          "name": "roles_organization_id_id_pk",
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sessions": {
+      "name": "sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "csrf_hash": {
+          "name": "csrf_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_revision": {
+          "name": "credential_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "sessions_token_key": {
+          "name": "sessions_token_key",
+          "columns": [
+            {
+              "expression": "token_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "sessions_user_active": {
+          "name": "sessions_user_active",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "where": "\"sessions\".\"revoked_at\" is null",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "sessions_organization_id_user_id_memberships_organization_id_user_id_fk": {
+          "name": "sessions_organization_id_user_id_memberships_organization_id_user_id_fk",
+          "tableFrom": "sessions",
+          "columnsFrom": [
+            "organization_id",
+            "user_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "sessions_valid_expiry": {
+          "name": "sessions_valid_expiry",
+          "value": "\"sessions\".\"expires_at\" > \"sessions\".\"created_at\""
+        },
+        "sessions_hash_lengths": {
+          "name": "sessions_hash_lengths",
+          "value": "\"sessions\".\"token_hash\" ~ '^[a-f0-9]{64}$' and \"sessions\".\"csrf_hash\" ~ '^[a-f0-9]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.user_mfa": {
+      "name": "user_mfa",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "encrypted_secret": {
+          "name": "encrypted_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "last_used_step": {
+          "name": "last_used_step",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": -1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_mfa_user_id_users_id_fk": {
+          "name": "user_mfa_user_id_users_id_fk",
+          "tableFrom": "user_mfa",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "must_change_password": {
+          "name": "must_change_password",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "users_username_key": {
+          "name": "users_username_key",
+          "columns": [
+            {
+              "expression": "lower(\"username\")",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "users_email_lookup": {
+          "name": "users_email_lookup",
+          "columns": [
+            {
+              "expression": "lower(\"email\")",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "users_name_length": {
+          "name": "users_name_length",
+          "value": "length(trim(\"users\".\"display_name\")) between 1 and 200"
+        },
+        "users_username_length": {
+          "name": "users_username_length",
+          "value": "length(trim(\"users\".\"username\")) between 1 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_columns": {
+      "name": "template_columns",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "row_id": {
+          "name": "row_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "span": {
+          "name": "span",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "css_class": {
+          "name": "css_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        }
+      },
+      "indexes": {
+        "template_columns_order": {
+          "name": "template_columns_order",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "row_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "template_columns_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_columns_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_columns",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_columns_organization_id_version_id_row_id_template_rows_organization_id_version_id_id_fk": {
+          "name": "template_columns_organization_id_version_id_row_id_template_rows_organization_id_version_id_id_fk",
+          "tableFrom": "template_columns",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "row_id"
+          ],
+          "tableTo": "template_rows",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_columns_organization_id_version_id_id_pk": {
+          "name": "template_columns_organization_id_version_id_id_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "template_column_layout": {
+          "name": "template_column_layout",
+          "value": "\"template_columns\".\"position\" >= 0 and \"template_columns\".\"span\" between 0 and 12"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_expression_nodes": {
+      "name": "template_expression_nodes",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expression_id": {
+          "name": "expression_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_index": {
+          "name": "node_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parent_index": {
+          "name": "parent_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operand_order": {
+          "name": "operand_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number_literal": {
+          "name": "number_literal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "text_literal": {
+          "name": "text_literal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "boolean_literal": {
+          "name": "boolean_literal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference_field_id": {
+          "name": "reference_field_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference_scope": {
+          "name": "reference_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operator": {
+          "name": "operator",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "function_name": {
+          "name": "function_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "expression_dependencies": {
+          "name": "expression_dependencies",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reference_field_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "template_expression_nodes_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_expression_nodes_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_expression_nodes",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "expression_nodes_expression_fk": {
+          "name": "expression_nodes_expression_fk",
+          "tableFrom": "template_expression_nodes",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "expression_id"
+          ],
+          "tableTo": "template_expressions",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "expression_nodes_reference_fk": {
+          "name": "expression_nodes_reference_fk",
+          "tableFrom": "template_expression_nodes",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "reference_field_id"
+          ],
+          "tableTo": "template_fields",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "expression_nodes_parent_fk": {
+          "name": "expression_nodes_parent_fk",
+          "tableFrom": "template_expression_nodes",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "expression_id",
+            "parent_index"
+          ],
+          "tableTo": "template_expression_nodes",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "expression_id",
+            "node_index"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_expression_nodes_organization_id_version_id_expression_id_node_index_pk": {
+          "name": "template_expression_nodes_organization_id_version_id_expression_id_node_index_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "expression_id",
+            "node_index"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "expression_node_bounds": {
+          "name": "expression_node_bounds",
+          "value": "\"template_expression_nodes\".\"node_index\" between 0 and 999 and \"template_expression_nodes\".\"operand_order\" between 0 and 999 and (\"template_expression_nodes\".\"parent_index\" is null or (\"template_expression_nodes\".\"parent_index\" between 0 and 999 and \"template_expression_nodes\".\"parent_index\" <> \"template_expression_nodes\".\"node_index\"))"
+        },
+        "expression_node_payload": {
+          "name": "expression_node_payload",
+          "value": "(\n    (\"template_expression_nodes\".\"kind\" = 'number' and \"template_expression_nodes\".\"number_literal\" is not null and \"template_expression_nodes\".\"number_literal\" ~ '^(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?$') or\n    (\"template_expression_nodes\".\"kind\" = 'text' and \"template_expression_nodes\".\"text_literal\" is not null) or (\"template_expression_nodes\".\"kind\" = 'boolean' and \"template_expression_nodes\".\"boolean_literal\" is not null) or\n    (\"template_expression_nodes\".\"kind\" = 'field' and \"template_expression_nodes\".\"reference_field_id\" is not null and \"template_expression_nodes\".\"reference_scope\" in ('current', 'ancestor', 'descendants')) or\n    (\"template_expression_nodes\".\"kind\" = 'unary' and \"template_expression_nodes\".\"operator\" in ('+', '-', '%')) or\n    (\"template_expression_nodes\".\"kind\" = 'binary' and \"template_expression_nodes\".\"operator\" in ('+', '-', '*', '/', '^', '=', '<>', '<', '>', '<=', '>=')) or\n    (\"template_expression_nodes\".\"kind\" = 'call' and \"template_expression_nodes\".\"function_name\" in ('ABS', 'MIN', 'MAX', 'ROUND', 'SUM', 'AVERAGE', 'IF'))\n  ) and num_nonnulls(\"template_expression_nodes\".\"number_literal\", \"template_expression_nodes\".\"text_literal\", \"template_expression_nodes\".\"boolean_literal\", \"template_expression_nodes\".\"reference_field_id\", \"template_expression_nodes\".\"operator\", \"template_expression_nodes\".\"function_name\") = 1 and (\"template_expression_nodes\".\"kind\" = 'field' or \"template_expression_nodes\".\"reference_scope\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_expressions": {
+      "name": "template_expressions",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "field_id": {
+          "name": "field_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_expressions_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_expressions_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_expressions",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_expressions_organization_id_version_id_field_id_template_fields_organization_id_version_id_id_fk": {
+          "name": "template_expressions_organization_id_version_id_field_id_template_fields_organization_id_version_id_id_fk",
+          "tableFrom": "template_expressions",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "field_id"
+          ],
+          "tableTo": "template_fields",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_expressions_organization_id_version_id_id_pk": {
+          "name": "template_expressions_organization_id_version_id_id_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "template_expression_purpose_key": {
+          "name": "template_expression_purpose_key",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "purpose"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "template_expression_purpose": {
+          "name": "template_expression_purpose",
+          "value": "\"template_expressions\".\"purpose\" in ('calculate', 'visible', 'required')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_fields": {
+      "name": "template_fields",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "column_id": {
+          "name": "column_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "repeat_group_id": {
+          "name": "repeat_group_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "widget": {
+          "name": "widget",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_type": {
+          "name": "value_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "alias": {
+          "name": "alias",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "placeholder": {
+          "name": "placeholder",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "required": {
+          "name": "required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "editable": {
+          "name": "editable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "default_state": {
+          "name": "default_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'absent'"
+        },
+        "default_text": {
+          "name": "default_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "default_number": {
+          "name": "default_number",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "default_boolean": {
+          "name": "default_boolean",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "default_date": {
+          "name": "default_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "template_fields_alias": {
+          "name": "template_fields_alias",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "alias",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "template_fields_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_fields_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_fields",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_fields_organization_id_version_id_column_id_template_columns_organization_id_version_id_id_fk": {
+          "name": "template_fields_organization_id_version_id_column_id_template_columns_organization_id_version_id_id_fk",
+          "tableFrom": "template_fields",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "column_id"
+          ],
+          "tableTo": "template_columns",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_fields_organization_id_version_id_repeat_group_id_template_repeat_groups_organization_id_version_id_id_fk": {
+          "name": "template_fields_organization_id_version_id_repeat_group_id_template_repeat_groups_organization_id_version_id_id_fk",
+          "tableFrom": "template_fields",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "repeat_group_id"
+          ],
+          "tableTo": "template_repeat_groups",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_fields_organization_id_version_id_id_pk": {
+          "name": "template_fields_organization_id_version_id_id_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "template_column_field_key": {
+          "name": "template_column_field_key",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "column_id"
+          ],
+          "nullsNotDistinct": false
+        },
+        "template_field_type_key": {
+          "name": "template_field_type_key",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "id",
+            "value_type"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "template_field_alias": {
+          "name": "template_field_alias",
+          "value": "\"template_fields\".\"alias\" ~ '^[A-Za-z0-9_]*$' and length(\"template_fields\".\"alias\") <= 200"
+        },
+        "template_widget_type": {
+          "name": "template_widget_type",
+          "value": "(\"template_fields\".\"widget\" in ('text_widget', 'input_widget', 'paragraph_widget') and \"template_fields\".\"value_type\" = 'text') or (\"template_fields\".\"widget\" in ('number_widget', 'formula_widget') and \"template_fields\".\"value_type\" = 'numeric') or (\"template_fields\".\"widget\" = 'checkbox_widget' and \"template_fields\".\"value_type\" = 'boolean') or (\"template_fields\".\"widget\" = 'datepicker_widget' and \"template_fields\".\"value_type\" = 'date') or (\"template_fields\".\"widget\" = 'dropdown_widget' and \"template_fields\".\"value_type\" = 'option')"
+        },
+        "template_field_default": {
+          "name": "template_field_default",
+          "value": "(\"template_fields\".\"default_state\" in ('absent', 'empty') and num_nonnulls(\"template_fields\".\"default_text\", \"template_fields\".\"default_number\", \"template_fields\".\"default_boolean\", \"template_fields\".\"default_date\") = 0) or (\"template_fields\".\"default_state\" = 'present' and num_nonnulls(\"template_fields\".\"default_text\", \"template_fields\".\"default_number\", \"template_fields\".\"default_boolean\", \"template_fields\".\"default_date\") = 1 and ((\"template_fields\".\"value_type\" = 'text' and \"template_fields\".\"default_text\" is not null) or (\"template_fields\".\"value_type\" = 'numeric' and \"template_fields\".\"default_number\" is not null and \"template_fields\".\"default_number\"::text not in ('NaN', 'Infinity', '-Infinity')) or (\"template_fields\".\"value_type\" = 'boolean' and \"template_fields\".\"default_boolean\" is not null) or (\"template_fields\".\"value_type\" = 'date' and \"template_fields\".\"default_date\" is not null)))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_instances": {
+      "name": "template_instances",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'editing'"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_instances_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_instances_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_instances",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_instances_organization_id_created_by_memberships_organization_id_user_id_fk": {
+          "name": "template_instances_organization_id_created_by_memberships_organization_id_user_id_fk",
+          "tableFrom": "template_instances",
+          "columnsFrom": [
+            "organization_id",
+            "created_by"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_instances_organization_id_id_pk": {
+          "name": "template_instances_organization_id_id_pk",
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "template_instance_version_key": {
+          "name": "template_instance_version_key",
+          "columns": [
+            "organization_id",
+            "id",
+            "version_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "template_instance_state": {
+          "name": "template_instance_state",
+          "value": "\"template_instances\".\"revision\" > 0 and \"template_instances\".\"status\" in ('editing', 'frozen')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_numeric_config": {
+      "name": "template_numeric_config",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field_id": {
+          "name": "field_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_type": {
+          "name": "value_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'numeric'"
+        },
+        "display_scale": {
+          "name": "display_scale",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pad_decimals": {
+          "name": "pad_decimals",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "minimum": {
+          "name": "minimum",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "maximum": {
+          "name": "maximum",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_numeric_config_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_numeric_config_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_numeric_config",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_numeric_config_organization_id_version_id_field_id_value_type_template_fields_organization_id_version_id_id_value_type_fk": {
+          "name": "template_numeric_config_organization_id_version_id_field_id_value_type_template_fields_organization_id_version_id_id_value_type_fk",
+          "tableFrom": "template_numeric_config",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "value_type"
+          ],
+          "tableTo": "template_fields",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id",
+            "value_type"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_numeric_config_organization_id_version_id_field_id_pk": {
+          "name": "template_numeric_config_organization_id_version_id_field_id_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "field_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "numeric_config_type": {
+          "name": "numeric_config_type",
+          "value": "\"template_numeric_config\".\"value_type\" = 'numeric' and (\"template_numeric_config\".\"display_scale\" is null or \"template_numeric_config\".\"display_scale\" between 0 and 100) and (\"template_numeric_config\".\"minimum\" is null or \"template_numeric_config\".\"maximum\" is null or \"template_numeric_config\".\"minimum\" <= \"template_numeric_config\".\"maximum\") and coalesce(\"template_numeric_config\".\"minimum\"::text, '') not in ('NaN', 'Infinity', '-Infinity') and coalesce(\"template_numeric_config\".\"maximum\"::text, '') not in ('NaN', 'Infinity', '-Infinity')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_occurrences": {
+      "name": "template_occurrences",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_revision": {
+          "name": "created_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "removed_revision": {
+          "name": "removed_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "template_root_occurrence_key": {
+          "name": "template_root_occurrence_key",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"template_occurrences\".\"group_id\" is null",
+          "concurrently": false
+        },
+        "template_occurrences_order": {
+          "name": "template_occurrences_order",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "group_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "template_occurrences_organization_id_instance_id_version_id_template_instances_organization_id_id_version_id_fk": {
+          "name": "template_occurrences_organization_id_instance_id_version_id_template_instances_organization_id_id_version_id_fk",
+          "tableFrom": "template_occurrences",
+          "columnsFrom": [
+            "organization_id",
+            "instance_id",
+            "version_id"
+          ],
+          "tableTo": "template_instances",
+          "columnsTo": [
+            "organization_id",
+            "id",
+            "version_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_occurrences_organization_id_version_id_group_id_template_repeat_groups_organization_id_version_id_id_fk": {
+          "name": "template_occurrences_organization_id_version_id_group_id_template_repeat_groups_organization_id_version_id_id_fk",
+          "tableFrom": "template_occurrences",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "group_id"
+          ],
+          "tableTo": "template_repeat_groups",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_occurrence_parent_fk": {
+          "name": "template_occurrence_parent_fk",
+          "tableFrom": "template_occurrences",
+          "columnsFrom": [
+            "organization_id",
+            "instance_id",
+            "version_id",
+            "parent_id"
+          ],
+          "tableTo": "template_occurrences",
+          "columnsTo": [
+            "organization_id",
+            "instance_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_occurrences_organization_id_instance_id_version_id_id_pk": {
+          "name": "template_occurrences_organization_id_instance_id_version_id_id_pk",
+          "columns": [
+            "organization_id",
+            "instance_id",
+            "version_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "template_occurrence_shape": {
+          "name": "template_occurrence_shape",
+          "value": "(\"template_occurrences\".\"group_id\" is null and \"template_occurrences\".\"parent_id\" is null and \"template_occurrences\".\"position\" = 0 and \"template_occurrences\".\"removed_revision\" is null) or (\"template_occurrences\".\"group_id\" is not null and \"template_occurrences\".\"parent_id\" is not null and \"template_occurrences\".\"parent_id\" <> \"template_occurrences\".\"id\" and \"template_occurrences\".\"position\" >= 0)"
+        },
+        "template_occurrence_revision": {
+          "name": "template_occurrence_revision",
+          "value": "\"template_occurrences\".\"created_revision\" > 0 and (\"template_occurrences\".\"removed_revision\" is null or \"template_occurrences\".\"removed_revision\" > \"template_occurrences\".\"created_revision\")"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_options": {
+      "name": "template_options",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field_id": {
+          "name": "field_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "value_type": {
+          "name": "value_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'option'"
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_options_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_options_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_options",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_options_organization_id_version_id_field_id_value_type_template_fields_organization_id_version_id_id_value_type_fk": {
+          "name": "template_options_organization_id_version_id_field_id_value_type_template_fields_organization_id_version_id_id_value_type_fk",
+          "tableFrom": "template_options",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "value_type"
+          ],
+          "tableTo": "template_fields",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id",
+            "value_type"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_options_organization_id_version_id_field_id_id_pk": {
+          "name": "template_options_organization_id_version_id_field_id_id_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "template_option_order_key": {
+          "name": "template_option_order_key",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "position"
+          ],
+          "nullsNotDistinct": false
+        },
+        "template_option_value_key": {
+          "name": "template_option_value_key",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "value"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "template_option_type": {
+          "name": "template_option_type",
+          "value": "\"template_options\".\"value_type\" = 'option' and \"template_options\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_repeat_groups": {
+      "name": "template_repeat_groups",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "parent_group_id": {
+          "name": "parent_group_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "row_id": {
+          "name": "row_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual'"
+        },
+        "minimum": {
+          "name": "minimum",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "maximum": {
+          "name": "maximum",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1000
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_repeat_groups_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_repeat_groups_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_repeat_groups",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_repeat_groups_organization_id_version_id_section_id_template_sections_organization_id_version_id_id_fk": {
+          "name": "template_repeat_groups_organization_id_version_id_section_id_template_sections_organization_id_version_id_id_fk",
+          "tableFrom": "template_repeat_groups",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "section_id"
+          ],
+          "tableTo": "template_sections",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_repeat_groups_organization_id_version_id_row_id_template_rows_organization_id_version_id_id_fk": {
+          "name": "template_repeat_groups_organization_id_version_id_row_id_template_rows_organization_id_version_id_id_fk",
+          "tableFrom": "template_repeat_groups",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "row_id"
+          ],
+          "tableTo": "template_rows",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_repeat_groups_organization_id_version_id_parent_group_id_template_repeat_groups_organization_id_version_id_id_fk": {
+          "name": "template_repeat_groups_organization_id_version_id_parent_group_id_template_repeat_groups_organization_id_version_id_id_fk",
+          "tableFrom": "template_repeat_groups",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "parent_group_id"
+          ],
+          "tableTo": "template_repeat_groups",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_repeat_groups_organization_id_version_id_id_pk": {
+          "name": "template_repeat_groups_organization_id_version_id_id_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "repeat_section_key": {
+          "name": "repeat_section_key",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "section_id"
+          ],
+          "nullsNotDistinct": false
+        },
+        "repeat_row_key": {
+          "name": "repeat_row_key",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "row_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "repeat_definition_shape": {
+          "name": "repeat_definition_shape",
+          "value": "num_nonnulls(\"template_repeat_groups\".\"section_id\", \"template_repeat_groups\".\"row_id\") = 1 and \"template_repeat_groups\".\"source\" = 'manual' and \"template_repeat_groups\".\"minimum\" between 0 and 1000 and \"template_repeat_groups\".\"maximum\" between greatest(1, \"template_repeat_groups\".\"minimum\") and 1000 and \"template_repeat_groups\".\"parent_group_id\" is distinct from \"template_repeat_groups\".\"id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_rows": {
+      "name": "template_rows",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "section_id": {
+          "name": "section_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "css_class": {
+          "name": "css_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        }
+      },
+      "indexes": {
+        "template_rows_order": {
+          "name": "template_rows_order",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "section_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "template_rows_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_rows_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_rows",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_rows_organization_id_version_id_section_id_template_sections_organization_id_version_id_id_fk": {
+          "name": "template_rows_organization_id_version_id_section_id_template_sections_organization_id_version_id_id_fk",
+          "tableFrom": "template_rows",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "section_id"
+          ],
+          "tableTo": "template_sections",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_rows_organization_id_version_id_id_pk": {
+          "name": "template_rows_organization_id_version_id_id_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "template_row_position": {
+          "name": "template_row_position",
+          "value": "\"template_rows\".\"position\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_sections": {
+      "name": "template_sections",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "parent_column_id": {
+          "name": "parent_column_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "css_class": {
+          "name": "css_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "x": {
+          "name": "x",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'100'"
+        },
+        "y": {
+          "name": "y",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'100'"
+        },
+        "width": {
+          "name": "width",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'100'"
+        },
+        "height": {
+          "name": "height",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'100'"
+        },
+        "visible": {
+          "name": "visible",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "is_header": {
+          "name": "is_header",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_footer": {
+          "name": "is_footer",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_final_result": {
+          "name": "is_final_result",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "source_version_id": {
+          "name": "source_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_section_id": {
+          "name": "source_section_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "template_sections_order": {
+          "name": "template_sections_order",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "version_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "parent_column_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "template_sections_organization_id_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_sections_organization_id_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_sections",
+          "columnsFrom": [
+            "organization_id",
+            "version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "section_parent_column_fk": {
+          "name": "section_parent_column_fk",
+          "tableFrom": "template_sections",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "parent_column_id"
+          ],
+          "tableTo": "template_columns",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_sections_organization_id_source_version_id_source_section_id_template_sections_organization_id_version_id_id_fk": {
+          "name": "template_sections_organization_id_source_version_id_source_section_id_template_sections_organization_id_version_id_id_fk",
+          "tableFrom": "template_sections",
+          "columnsFrom": [
+            "organization_id",
+            "source_version_id",
+            "source_section_id"
+          ],
+          "tableTo": "template_sections",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_sections_organization_id_version_id_id_pk": {
+          "name": "template_sections_organization_id_version_id_id_pk",
+          "columns": [
+            "organization_id",
+            "version_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "template_section_layout": {
+          "name": "template_section_layout",
+          "value": "\"template_sections\".\"position\" >= 0 and \"template_sections\".\"width\" > 0 and \"template_sections\".\"height\" > 0 and abs(\"template_sections\".\"x\") <= 100000 and abs(\"template_sections\".\"y\") <= 100000 and \"template_sections\".\"width\" <= 100000 and \"template_sections\".\"height\" <= 100000"
+        },
+        "template_section_provenance": {
+          "name": "template_section_provenance",
+          "value": "(\"template_sections\".\"source_version_id\" is null) = (\"template_sections\".\"source_section_id\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_values": {
+      "name": "template_values",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_id": {
+          "name": "version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field_id": {
+          "name": "field_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurrence_id": {
+          "name": "occurrence_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_type": {
+          "name": "value_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number_value": {
+          "name": "number_value",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "text_value": {
+          "name": "text_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "boolean_value": {
+          "name": "boolean_value",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "date_value": {
+          "name": "date_value",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "option_id": {
+          "name": "option_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lexical": {
+          "name": "lexical",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "saved_by": {
+          "name": "saved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "saved_at": {
+          "name": "saved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "template_value_latest": {
+          "name": "template_value_latest",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "field_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurrence_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "revision",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "template_values_organization_id_instance_id_version_id_template_instances_organization_id_id_version_id_fk": {
+          "name": "template_values_organization_id_instance_id_version_id_template_instances_organization_id_id_version_id_fk",
+          "tableFrom": "template_values",
+          "columnsFrom": [
+            "organization_id",
+            "instance_id",
+            "version_id"
+          ],
+          "tableTo": "template_instances",
+          "columnsTo": [
+            "organization_id",
+            "id",
+            "version_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_value_field_type_fk": {
+          "name": "template_value_field_type_fk",
+          "tableFrom": "template_values",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "value_type"
+          ],
+          "tableTo": "template_fields",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "id",
+            "value_type"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_value_occurrence_fk": {
+          "name": "template_value_occurrence_fk",
+          "tableFrom": "template_values",
+          "columnsFrom": [
+            "organization_id",
+            "instance_id",
+            "version_id",
+            "occurrence_id"
+          ],
+          "tableTo": "template_occurrences",
+          "columnsTo": [
+            "organization_id",
+            "instance_id",
+            "version_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_value_option_fk": {
+          "name": "template_value_option_fk",
+          "tableFrom": "template_values",
+          "columnsFrom": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "option_id"
+          ],
+          "tableTo": "template_options",
+          "columnsTo": [
+            "organization_id",
+            "version_id",
+            "field_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_values_organization_id_saved_by_memberships_organization_id_user_id_fk": {
+          "name": "template_values_organization_id_saved_by_memberships_organization_id_user_id_fk",
+          "tableFrom": "template_values",
+          "columnsFrom": [
+            "organization_id",
+            "saved_by"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_values_organization_id_instance_id_field_id_occurrence_id_revision_pk": {
+          "name": "template_values_organization_id_instance_id_field_id_occurrence_id_revision_pk",
+          "columns": [
+            "organization_id",
+            "instance_id",
+            "field_id",
+            "occurrence_id",
+            "revision"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "template_value_revision": {
+          "name": "template_value_revision",
+          "value": "\"template_values\".\"revision\" > 0 and \"template_values\".\"origin\" in ('entered', 'calculated', 'default')"
+        },
+        "template_value_payload": {
+          "name": "template_value_payload",
+          "value": "(\n    (\"template_values\".\"state\" in ('absent', 'empty', 'not_applicable', 'invalid') and num_nonnulls(\"template_values\".\"number_value\", \"template_values\".\"text_value\", \"template_values\".\"boolean_value\", \"template_values\".\"date_value\", \"template_values\".\"option_id\") = 0) or\n    (\"template_values\".\"state\" = 'present' and num_nonnulls(\"template_values\".\"number_value\", \"template_values\".\"text_value\", \"template_values\".\"boolean_value\", \"template_values\".\"date_value\", \"template_values\".\"option_id\") = 1 and (\n      (\"template_values\".\"value_type\" = 'numeric' and \"template_values\".\"number_value\" is not null and \"template_values\".\"number_value\"::text not in ('NaN', 'Infinity', '-Infinity')) or\n      (\"template_values\".\"value_type\" = 'text' and \"template_values\".\"text_value\" is not null) or (\"template_values\".\"value_type\" = 'boolean' and \"template_values\".\"boolean_value\" is not null) or\n      (\"template_values\".\"value_type\" = 'date' and \"template_values\".\"date_value\" is not null) or (\"template_values\".\"value_type\" = 'option' and \"template_values\".\"option_id\" is not null)\n    ))) and ((\"template_values\".\"state\" = 'invalid' and \"template_values\".\"error_code\" is not null and \"template_values\".\"error_message\" is not null) or (\"template_values\".\"state\" <> 'invalid' and \"template_values\".\"error_code\" is null and \"template_values\".\"error_message\" is null))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.template_versions": {
+      "name": "template_versions",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "semantics": {
+          "name": "semantics",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'meteor-number-v1'"
+        },
+        "source_version_id": {
+          "name": "source_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "frozen_at": {
+          "name": "frozen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frozen_by": {
+          "name": "frozen_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "template_one_draft_key": {
+          "name": "template_one_draft_key",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"template_versions\".\"status\" = 'draft'",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "template_versions_organization_id_template_id_templates_organization_id_id_fk": {
+          "name": "template_versions_organization_id_template_id_templates_organization_id_id_fk",
+          "tableFrom": "template_versions",
+          "columnsFrom": [
+            "organization_id",
+            "template_id"
+          ],
+          "tableTo": "templates",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_versions_organization_id_source_version_id_template_versions_organization_id_id_fk": {
+          "name": "template_versions_organization_id_source_version_id_template_versions_organization_id_id_fk",
+          "tableFrom": "template_versions",
+          "columnsFrom": [
+            "organization_id",
+            "source_version_id"
+          ],
+          "tableTo": "template_versions",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_versions_organization_id_created_by_memberships_organization_id_user_id_fk": {
+          "name": "template_versions_organization_id_created_by_memberships_organization_id_user_id_fk",
+          "tableFrom": "template_versions",
+          "columnsFrom": [
+            "organization_id",
+            "created_by"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_versions_organization_id_frozen_by_memberships_organization_id_user_id_fk": {
+          "name": "template_versions_organization_id_frozen_by_memberships_organization_id_user_id_fk",
+          "tableFrom": "template_versions",
+          "columnsFrom": [
+            "organization_id",
+            "frozen_by"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_versions_organization_id_id_pk": {
+          "name": "template_versions_organization_id_id_pk",
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "template_version_number_key": {
+          "name": "template_version_number_key",
+          "columns": [
+            "organization_id",
+            "template_id",
+            "number"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "template_version_state": {
+          "name": "template_version_state",
+          "value": "(\"template_versions\".\"status\" = 'draft' and \"template_versions\".\"frozen_at\" is null and \"template_versions\".\"frozen_by\" is null) or (\"template_versions\".\"status\" = 'frozen' and \"template_versions\".\"frozen_at\" is not null and \"template_versions\".\"frozen_by\" is not null)"
+        },
+        "template_version_metadata": {
+          "name": "template_version_metadata",
+          "value": "\"template_versions\".\"number\" > 0 and \"template_versions\".\"revision\" > 0 and length(trim(\"template_versions\".\"name\")) between 1 and 200 and length(\"template_versions\".\"description\") <= 10000 and \"template_versions\".\"kind\" in ('sample', 'datasheet', 'report', 'label', 'equipment_service_log') and \"template_versions\".\"semantics\" = 'meteor-number-v1'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.templates": {
+      "name": "templates",
+      "schema": "",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "templates_code_key": {
+          "name": "templates_code_key",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"code\")",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "templates_organization_id_organizations_id_fk": {
+          "name": "templates_organization_id_organizations_id_fk",
+          "tableFrom": "templates",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "templates_organization_id_created_by_memberships_organization_id_user_id_fk": {
+          "name": "templates_organization_id_created_by_memberships_organization_id_user_id_fk",
+          "tableFrom": "templates",
+          "columnsFrom": [
+            "organization_id",
+            "created_by"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "user_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "templates_organization_id_id_pk": {
+          "name": "templates_organization_id_id_pk",
+          "columns": [
+            "organization_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "templates_code_length": {
+          "name": "templates_code_length",
+          "value": "length(trim(\"templates\".\"code\")) between 1 and 200"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -27,8 +27,10 @@ export async function createAccount(owner, options = {}) {
     await client.query('INSERT INTO memberships(organization_id, user_id, is_default) VALUES($1, $2, $3)', [organizationId, userId, options.isDefault ?? true]);
     await client.query('INSERT INTO roles(organization_id, id, name) VALUES($1, $2, $3)', [organizationId, roleId, `Reader ${roleId}`]);
     await client.query('INSERT INTO membership_roles(organization_id, user_id, role_id) VALUES($1, $2, $3)', [organizationId, userId, roleId]);
-    await client.query("INSERT INTO permissions(code, description) VALUES('templates.read', 'Read templates') ON CONFLICT DO NOTHING");
-    await client.query("INSERT INTO role_permissions(organization_id, role_id, permission_code) VALUES($1, $2, 'templates.read')", [organizationId, roleId]);
+    for (const permission of options.permissions ?? ['templates.read']) {
+      await client.query('INSERT INTO permissions(code, description) VALUES($1, $1) ON CONFLICT DO NOTHING', [permission]);
+      await client.query('INSERT INTO role_permissions(organization_id, role_id, permission_code) VALUES($1, $2, $3)', [organizationId, roleId, permission]);
+    }
     await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }

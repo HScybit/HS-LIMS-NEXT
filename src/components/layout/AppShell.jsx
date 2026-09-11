@@ -7,15 +7,18 @@ import AppIcon from '../ui/AppIcon.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import { showToast } from '../ui/toast.jsx';
 import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
+import { PageHeaderContext } from './PageHeader.jsx';
 
 export default function AppShell({ identity, children }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isDesigner = /^\/master_template_management\/[a-f\d-]+$/i.test(pathname);
   const [collapsed, setCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [headerTarget, setHeaderTarget] = useState(null);
   const menu = useRef(null);
 
   useEffect(() => {
@@ -85,6 +88,7 @@ export default function AppShell({ identity, children }) {
         </Link>
       </div>
       <div className="sidebar-nav flex-grow-1">
+        {identity.permissions.includes('templates.read') ? <section className="sidebar-section"><div className="sidebar-label"><span>Templates</span></div><div className="d-grid gap-1"><Link href="/master_template_management" className={`sidebar-link btn text-start ${pathname.startsWith('/master_template_management') ? 'is-active' : ''}`} aria-label="Master Templates" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="file-text" size={20} /></span><span className="hide-menu">Master Templates</span></Link></div></section> : null}
         <section className="sidebar-section"><div className="sidebar-label"><span>Account</span></div>
           <div className="d-grid gap-1"><Link href="/me" className={`sidebar-link btn text-start ${pathname === '/me' ? 'is-active' : ''}`} aria-label="My Profile" onClick={() => setMobileOpen(false)}>
             <span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="user" size={20} /></span><span className="hide-menu">My Profile</span>
@@ -97,7 +101,7 @@ export default function AppShell({ identity, children }) {
     </aside>;
   }
 
-  return <div className="lims-app">
+  return <PageHeaderContext.Provider value={headerTarget}><div className={`lims-app ${isDesigner ? 'lims-app--template-designer' : ''}`}>
     <div className={`sidebar-backdrop ${mobileOpen ? 'is-visible' : ''}`} onClick={() => setMobileOpen(false)} aria-hidden="true" />
     <div className={`sidebar-shell sidebar-shell-mobile ${mobileOpen ? 'is-open' : ''}`} inert={!mobileOpen}>{navigation(true)}</div>
     <div className={`sidebar-shell sidebar-shell-desktop ${collapsed ? 'is-collapsed' : ''} ${hoverExpanded ? 'is-hover-expanded' : ''}`}
@@ -108,7 +112,7 @@ export default function AppShell({ identity, children }) {
           <div className="header-nav-toggle-wrap"><button className="header-nav-toggle btn" aria-label={mobileOpen ? 'Close navigation' : collapsed ? 'Expand navigation' : 'Collapse navigation'} aria-expanded={mobileOpen || !collapsed}
             onClick={() => { if (window.matchMedia('(max-width: 991.98px)').matches) setMobileOpen((value) => !value); else setCollapsed((value) => !value); }}><AppIcon name={mobileOpen ? 'close' : 'menu'} /></button></div>
           <div className="header-breadcrumb d-flex align-items-center"><Link href="/dashboard" className="header-home btn d-flex align-items-center" aria-label="Go to Dashboard"><AppIcon name="home" /></Link>
-            <span className="smplfy-header-breadcrumb-divider">{'>'}</span><span className="smplfy-header-breadcrumb-text is-current" aria-current="page">My Account</span>
+            <span className="smplfy-header-breadcrumb-divider">{'>'}</span><span className="smplfy-header-breadcrumb-text is-current" aria-current="page">{pathname.startsWith('/master_template_management') ? 'Master Templates' : 'My Account'}</span>
           </div>
         </div></div>
         <div className="col-auto"><div className="d-flex align-items-center gap-2"><div className="header-profile-shell" ref={menu}>
@@ -122,7 +126,8 @@ export default function AppShell({ identity, children }) {
           </div> : null}
         </div></div></div>
       </div></div></header>
+      <div className="lims-page-header-slot" ref={setHeaderTarget} />
       <div className="lims-main-content">{children}</div>
     </div>
-  </div>;
+  </div></PageHeaderContext.Provider>;
 }

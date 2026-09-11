@@ -1,8 +1,19 @@
 'use client';
 
-import { useId } from 'react';
+import React, { useId } from 'react';
 import cx from 'classnames';
+import InputFieldDropdown from './InputFieldDropdown.jsx';
+import SearchableSelect from './SearchableSelect.jsx';
 import InputFieldText from './InputFieldText.jsx';
+import InputFieldTextarea from './InputFieldTextarea.jsx';
+import '../../styles/form-controls.scss';
+
+const inputByType = {
+  text: InputFieldText,
+  dropdown: InputFieldDropdown,
+  'searchable-select': SearchableSelect,
+  textarea: InputFieldTextarea,
+};
 
 export default function FormElement({
   type = 'text',
@@ -15,9 +26,9 @@ export default function FormElement({
   inputProps = {},
   className = '',
 }) {
-  if (type !== 'text') throw new Error('This control requires a supported input type.');
-  const InputComponent = InputFieldText;
+  const InputComponent = inputByType[type];
   const generatedId = useId();
+  if (!InputComponent) throw new Error(`Unsupported form input type: ${type}`);
   const inputId = inputProps.id ?? `field-${generatedId}`;
   const helperId = helperText ? `${inputId}-helper` : undefined;
   const messageId = message ? `${inputId}-message` : undefined;

@@ -7,7 +7,7 @@ let pool;
 export function getPool() {
   if (!pool) {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required.');
-    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000 });
+    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000, statement_timeout: 30_000 });
     pool.on('error', () => console.error('An idle database connection failed.'));
   }
   return pool;
