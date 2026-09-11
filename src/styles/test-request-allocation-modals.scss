@@ -1,0 +1,247 @@
+.modal-dialog.smplfy-tr-allocation-modal-dialog {
+  --smplfy-modal-custom-width: 1392px;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog > .modal-content {
+  height: min(659px, calc(100vh - 40px));
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog > .modal-content .modal-header {
+  min-height: 82px;
+  padding: 20px 24px;
+  flex: 0 0 auto;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog > .modal-content .modal-title {
+  font-size: 22px;
+  line-height: 27px;
+  font-weight: 500;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body {
+  padding: 0 !important;
+  flex: 1 1 auto;
+  overflow: hidden !important;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body > .d-flex {
+  min-height: 0;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section {
+  flex-basis: calc(100% - 360px);
+  min-width: 0;
+  min-height: 0;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > :first-child {
+  padding: 24px 31px;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > :first-child dl {
+  gap: 14px;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > :first-child .row {
+  column-gap: 16px;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body dt,
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body dd {
+  font-size: 14px;
+  line-height: 17px;
+  letter-spacing: 0;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body dt {
+  width: 104px;
+  color: var(--smplfy-primitive-neutral-600);
+  font-weight: 400;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body dd {
+  color: var(--smplfy-primitive-neutral-800);
+  font-weight: 500;
+  min-width: 0;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > .border-top {
+  min-height: 0;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .nav-tabs {
+  padding: 0 31px;
+  border-bottom: 1px solid var(--smplfy-primitive-neutral-300) !important;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .nav-tabs .smplfy-nav-link.nav-link {
+  min-height: 44px;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > .border-top > .overflow-auto {
+  min-height: 0;
+  padding: 26px 24px 24px;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > .border-top > .overflow-auto .table-responsive {
+  border-color: var(--smplfy-primitive-neutral-400);
+  border-radius: 10px;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .smplfy-table.table {
+  --smplfy-table-min-width: 0;
+  --smplfy-table-head-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-table-hover-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-table-head-padding-y: 7px;
+  --smplfy-table-cell-padding-y: 7px;
+  --smplfy-table-cell-padding-x: 8px;
+  --smplfy-table-head-font-size: 12px;
+  --smplfy-table-head-line-height: 16px;
+  --smplfy-table-head-font-weight: 500;
+  --smplfy-table-cell-font-size: 14px;
+  --smplfy-table-cell-line-height: 17px;
+  --smplfy-table-cell-font-weight: 500;
+
+  width: 100%;
+  table-layout: fixed;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .smplfy-table.table > :not(caption) > * > * {
+  height: 34px;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .smplfy-table.table thead th {
+  height: 31px;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .smplfy-table.table th:first-child,
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .smplfy-table.table td:first-child {
+  width: 44px;
+  text-align: center;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .smplfy-table.table .smplfy-badge.badge {
+  white-space: nowrap;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body aside {
+  width: 360px;
+  min-height: 0;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body aside > :first-child {
+  padding: 38px 24px 0;
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body aside > .modal-footer {
+  min-height: 88px;
+  padding: 24px;
+  border-top: 1px solid var(--smplfy-primitive-neutral-300);
+}
+
+.modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body aside > .modal-footer > .smplfy-btn.btn:first-child {
+  min-width: 88px;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal {
+  --smplfy-modal-custom-width: 544px;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal > .modal-content {
+  min-height: 328px;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal > .modal-content .modal-header {
+  min-height: 82px;
+  padding: 24px;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal > .modal-content .modal-title {
+  font-size: 22px;
+  line-height: 27px;
+  font-weight: 500;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal .modal-body .d-flex.align-items-center > span {
+  font-size: 14px;
+  line-height: 17px;
+  letter-spacing: 0;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal .modal-body .d-flex.align-items-center > span:first-child {
+  color: var(--smplfy-primitive-neutral-600);
+  font-weight: 400;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal .modal-body .d-flex.align-items-center > span:last-child {
+  color: var(--smplfy-primitive-neutral-800);
+  font-weight: 600;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal .modal-footer {
+  padding: 24px;
+}
+
+.modal-dialog.smplfy-tr-job-allocation-modal .modal-footer > .smplfy-btn.btn:first-child {
+  min-width: 88px;
+}
+
+@media (max-width: 1200px) {
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section {
+    flex-basis: calc(100% - 320px);
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body aside {
+    width: 320px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .modal-dialog.smplfy-tr-allocation-modal-dialog > .modal-content {
+    height: calc(100vh - 16px);
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog > .modal-content .modal-header {
+    padding: 16px;
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body > .d-flex {
+    flex-direction: column;
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section {
+    flex-basis: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--smplfy-primitive-neutral-300);
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body aside {
+    width: 100%;
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > :first-child,
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .nav-tabs,
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > .border-top > .overflow-auto,
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body aside > :first-child,
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body aside > .modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body section > :first-child .row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body dt {
+    width: auto;
+  }
+
+  .modal-dialog.smplfy-tr-allocation-modal-dialog .modal-body .nav-tabs {
+    overflow-x: auto;
+  }
+}

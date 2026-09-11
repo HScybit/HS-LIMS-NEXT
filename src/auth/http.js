@@ -28,7 +28,7 @@ export function assertSameOrigin(request) {
   }
 }
 
-export async function readInput(request) {
+export async function readInput(request, { maxBytes = 16_384 } = {}) {
   assertSameOrigin(request);
   if (request.headers.get('content-type')?.split(';')[0].trim() !== 'application/json') throw new HttpError(415, 'invalid_content_type', 'A JSON request is required.');
   const reader = request.body?.getReader();
@@ -39,7 +39,7 @@ export async function readInput(request) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 16_384) { await reader.cancel(); throw new HttpError(413, 'input_too_large', 'Request is too large.'); }
+    if (size > maxBytes) { await reader.cancel(); throw new HttpError(413, 'input_too_large', 'Request is too large.'); }
     chunks.push(Buffer.from(value));
   }
   try {

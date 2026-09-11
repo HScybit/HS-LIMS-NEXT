@@ -71,6 +71,125 @@
       "when": 1789148620456,
       "tag": "0009_permission_query_boundaries",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789152863311,
+      "tag": "0010_vengeful_valeria_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789152897110,
+      "tag": "0011_runtime_template_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789154191743,
+      "tag": "0012_yellow_sunset_bain",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789154230375,
+      "tag": "0013_sample_workflow_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789154707881,
+      "tag": "0014_datasheet_capture_authorization",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789155270840,
+      "tag": "0015_scientific_reference_locks",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789155388608,
+      "tag": "0016_thick_caretaker",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789155446765,
+      "tag": "0017_workflow_publication_graph",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789155581299,
+      "tag": "0018_far_clint_barton",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789155613801,
+      "tag": "0019_sample_capture_ownership",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789155991103,
+      "tag": "0020_immutable_specification_locks",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789156567574,
+      "tag": "0021_allocation_template_selection",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789156982069,
+      "tag": "0022_approval_runtime_read",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789157453786,
+      "tag": "0023_laboratory_runtime_status_and_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789160787948,
+      "tag": "0024_sample_creation_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789163310137,
+      "tag": "0025_registration_reference_forms",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789163334299,
+      "tag": "0026_registration_reference_access",
+      "breakpoints": true
     }
   ]
 }

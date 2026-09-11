@@ -41,7 +41,7 @@ export async function listTemplateRows(client, identity, input = {}) {
   const latest = `WITH latest AS (SELECT DISTINCT ON (t.id) t.id, t.code, t.created_at, v.id AS version_id,
     v.name, v.description, v.kind, v.status, v.number, v.revision FROM templates t JOIN template_versions v
     ON v.organization_id = t.organization_id AND v.template_id = t.id
-    WHERE t.organization_id = $1 AND t.active ORDER BY t.id, v.number DESC)`;
+    WHERE t.organization_id = $1 AND t.active AND v.status <> 'building' ORDER BY t.id, (v.status = 'draft') DESC, v.number DESC)`;
   const count = await client.query(`${latest} SELECT count(*)::integer AS total FROM latest ${where}`, parameters);
   const pageParameters = [...parameters, pageSize, (page - 1) * pageSize];
   const rows = await client.query(`${latest} SELECT id AS _id, name, description, code AS uuid, created_at, version_id AS "versionId", kind, status

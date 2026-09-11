@@ -1,4 +1,4 @@
-import { and, eq, asc, desc } from 'drizzle-orm';
+import { and, eq, asc, desc, ne, sql } from 'drizzle-orm';
 import { database } from '../db/pool.js';
 import { HttpError } from '../auth/errors.js';
 import * as tables from '../db/template-schema.js';
@@ -24,8 +24,8 @@ export async function loadDefinition(client, organizationId, versionId, options 
     templateOptions: choices, templateExpressions: expressions, templateExpressionNodes: nodes, templateRepeatGroups: groups } = tables;
   const versionRows = await query('version', () => db.select({ version: versions, code: templates.code, active: templates.active }).from(versions)
     .innerJoin(templates, and(eq(versions.organizationId, templates.organizationId), eq(versions.templateId, templates.id)))
-    .where(and(eq(versions.organizationId, organizationId), options.templateId ? eq(versions.templateId, options.templateId) : eq(versions.id, versionId)))
-    .orderBy(desc(versions.number)));
+    .where(and(eq(versions.organizationId, organizationId), ne(versions.status, 'building'), options.templateId ? eq(versions.templateId, options.templateId) : eq(versions.id, versionId)))
+    .orderBy(desc(sql`${versions.status} = 'draft'`), desc(versions.number)));
   const selectedVersion = versionId ? versionRows.find((row) => row.version.id === versionId) : versionRows[0];
   if (!selectedVersion) throw new HttpError(404, 'template_not_found', 'Template version was not found.');
   versionId = selectedVersion.version.id;

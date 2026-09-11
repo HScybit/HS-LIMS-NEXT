@@ -158,9 +158,10 @@ export async function editTemplate(client, identity, versionId, expectedRevision
       visible: bool(command.visible ?? true, 'Visible'), isHeader: bool(command.isHeader ?? false, 'Header'), isFooter: bool(command.isFooter ?? false, 'Footer'), isFinalResult: bool(command.isFinalResult ?? false, 'Final result') })
       .where(and(scope(t.templateSections, base.organizationId, versionId), eq(t.templateSections.id, section.id)));
   } else if (command.type === 'configureColumn') {
-    fieldsOnly(command, ['type', 'id', 'span', 'cssClass', 'widget']);
+    fieldsOnly(command, ['type', 'id', 'span', 'cssClass', 'widget', 'isFinalResult']);
     const column = ownRecord(model.columnsById, command.id, 'Column');
-    await db.update(t.templateColumns).set({ span: integer(command.span, 'Column span', 0, 12), cssClass: text(command.cssClass, 'CSS class', 1000, { optional: true }) })
+    await db.update(t.templateColumns).set({ span: integer(command.span, 'Column span', 0, 12), cssClass: text(command.cssClass, 'CSS class', 1000, { optional: true }),
+      isFinalResult: command.isFinalResult === undefined ? column.isFinalResult : bool(command.isFinalResult, 'Final result') })
       .where(and(scope(t.templateColumns, base.organizationId, versionId), eq(t.templateColumns.id, command.id)));
     if (command.widget && !column.fieldId) await configureField(db, base, model, { type: 'configureField', columnId: column.id, widget: command.widget, options: [] });
     else if (command.widget && model.fieldsById[column.fieldId]?.widget !== command.widget) throw new HttpError(400, 'widget_type_change', 'Remove the current widget before changing its type.');
@@ -262,8 +263,8 @@ export async function createDraft(client, identity, sourceVersionId) {
   const { records } = await loadDefinition(client, identity.organization_id, sourceVersionId, { forFreeze: true });
   if (records.version.status !== 'frozen') throw new HttpError(400, 'invalid_source_version', 'Create a new draft from a frozen version.');
   await client.query('SELECT id FROM templates WHERE organization_id = $1 AND id = $2 FOR UPDATE', [identity.organization_id, records.version.templateId]);
-  const existing = await client.query('SELECT id, status, number FROM template_versions WHERE organization_id = $1 AND template_id = $2 ORDER BY number DESC LIMIT 1', [identity.organization_id, records.version.templateId]);
-  if (existing.rows[0].status === 'draft') throw new HttpError(409, 'draft_exists', 'This template already has an editable draft.');
+  const existing = await client.query("SELECT max(number) AS number, bool_or(status = 'draft') AS has_draft FROM template_versions WHERE organization_id = $1 AND template_id = $2", [identity.organization_id, records.version.templateId]);
+  if (existing.rows[0].has_draft) throw new HttpError(409, 'draft_exists', 'This template already has an editable draft.');
   const versionId = randomUUID();
   const db = database(client);
   await db.insert(t.templateVersions).values({ organizationId: identity.organization_id, id: versionId, templateId: records.version.templateId, number: existing.rows[0].number + 1,

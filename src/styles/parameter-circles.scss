@@ -1,0 +1,109 @@
+.parameter-circles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 228px;
+  overflow: visible;
+}
+
+.parameter-circles__item {
+  --parameter-circle-color: #d1d5db;
+  --parameter-circle-border-color: rgba(0, 0, 0, 0.05);
+  --parameter-icon-color: #0b1218;
+  position: relative;
+  z-index: 0;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--parameter-circle-color);
+  color: var(--parameter-icon-color);
+  box-shadow: inset 0 0 0 1.2px var(--parameter-circle-border-color);
+  overflow: visible;
+  text-decoration: none;
+}
+
+.parameter-circles__item:hover,
+.parameter-circles__item:focus-visible {
+  color: var(--parameter-icon-color);
+}
+
+.parameter-circles__item.is-active {
+  z-index: 20;
+}
+
+.parameter-circles__icon {
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+
+.parameter-circles__tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  min-width: 168px;
+  max-width: 240px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: #1c2126;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  opacity: 0;
+  pointer-events: none;
+  white-space: normal;
+  transform: translateX(-50%) translateY(4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  z-index: 30;
+  box-shadow: 0 10px 24px rgba(11, 18, 24, 0.22);
+}
+
+.parameter-circles__tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 14px;
+  height: 10px;
+  background: #1c2126;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  transform: translateX(-50%);
+}
+
+.parameter-circles__tooltip.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.parameter-circles__tooltip-name {
+  width: 100%;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.parameter-circles__tooltip-status {
+  width: 100%;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.74);
+  text-align: left;
+}
+
+@media (max-width: 767.98px) {
+  .parameter-circles {
+    max-width: 100%;
+  }
+}

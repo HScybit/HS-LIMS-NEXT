@@ -6,6 +6,8 @@ import { loadDefinition, loadCapture } from './loader.js';
 import { insertBatch } from './authoring.js';
 import { calculateCapture, valueKey } from './calculations.js';
 import { requirePermission, uuid, revision, fieldsOnly, decimal, bool, dateOnly, text } from './input.js';
+import { setCaptureContext, requireCaptureWrite } from './access.js';
+import { assertCaptureSize } from './runtime-limits.js';
 
 function storedValues(identity, instance, versionId, nextRevision, values) {
   return values.map((value) => ({ ...value, organizationId: identity.organization_id, instanceId: instance.id, versionId,
@@ -47,14 +49,28 @@ function initialOccurrences(model, rootId, revisionNumber) {
 }
 
 export async function createCapture(client, identity, versionId) {
-  requirePermission(identity, 'datasheets.execute'); uuid(versionId);
+  requirePermission(identity, 'datasheets.execute');
+  return initializeCapture(client, identity, versionId);
+}
+
+export async function createWorkflowCapture(client, identity, versionId) {
+  if (!['samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute'].some((permission) => identity.permission_codes?.includes(permission))) {
+    throw new HttpError(403, 'forbidden', 'You cannot initialize this capture.');
+  }
+  return initializeCapture(client, identity, versionId);
+}
+
+async function initializeCapture(client, identity, versionId) {
+  uuid(versionId);
   const { model } = await loadDefinition(client, identity.organization_id, versionId, { forFreeze: true });
   if (model.version.status !== 'frozen') throw new HttpError(400, 'unfrozen_template', 'Capture must use a frozen template version.');
   const instance = { organizationId: identity.organization_id, id: randomUUID(), versionId, createdBy: identity.user_id };
   const occurrences = initialOccurrences(model, randomUUID(), 1);
+  assertCaptureSize(model, occurrences);
   const initialValues = defaults(model, occurrences);
   const calculation = calculateCapture(model, occurrences, initialValues);
   const db = database(client);
+  await setCaptureContext(client, instance.id);
   await db.insert(templateInstances).values(instance);
   // Breadth-first order ensures the parent exists before the repeat ancestry trigger runs.
   await insertBatch(db, templateOccurrences, occurrences.map((row) => ({ ...row, organizationId: identity.organization_id, instanceId: instance.id, versionId })));
@@ -91,8 +107,17 @@ function enteredValue(model, occurrences, input) {
 }
 
 export async function saveCapture(client, identity, instanceId, expectedRevision, inputs) {
-  requirePermission(identity, 'datasheets.execute'); uuid(instanceId); revision(expectedRevision);
   if (!Array.isArray(inputs) || !inputs.length || inputs.length > 1000) throw new HttpError(400, 'invalid_values', 'Save between 1 and 1,000 values at a time.');
+  return updateCapture(client, identity, instanceId, expectedRevision, inputs);
+}
+
+export async function recalculateCapture(client, identity, instanceId, expectedRevision) {
+  return updateCapture(client, identity, instanceId, expectedRevision, []);
+}
+
+async function updateCapture(client, identity, instanceId, expectedRevision, inputs) {
+  requirePermission(identity, 'datasheets.execute'); uuid(instanceId); revision(expectedRevision);
+  await requireCaptureWrite(client, instanceId);
   const changed = await client.query(`UPDATE template_instances SET revision = revision + 1
     WHERE organization_id = $1 AND id = $2 AND revision = $3 AND status = 'editing' RETURNING version_id`, [identity.organization_id, instanceId, expectedRevision]);
   if (!changed.rowCount) throw new HttpError(409, 'stale_capture', 'This datasheet changed or was frozen. Reload before saving.');
@@ -119,6 +144,7 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
   fieldsOnly(command, ['type', 'occurrenceId', 'withData']); uuid(command.occurrenceId);
   if (!['clone', 'remove'].includes(command.type)) throw new HttpError(400, 'invalid_repeat_action', 'Select a supported repeat action.');
   if (command.withData !== undefined) bool(command.withData, 'Clone with data');
+  await requireCaptureWrite(client, instanceId);
   const nextRevision = expectedRevision + 1;
   const changed = await client.query(`UPDATE template_instances SET revision = revision + 1 WHERE organization_id = $1 AND id = $2
     AND revision = $3 AND status = 'editing' RETURNING version_id`, [identity.organization_id, instanceId, expectedRevision]);
@@ -151,6 +177,7 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
       FROM template_occurrences o WHERE o.organization_id = $1 AND o.instance_id = $2 AND o.id = $3`, [identity.organization_id, instanceId, source.id]);
     const copies = subtree.map((row) => ({ id: mapping.get(row.id), groupId: row.groupId, parentId: mapping.get(row.parentId) ?? row.parentId,
       position: row.id === source.id ? positionResult.rows[0].position : row.position, createdRevision: nextRevision }));
+    assertCaptureSize(model, [...capture.occurrences, ...copies]);
     await insertBatch(db, templateOccurrences, copies.map((row) => ({ ...row, organizationId: identity.organization_id, instanceId, versionId })));
     occurrences = [...capture.occurrences, ...copies];
     additions = command.withData ? capture.values.filter((value) => mapping.has(value.occurrenceId) && value.origin !== 'calculated')

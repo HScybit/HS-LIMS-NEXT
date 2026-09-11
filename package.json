@@ -15,12 +15,15 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=.env.local scripts/migrate.js",
     "db:seed": "node --env-file=.env.local scripts/seed.js",
+    "db:seed:lab": "node --env-file=.env.local scripts/seed-laboratory.js",
     "test": "node --test tests/unit/*.test.js",
     "test:integration": "node --env-file=.env.local --test --test-concurrency=1 tests/integration/*.test.js",
     "test:migrations": "node --env-file=.env.local scripts/verify-migrations.js",
     "test:e2e": "playwright test",
     "benchmark:templates": "node --env-file=.env.local scripts/benchmark-templates.js",
-    "benchmark:browser": "playwright test --config=playwright.performance.config.js",
+    "benchmark:datasheets": "node --env-file=.env.local scripts/benchmark-datasheets.js",
+    "benchmark:browser": "playwright test --config=playwright.performance.config.js tests/performance/designer.spec.js",
+    "benchmark:datasheet-browser": "playwright test --config=playwright.performance.config.js tests/performance/datasheets.spec.js",
     "verify": "npm run lint && npm test && npm run test:integration && npm run build && npm run test:e2e"
   },
   "dependencies": {

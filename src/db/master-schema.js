@@ -1,0 +1,125 @@
+import { sql } from 'drizzle-orm';
+import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
+import { organizations } from './schema.js';
+import { templates } from './template-schema.js';
+
+const tenant = () => uuid('organization_id').notNull().references(() => organizations.id);
+const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
+const identity = () => ({ organizationId: tenant(), id: uuid('id').notNull().defaultRandom() });
+const metadata = () => ({ code: text('code').notNull(), name: text('name').notNull(), active: boolean('active').notNull().default(true),
+  revision: integer('revision').notNull().default(1), createdAt: time('created_at').notNull().defaultNow(), updatedAt: time('updated_at').notNull().defaultNow() });
+const key = (t) => primaryKey({ columns: [t.organizationId, t.id] });
+const link = (t, column, target, name) => foreignKey({ name, columns: [t.organizationId, column], foreignColumns: [target.organizationId, target.id] });
+const named = (t, prefix) => [key(t), uniqueIndex(`${prefix}_code_key`).on(t.organizationId, sql`lower(${t.code})`),
+  check(`${prefix}_metadata`, sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 250 and ${t.revision} > 0`)];
+const finite = (column) => sql`${column} not in ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric)`;
+
+// Supporting scientific masters are scoped by their sample/test/report consumers.
+// Their management interfaces are implemented separately from sample registration.
+export const measurementUnits = pgTable('measurement_units', {
+  ...identity(), ...metadata(), symbol: text('symbol').notNull(), dimension: text('dimension'),
+}, (t) => [...named(t, 'measurement_units'), check('measurement_units_symbol', sql`length(${t.symbol}) between 1 and 32`)]);
+
+export const laboratories = pgTable('laboratories', { ...identity(), ...metadata() }, (t) => named(t, 'laboratories'));
+
+export const sampleCategories = pgTable('sample_categories', {
+  ...identity(), ...metadata(), description: text('description').notNull().default(''), abbreviation: text('abbreviation').notNull(),
+  retentionDays: integer('retention_days'), estimatedTimeInDays: integer('estimated_time_in_days').notNull().default(0),
+  enableEvents: boolean('enable_events').notNull().default(false), enableReissue: boolean('enable_reissue').notNull().default(false),
+}, (t) => [...named(t, 'sample_categories'), check('sample_categories_settings', sql`length(trim(${t.abbreviation})) between 1 and 64 and ${t.retentionDays} >= 0 and ${t.estimatedTimeInDays} >= 0`)]);
+
+export const products = pgTable('products', {
+  ...identity(), ...metadata(), description: text('description').notNull().default(''), abbreviation: text('abbreviation'), jobTemplateId: uuid('job_template_id'),
+}, (t) => [...named(t, 'products'), link(t, t.jobTemplateId, templates)]);
+
+export const productSampleCategories = pgTable('product_sample_categories', {
+  organizationId: tenant(), productId: uuid('product_id').notNull(), sampleCategoryId: uuid('sample_category_id').notNull(),
+}, (t) => [primaryKey({ columns: [t.organizationId, t.productId, t.sampleCategoryId] }), link(t, t.productId, products), link(t, t.sampleCategoryId, sampleCategories)]);
+
+// Registration uses these links to filter products; this is not a tag manager.
+export const tags = pgTable('tags', { ...identity(), ...metadata() }, (t) => named(t, 'tags'));
+export const productTags = pgTable('product_tags', {
+  organizationId: tenant(), productId: uuid('product_id').notNull(), tagId: uuid('tag_id').notNull(),
+}, (t) => [primaryKey({ columns: [t.organizationId, t.productId, t.tagId] }), link(t, t.productId, products), link(t, t.tagId, tags)]);
+
+export const customers = pgTable('customers', {
+  ...identity(), ...metadata(), legalName: text('legal_name').notNull(), abbreviation: text('abbreviation'), taxIdentifier: text('tax_identifier'),
+  creditDays: integer('credit_days').notNull().default(0),
+}, (t) => [...named(t, 'customers'), check('customers_details', sql`length(trim(${t.legalName})) between 1 and 250 and ${t.creditDays} between 0 and 3650`)]);
+
+export const customerAddresses = pgTable('customer_addresses', {
+  ...identity(), customerId: uuid('customer_id').notNull(), addressType: text('address_type').notNull(), attentionTo: text('attention_to'),
+  line1: text('line_1'), line2: text('line_2'), city: text('city'), state: text('state'), postalCode: text('postal_code'),
+  countryCode: text('country_code'), freeformAddress: text('freeform_address'), isDefault: boolean('is_default').notNull().default(false),
+}, (t) => [key(t), link(t, t.customerId, customers), uniqueIndex('customer_default_address_key').on(t.organizationId, t.customerId, t.addressType).where(sql`${t.isDefault}`),
+  check('customer_address_type', sql`${t.addressType} in ('billing', 'shipping', 'registered', 'other') and length(${t.countryCode}) = 2`),
+  check('customer_address_representation', sql`(${t.freeformAddress} is not null and length(trim(${t.freeformAddress})) between 1 and 4000
+    and num_nonnulls(${t.attentionTo}, ${t.line1}, ${t.line2}, ${t.city}, ${t.state}, ${t.postalCode}, ${t.countryCode}) = 0)
+    or (${t.freeformAddress} is null and ${t.line1} is not null and ${t.city} is not null and ${t.countryCode} is not null)`)]);
+
+export const customerContacts = pgTable('customer_contacts', {
+  ...identity(), customerId: uuid('customer_id').notNull(), name: text('name').notNull(), email: text('email'), phone: text('phone'),
+  designation: text('designation'), isPrimary: boolean('is_primary').notNull().default(false),
+}, (t) => [key(t), link(t, t.customerId, customers), uniqueIndex('customer_primary_contact_key').on(t.organizationId, t.customerId).where(sql`${t.isPrimary}`),
+  check('customer_contact_details', sql`length(trim(${t.name})) between 1 and 200 and (nullif(trim(${t.email}), '') is not null or nullif(trim(${t.phone}), '') is not null)`)]);
+
+// Quotation selection is a bounded reference dependency, not a billing module.
+export const customerQuotations = pgTable('customer_quotations', {
+  ...identity(), customerId: uuid('customer_id').notNull(), quotationNumber: text('quotation_number').notNull(),
+  quotationDate: date('quotation_date', { mode: 'string' }).notNull(), validUntil: date('valid_until', { mode: 'string' }),
+  currencyCode: text('currency_code').notNull().default('INR'), totalAmount: numeric('total_amount').notNull().default('0'),
+  status: text('status').notNull().default('approved'), createdAt: time('created_at').notNull().defaultNow(),
+}, (t) => [key(t), link(t, t.customerId, customers), unique('customer_quotation_number_key').on(t.organizationId, t.quotationNumber),
+  unique('customer_quotation_owner_key').on(t.organizationId, t.customerId, t.id), index('customer_quotation_date_idx').on(t.organizationId, t.customerId, t.quotationDate),
+  check('customer_quotation_details', sql`${t.status} in ('draft', 'approved', 'expired', 'cancelled') and ${t.totalAmount} >= 0 and ${finite(t.totalAmount)} and length(${t.currencyCode}) = 3 and (${t.validUntil} is null or ${t.validUntil} >= ${t.quotationDate})`)]);
+
+export const testParameters = pgTable('test_parameters', {
+  ...identity(), ...metadata(), description: text('description').notNull().default(''), laboratoryId: uuid('laboratory_id'), measurementUnitId: uuid('measurement_unit_id'),
+  defaultScale: integer('default_scale').notNull().default(2), masterKey: text('master_key').notNull(), schemeAbbreviation: text('scheme_abbreviation').notNull(),
+  displayOrder: integer('display_order').notNull().default(0),
+}, (t) => [...named(t, 'test_parameters'), link(t, t.laboratoryId, laboratories), link(t, t.measurementUnitId, measurementUnits),
+  uniqueIndex('test_parameter_master_key').on(t.organizationId, sql`lower(${t.masterKey})`), uniqueIndex('test_parameter_scheme_key').on(t.organizationId, sql`lower(${t.schemeAbbreviation})`),
+  check('test_parameter_display', sql`${t.defaultScale} between 0 and 12 and ${t.displayOrder} >= 0 and length(trim(${t.masterKey})) between 1 and 64 and length(trim(${t.schemeAbbreviation})) between 1 and 64`)]);
+
+export const methodsOfAnalysis = pgTable('methods_of_analysis', {
+  ...identity(), ...metadata(), description: text('description').notNull().default(''), methodUuid: text('method_uuid').notNull(),
+  decimalScale: integer('decimal_scale').notNull().default(2), parseNumber: boolean('parse_number').notNull().default(false),
+}, (t) => [...named(t, 'methods_of_analysis'), uniqueIndex('method_uuid_key').on(t.organizationId, sql`lower(${t.methodUuid})`),
+  check('method_number_settings', sql`${t.decimalScale} between 0 and 12 and length(trim(${t.methodUuid})) between 1 and 100`)]);
+
+export const parameterMethods = pgTable('parameter_methods', {
+  organizationId: tenant(), testParameterId: uuid('test_parameter_id').notNull(), methodId: uuid('method_id').notNull(), isDefault: boolean('is_default').notNull().default(false),
+}, (t) => [primaryKey({ columns: [t.organizationId, t.testParameterId, t.methodId] }), link(t, t.testParameterId, testParameters), link(t, t.methodId, methodsOfAnalysis),
+  uniqueIndex('parameter_default_method_key').on(t.organizationId, t.testParameterId).where(sql`${t.isDefault}`)]);
+
+export const decisionRules = pgTable('decision_rules', {
+  ...identity(), ...metadata(), productId: uuid('product_id').notNull(), testParameterId: uuid('test_parameter_id').notNull(), methodId: uuid('method_id'), sampleCategoryId: uuid('sample_category_id'),
+  templateId: uuid('template_id'), cutoffValue: numeric('cutoff_value').notNull().default('0'), greaterThanText: text('greater_than_text'), lessThanText: text('less_than_text'),
+  minimumText: text('minimum_text'), maximumText: text('maximum_text'), unitOfMeasure: text('unit_of_measure'), isNabl: boolean('is_nabl').notNull().default(false),
+  minimumSize: text('minimum_size'), estimatedTimeInDays: numeric('estimated_time_in_days').notNull().default('0'), estimatedCharges: numeric('estimated_charges').notNull().default('0'),
+  expressTimeInDays: numeric('express_time_in_days').notNull().default('0'), expressCharges: numeric('express_charges').notNull().default('0'),
+  resultRepresentation: text('result_representation'), defaultNarration: text('default_narration'),
+  detectableUpperLimit: numeric('detectable_upper_limit'), detectableLowerLimit: numeric('detectable_lower_limit'),
+  detectableUpperLimitText: text('detectable_upper_limit_text'), detectableLowerLimitText: text('detectable_lower_limit_text'),
+  showDetectableLimitText: boolean('show_detectable_limit_text').notNull().default(false), showStandardLimitText: boolean('show_standard_limit_text').notNull().default(false),
+  conformanceLimit: numeric('conformance_limit'), discipline: text('discipline'), ruleGroup: text('rule_group'), uniqueKey: text('unique_key'),
+}, (t) => [...named(t, 'decision_rules'), link(t, t.productId, products), link(t, t.testParameterId, testParameters), link(t, t.methodId, methodsOfAnalysis),
+  link(t, t.sampleCategoryId, sampleCategories), link(t, t.templateId, templates),
+  unique('decision_rule_scope_key').on(t.organizationId, t.productId, t.testParameterId, t.methodId, t.sampleCategoryId).nullsNotDistinct(),
+  uniqueIndex('decision_rule_unique_key').on(t.organizationId, sql`lower(${t.uniqueKey})`).where(sql`${t.uniqueKey} is not null`),
+  check('decision_rule_finite_numbers', sql`${finite(t.cutoffValue)} and ${finite(t.detectableUpperLimit)} and ${finite(t.detectableLowerLimit)} and ${finite(t.conformanceLimit)}`),
+  check('decision_rule_estimates', sql`${t.estimatedTimeInDays} >= 0 and ${finite(t.estimatedTimeInDays)} and ${t.estimatedCharges} >= 0 and ${finite(t.estimatedCharges)} and ${t.expressTimeInDays} >= 0 and ${finite(t.expressTimeInDays)} and ${t.expressCharges} >= 0 and ${finite(t.expressCharges)}`)]);
+
+export const decisionRuleLimits = pgTable('decision_rule_limits', {
+  ...identity(), decisionRuleId: uuid('decision_rule_id').notNull(), lowerLimit: numeric('lower_limit'), upperLimit: numeric('upper_limit'),
+  lowerInclusive: boolean('lower_inclusive').notNull().default(true), upperInclusive: boolean('upper_inclusive').notNull().default(true),
+  outcome: text('outcome').notNull(), narration: text('narration'), displayOrder: integer('display_order').notNull().default(0),
+}, (t) => [key(t), link(t, t.decisionRuleId, decisionRules), index('decision_rule_limits_order').on(t.organizationId, t.decisionRuleId, t.displayOrder),
+  check('decision_rule_limit_bounds', sql`num_nonnulls(${t.lowerLimit}, ${t.upperLimit}) >= 1 and ${finite(t.lowerLimit)} and ${finite(t.upperLimit)} and (${t.lowerLimit} is null or ${t.upperLimit} is null or ${t.lowerLimit} <= ${t.upperLimit}) and ${t.displayOrder} >= 0`)]);
+
+export const sampleCategoryTemplates = pgTable('sample_category_templates', {
+  organizationId: tenant(), sampleCategoryId: uuid('sample_category_id').notNull(), templateId: uuid('template_id').notNull(), purpose: text('purpose').notNull(),
+  isDefault: boolean('is_default').notNull().default(false),
+}, (t) => [primaryKey({ columns: [t.organizationId, t.sampleCategoryId, t.templateId, t.purpose] }), link(t, t.sampleCategoryId, sampleCategories), link(t, t.templateId, templates),
+  uniqueIndex('sample_category_default_template_key').on(t.organizationId, t.sampleCategoryId, t.purpose).where(sql`${t.isDefault}`),
+  check('sample_category_template_purpose', sql`${t.purpose} in ('sample', 'datasheet', 'report', 'label')`)]);

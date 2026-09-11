@@ -1,5 +1,6 @@
 import { evaluateExpression, ExpressionError } from './expressions.js';
 import { formatValueWithDecimalPoints } from './formatting.js';
+import { assertCaptureSize } from './runtime-limits.js';
 
 export const valueKey = (fieldId, occurrenceId) => `${fieldId}:${occurrenceId}`;
 
@@ -22,6 +23,7 @@ export function valuePayload(value) {
 // Shared client/server evaluation; persisted calculations are always recomputed on the server.
 export function calculateCapture(model, occurrences, savedValues) {
   if (occurrences.length > 5000) throw new ExpressionError('repeat_limit', 'Capture exceeds the supported repeat count.');
+  assertCaptureSize(model, occurrences);
   const started = performance.now();
   const byId = new Map(occurrences.map((row) => [row.id, row]));
   const values = new Map(savedValues.filter((value) => byId.has(value.occurrenceId)).map((value) => [valueKey(value.fieldId, value.occurrenceId), value]));

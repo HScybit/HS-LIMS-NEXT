@@ -9,6 +9,7 @@ import '@/styles/form-controls.scss';
 import '@/styles/checkbox.scss';
 import '@/styles/header.scss';
 import '@/styles/me-page.scss';
+import NavigationGuard from '@/components/layout/NavigationGuard.jsx';
 
 export const metadata = {
   title: { default: 'Sampleify LIMS', template: '%s | Sampleify LIMS' },
@@ -16,5 +17,5 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  return <html lang="en"><body><div id="react-target">{children}</div></body></html>;
+  return <html lang="en"><body><div id="react-target"><NavigationGuard>{children}</NavigationGuard></div></body></html>;
 }

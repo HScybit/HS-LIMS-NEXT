@@ -1,0 +1,193 @@
+'use client';
+
+import { Profiler, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import PageHeader from '../layout/PageHeader.jsx';
+import { useNavigationGuard } from '../layout/NavigationGuard.jsx';
+import PrimaryButton from '../ui/PrimaryButton.jsx';
+import SecondaryButton from '../ui/SecondaryButton.jsx';
+import { AppLoader } from '../ui/AppLoader.jsx';
+import TemplateCanvas from '../templates/TemplateCanvas.jsx';
+import { apiRequest } from '../../lib/api-client.js';
+import { createCaptureAutosave } from '../../datasheets/autosave.js';
+import { valueKey, valuePayload } from '../../templates/calculations.js';
+import '../../styles/template-designer.scss';
+import '../../styles/tr-details-page.scss';
+
+const valueProperty = { numeric: 'numberValue', text: 'textValue', boolean: 'booleanValue', date: 'dateValue', option: 'optionId' };
+const inputFor = (fieldId, occurrenceId, value) => ({ fieldId, occurrenceId, state: value === '' || value == null ? 'empty' : 'present', ...(value !== '' && value != null ? { value } : {}) });
+const indexedValues = (values) => Object.fromEntries(values.map((value) => [valueKey(value.fieldId, value.occurrenceId), value]));
+function draftValue(field, input) {
+  return { fieldId: input.fieldId, occurrenceId: input.occurrenceId, valueType: field.valueType, state: input.state, origin: 'entered',
+    ...(input.state === 'present' ? { [valueProperty[field.valueType]]: input.value } : {}) };
+}
+
+export default function DatasheetResults({ datasheetId, sampleId, requestedRevision }) {
+  const router = useRouter();
+  const navigationGuard = useNavigationGuard();
+  const [data, setData] = useState(null);
+  const [values, setValues] = useState({});
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [calculating, setCalculating] = useState(false);
+  const [reload, setReload] = useState(0);
+  const drafts = useRef(new Map());
+  const operation = useRef(false);
+  const current = useRef(null);
+  const active = useRef(true);
+  const applySaved = useCallback((result) => {
+    if (!active.current || !current.current) return;
+    const nextValues = indexedValues(result.values);
+    for (const [key, input] of drafts.current) {
+      const saved = nextValues[key];
+      if (saved?.state === input.state && (valuePayload(saved) ?? null) === (input.value ?? null)) drafts.current.delete(key);
+      else nextValues[key] = draftValue(current.current.model.fieldsById[input.fieldId], input);
+    }
+    const next = { ...current.current, validation: result.validation, capture: { ...current.current.capture, revision: result.revision, values: result.values } };
+    current.current = next; setData(next); setValues(nextValues);
+  }, []);
+  // The queue constructor only stores callbacks; applySaved runs after an awaited save.
+  // eslint-disable-next-line react-hooks/refs
+  const [autosave] = useState(() => createCaptureAutosave((_instanceId, body) => apiRequest(`/api/datasheets/${datasheetId}/values`, { method: 'PATCH', body }), applySaved));
+
+  useEffect(() => {
+    active.current = true;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ sampleId, ...(requestedRevision ? { revision: requestedRevision } : {}) });
+    performance.mark('datasheet:load-start');
+    apiRequest(`/api/datasheets/${datasheetId}?${query}`, { signal: controller.signal }).then((result) => {
+      if (controller.signal.aborted) return;
+      const start = performance.now();
+      current.current = result; drafts.current.clear();
+      autosave.reset(result.capture.instance.id, result.capture.revision, result.capture.values);
+      setData(result); setValues(indexedValues(result.capture.values)); setError('');
+      performance.measure('datasheet:state-enqueue', { start, end: performance.now() });
+      performance.mark('datasheet:data-ready');
+      performance.measure('datasheet:load', 'datasheet:load-start', 'datasheet:data-ready');
+    }).catch((failure) => { if (!controller.signal.aborted) setError(failure.message); });
+    return () => { active.current = false; controller.abort(); };
+  }, [datasheetId, sampleId, requestedRevision, autosave, reload]);
+
+  useLayoutEffect(() => {
+    if (!data) return;
+    const ready = performance.getEntriesByName('datasheet:data-ready', 'mark').at(-1);
+    if (ready) performance.measure('datasheet:data-to-commit', { start: ready.startTime, end: performance.now() });
+  }, [data]);
+
+  const persistInput = useCallback(async (input) => {
+    const result = await autosave.commit(input);
+    if (result === false) {
+      const key = valueKey(input.fieldId, input.occurrenceId); const pending = drafts.current.get(key);
+      if (pending?.state === input.state && (pending.value ?? null) === (input.value ?? null)) drafts.current.delete(key);
+    }
+    return result;
+  }, [autosave]);
+
+  const flushPending = useCallback(async () => {
+    await Promise.allSettled([...drafts.current.values()].map(persistInput));
+    await autosave.flush();
+  }, [autosave, persistInput]);
+
+  const perform = useCallback(async (action) => {
+    if (operation.current) return false;
+    operation.current = true; setBusy(true); setError('');
+    try { await flushPending(); await action(); return true; }
+    catch (failure) { if (active.current) setError(failure.message); return false; }
+    finally { operation.current = false; if (active.current) setBusy(false); }
+  }, [flushPending]);
+
+  useEffect(() => navigationGuard.register({
+    hasPending: () => operation.current || drafts.current.size > 0 || (autosave.snapshot()?.pending.length ?? 0) > 0,
+    prepareLeave: perform,
+  }), [navigationGuard, autosave, perform]);
+
+  useEffect(() => {
+    const hasPending = () => drafts.current.size > 0 || (autosave.snapshot()?.pending.length ?? 0) > 0;
+    function beforeUnload(event) {
+      if (hasPending() || operation.current) { event.preventDefault(); event.returnValue = ''; }
+    }
+    function followLink(event) {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !hasPending()) return;
+      const link = event.target.closest('a[href]');
+      if (!link || link.target === '_blank' || link.hasAttribute('download')) return;
+      const target = new URL(link.href, window.location.href);
+      if (target.origin !== window.location.origin || target.pathname === window.location.pathname && target.search === window.location.search) return;
+      event.preventDefault(); event.stopPropagation();
+      void perform(async () => router.push(`${target.pathname}${target.search}${target.hash}`));
+    }
+    window.addEventListener('beforeunload', beforeUnload);
+    document.addEventListener('click', followLink, true);
+    return () => { window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('click', followLink, true); };
+  }, [autosave, perform, router]);
+
+  const change = useCallback((fieldId, occurrenceId, value) => {
+    if (operation.current || !current.current?.canExecute) return;
+    const input = inputFor(fieldId, occurrenceId, value); const key = valueKey(fieldId, occurrenceId);
+    drafts.current.set(key, input);
+    setValues((previous) => ({ ...previous, [key]: draftValue(current.current.model.fieldsById[fieldId], input) }));
+  }, []);
+  const commit = useCallback((fieldId, occurrenceId, value) => {
+    if (operation.current || !current.current?.canExecute) return;
+    const input = inputFor(fieldId, occurrenceId, value);
+    void persistInput(input).catch((failure) => { if (active.current) setError(failure.message); });
+  }, [persistInput]);
+
+  function done() {
+    void perform(async () => router.push(`/samples/${data.datasheet.sampleId}/test_requests/${data.datasheet.testRequestId}`));
+  }
+  function calculate() {
+    void perform(async () => {
+      setCalculating(true);
+      const start = performance.now();
+      try {
+        const result = await apiRequest(`/api/datasheets/${datasheetId}/calculate`, { method: 'POST', body: { revision: autosave.snapshot().revision } });
+        autosave.reset(result.instanceId, result.revision, result.values); applySaved(result);
+        performance.measure('datasheet:calculate-save', { start, end: performance.now() });
+      } finally { if (active.current) setCalculating(false); }
+    });
+  }
+  const repeat = useCallback((command) => {
+    if (command.type === 'remove' && !window.confirm('Are you sure you want to delete this row?')) return;
+    void perform(async () => {
+      const result = await apiRequest(`/api/datasheets/${datasheetId}/repeats`, { method: 'POST', body: { revision: autosave.snapshot().revision, command } });
+      autosave.reset(result.instanceId, result.revision, result.values);
+      current.current = { ...current.current, capture: { ...current.current.capture, occurrences: result.occurrences } };
+      applySaved(result);
+    });
+  }, [applySaved, autosave, datasheetId, perform]);
+  async function refresh() {
+    if ((drafts.current.size || autosave.snapshot()?.pending.length) && !window.confirm('Reload and discard your unsaved changes?')) return;
+    if (operation.current) return;
+    operation.current = true; setBusy(true);
+    // Wait for in-flight writes, then honor the explicit discard confirmation
+    // even when the queue contains a stale-write or authorization failure.
+    try { await autosave.flush(); } catch { /* Unsaved changes were explicitly discarded. */ }
+    drafts.current.clear(); current.current = null;
+    setData(null); setValues({}); setError(''); setReload((value) => value + 1);
+    operation.current = false; setBusy(false);
+  }
+
+  if (!data) return error ? <div className="alert alert-danger m-3" role="alert">{error}<button type="button" className="btn btn-link" onClick={() => setReload((value) => value + 1)}>Retry</button></div> : <AppLoader message="Loading datasheet..." />;
+  return <>
+    <PageHeader><section className="tr-details-page-header"><div className="tr-details-page-header__title-wrap">
+      <SecondaryButton size="medium" leftIcon="chevron-left" className="tr-details-page-header__back" aria-label="Go back" disabled={busy} onClick={done} />
+      <div className="tr-details-page-header__title-copy"><div className="tr-details-page-header__title-row"><h1>Add Results</h1></div>
+        <div className="tr-details-page-header__timestamp"><span>{data.model.version.name || 'Datasheet'}</span></div></div>
+    </div><div className="tr-details-page-header__actions">
+      <SecondaryButton size="default" tone="primary" leftIcon="calculator" disabled={!data.canExecute || !data.model.calculationOrder.length || busy} onClick={calculate}>{calculating ? 'Calculating' : 'Calculate'}</SecondaryButton>
+      <PrimaryButton leftIcon="check" disabled={busy} onClick={done}>Done</PrimaryButton>
+    </div></section></PageHeader>
+    <main className="tr-details-page tr-details-page--single-method tr-details-results-page" aria-busy={busy}>
+      <section className="tr-details-page__content"><div className="tr-details-report-surface">
+        {error ? <div className="alert alert-danger mb-3" role="alert">{error}
+          <button type="button" className="btn btn-link" disabled={busy} onClick={() => { void perform(async () => autosave.retry()); }}>Retry save</button>
+          <button type="button" className="btn btn-link" disabled={busy} onClick={refresh}>Reload</button>
+        </div> : null}
+        <div className="tr-details-template"><Profiler id="datasheet-canvas" onRender={(_id, phase, duration, _base, start) => performance.measure(`datasheet:react-${phase}`, { start, duration })}>
+          <TemplateCanvas model={data.model} mode={data.canExecute ? 'edit' : 'view'} values={values} validation={data.validation}
+            occurrences={data.capture.occurrences} onChange={change} onCommit={commit} onRepeat={repeat} busy={busy} />
+        </Profiler></div>
+      </div></section>
+    </main>
+  </>;
+}

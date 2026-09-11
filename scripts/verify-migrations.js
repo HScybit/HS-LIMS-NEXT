@@ -11,6 +11,12 @@ import { createAnalyticalTemplate } from '../tests/helpers/templates.js';
 import { freezeTemplate } from '../src/templates/authoring.js';
 import { createCapture } from '../src/templates/capture.js';
 import { loadCapture, loadDefinition } from '../src/templates/loader.js';
+import { createLaboratoryFixture } from '../tests/helpers/laboratory.js';
+import { quickCreateCustomer } from '../src/samples/customer.js';
+import { registerSample } from '../src/samples/register.js';
+import { loadSample } from '../src/samples/load.js';
+import { generateTestRequests } from '../src/test-requests/generate.js';
+import { allocateTestRequest } from '../src/test-requests/allocate.js';
 
 const ownerUrl = new URL(process.env.MIGRATION_DATABASE_URL);
 const appUrl = new URL(process.env.DATABASE_URL);
@@ -45,7 +51,7 @@ try {
   const role = (await getPool().query('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')).rows[0];
   assert.deepEqual(role, { rolsuper: false, rolbypassrls: false });
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
-  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute'] });
+  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate'] });
   const session = await signIn({ identifier: account.username, password: account.password });
   await withSession(session.token, async (client, identity) => {
     const template = await createAnalyticalTemplate(client, identity);
@@ -57,9 +63,21 @@ try {
     assert.equal(loaded.instance.version_id, template.versionId);
     assert.equal(loaded.occurrences.length, 3);
   }, { csrfToken: session.csrfToken });
+  const laboratory = await createLaboratoryFixture(owner, account);
+  await withSession(session.token, async (client, identity) => {
+    const customer = await quickCreateCustomer(client, identity, { name: 'Synthetic fresh customer', legalName: 'Synthetic legal name', contactPersonName: 'Synthetic contact',
+      contactPersonEmail: 'fresh@example.invalid', contactPersonPhone: '00000000', billToAddress: 'Synthetic billing\nSecond line', shipToAddress: 'Synthetic receiving' });
+    const sample = await registerSample(client, identity, { ...laboratory.registration, sampleType: 'customer', customerId: customer.id, customerAddress: customer.addresses[0].text });
+    const generated = await generateTestRequests(client, identity, sample.id);
+    assert.equal(generated.items.length, 1);
+    const allocated = await allocateTestRequest(client, identity, generated.items[0].id, { revision: 1, assignmentType: 'analyst', assignedUserId: account.userId });
+    assert.ok(allocated.datasheetId); assert.equal(allocated.status, 'allocated');
+    const loaded = await loadSample(client, identity, sample.id);
+    assert.equal(loaded.customerName, customer.name); assert.equal(loaded.products[0].tests[0].requestStatus, 'allocated');
+  }, { csrfToken: session.csrfToken });
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication/template capture passed with RLS. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration and allocation passed with RLS. Synthetic database retained: ${databaseName}`);
 } finally {
   await closePool();
   await owner?.end();

@@ -1,0 +1,3 @@
+ALTER TABLE "samples" ADD COLUMN "template_instance_id" uuid;--> statement-breakpoint
+ALTER TABLE "samples" ADD CONSTRAINT "samples_organization_id_template_instance_id_template_instances_organization_id_id_fk" FOREIGN KEY ("organization_id","template_instance_id") REFERENCES "public"."template_instances"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "samples" ADD CONSTRAINT "sample_template_instance_key" UNIQUE("organization_id","template_instance_id");

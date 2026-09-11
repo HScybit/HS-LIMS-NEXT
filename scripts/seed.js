@@ -29,7 +29,7 @@ try {
       await tx.insert(membershipRoles).values({ userId: user.id, organizationId: organization.id, roleId: role.id });
       for (const [code, description] of [
         ['templates.read', 'Read templates'], ['templates.manage', 'Manage templates'],
-        ['samples.read', 'Read samples'], ['samples.manage', 'Manage samples'],
+        ['samples.read', 'Read samples'], ['samples.create', 'Create samples'], ['samples.manage', 'Manage samples'],
         ['datasheets.execute', 'Enter datasheet results'],
       ]) {
         await tx.insert(permissions).values({ code, description }).onConflictDoNothing();

@@ -1898,6 +1898,10 @@ button.smplfy-header-breadcrumb-text:active {
   gap: 8px;
 }
 
+.sample-form-products {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .sample-form-image-preview {
   max-width: 160px;
   max-height: 80px;

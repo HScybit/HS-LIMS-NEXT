@@ -1,0 +1,442 @@
+.smplfy-tr-listing-header {
+  min-height: 72px;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.smplfy-tr-listing-header .smplfy-btn.btn[aria-label="Go back"],
+.smplfy-tr-listing-header .smplfy-btn.btn[aria-label="Back to test request home"] {
+  width: 32px;
+  padding-inline: 0;
+}
+
+.smplfy-tr-listing-header__title,
+.smplfy-tr-listing-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.smplfy-tr-listing-header__title {
+  min-width: 0;
+}
+
+.smplfy-tr-listing-header__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.smplfy-tr-listing-header h1 {
+  color: var(--smplfy-primitive-neutral-800);
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+@media (max-width: 575.98px) {
+  .smplfy-tr-listing-header {
+    align-items: flex-start;
+  }
+
+  .smplfy-tr-listing-header__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+.smplfy-tr-listing-page {
+  gap: 16px !important;
+  padding: 24px;
+  background: var(--smplfy-primitive-neutral-200);
+}
+
+.smplfy-tr-refresh-indicator {
+  min-height: 32px;
+  padding: 7px 24px;
+  border-bottom: 1px solid var(--smplfy-primitive-neutral-300);
+  background: var(--smplfy-primitive-blue-50, #eef6ff);
+  color: var(--smplfy-primitive-blue-700, #0b5cab);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.smplfy-tr-listing-search {
+  min-height: 88px;
+  padding: 0;
+}
+
+.smplfy-tr-listing-search > .container-fluid,
+.smplfy-tr-listing-search > .container-fluid > .row {
+  min-height: 88px;
+}
+
+.smplfy-tr-listing-search .input-group {
+  width: 100%;
+  height: var(--smplfy-field-height);
+  border: var(--smplfy-field-border-width) solid var(--smplfy-field-border-default);
+  border-radius: var(--smplfy-field-radius);
+  background: var(--smplfy-primitive-neutral-100);
+  overflow: hidden;
+}
+
+.smplfy-tr-listing-search .input-group .input-group-text {
+  padding: 0 0 0 var(--smplfy-field-padding-inline-compact);
+  border: 0;
+  background: transparent;
+}
+
+.smplfy-tr-listing-search .input-group .smplfy-form-control.form-control {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding:
+    0
+    var(--smplfy-field-padding-inline-compact)
+    0
+    var(--smplfy-field-padding-inline-compact);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.smplfy-tr-listing-search .input-group .smplfy-btn.btn {
+  --smplfy-button-current-height: var(--smplfy-field-height);
+
+  width: var(--smplfy-field-height);
+  min-width: var(--smplfy-field-height);
+  border-radius: 0;
+}
+
+.smplfy-tr-listing-search .btn-link {
+  --smplfy-button-current-height: var(--smplfy-field-height);
+  --bs-btn-color: var(--smplfy-primitive-neutral-700);
+  --bs-btn-hover-color: var(--smplfy-primitive-neutral-800);
+  --bs-btn-active-color: var(--smplfy-primitive-neutral-800);
+  --bs-btn-focus-box-shadow: none;
+}
+
+.smplfy-tr-listing-filter-pills {
+  padding: 0 0 16px;
+}
+
+.smplfy-tr-listing-filter-pills .badge {
+  min-height: var(--smplfy-status-pill-height);
+  padding:
+    var(--smplfy-status-pill-padding-y)
+    var(--smplfy-status-pill-padding-x);
+  border-radius: var(--smplfy-badge-radius-pill);
+  font-size: var(--smplfy-nav-link-font-size);
+  line-height: var(--smplfy-nav-link-line-height);
+  font-weight: 500;
+}
+
+.smplfy-tr-listing-filter-pills .btn-close {
+  --bs-btn-close-opacity: 1;
+  --bs-btn-close-hover-opacity: 1;
+  --bs-btn-close-focus-shadow: none;
+
+  width: var(--smplfy-status-pill-height);
+  height: var(--smplfy-status-pill-height);
+  padding: 0;
+  background-size: 10px auto;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card {
+  border-radius: 8px;
+  padding: 0;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card > .card-header {
+  --bs-card-cap-bg: transparent;
+
+  min-height: auto;
+  padding: 24px;
+  margin-bottom: 0;
+  border-bottom-color: var(--smplfy-primitive-neutral-300);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card > .card-header:not(:has(.smplfy-btn)) {
+  padding-block: 18px;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card > .card-header > .smplfy-btn.btn {
+  align-self: center;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card > .card-body {
+  padding: 16px 24px 24px;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card > .card-header + .card-body {
+  padding-top: 0;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .table-responsive:has(> .smplfy-table.table) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table {
+  --smplfy-table-min-width: 0;
+  --smplfy-table-head-bg: transparent;
+  --smplfy-table-hover-bg: transparent;
+  --smplfy-table-border: transparent;
+  --smplfy-table-cell-padding-y: 0;
+  --smplfy-table-cell-padding-x: 8px;
+  --smplfy-table-head-padding-y: 8px;
+  --smplfy-table-head-font-size: 12px;
+  --smplfy-table-head-line-height: 16px;
+  --smplfy-table-head-font-weight: 500;
+  --smplfy-table-cell-font-size: 14px;
+  --smplfy-table-cell-line-height: 18px;
+  --smplfy-table-cell-font-weight: 500;
+  --smplfy-table-link-font-size: 16px;
+  --smplfy-table-link-font-weight: 600;
+
+  width: 100%;
+  table-layout: fixed;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table th,
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table td {
+  border-bottom-color: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table thead th {
+  height: 28px;
+  background: transparent;
+  color: var(--smplfy-primitive-neutral-600);
+  letter-spacing: 0;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table tbody td {
+  height: 41px;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table tbody td:has(.smplfy-tr-state-transition) {
+  height: 41px;
+  overflow: hidden;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table {
+  --smplfy-table-min-width: 1320px;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table {
+  --smplfy-table-min-width: 980px;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table:has(.smplfy-tr-job-col-sample) {
+  --smplfy-table-min-width: 1120px;
+}
+
+.smplfy-tr-status-cell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.smplfy-tr-status-cell .smplfy-status-pill.smplfy-badge.badge {
+  box-sizing: border-box;
+  min-width: 104px;
+  max-width: 136px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.smplfy-tr-state-transition {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+.smplfy-tr-state-transition .smplfy-tr-transition-pill {
+  min-width: 104px;
+  max-width: 136px;
+  flex: 0 1 auto;
+}
+
+.smplfy-tr-state-transition > .smplfy-icon {
+  flex: 0 0 auto;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table th:first-child,
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table td:first-child {
+  padding-left: 0;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table th:last-child,
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table td:last-child {
+  width: 164px;
+  padding-right: 0;
+  overflow: visible;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card .smplfy-table.table td:last-child > .d-flex {
+  width: 164px;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table th:nth-child(1),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table td:nth-child(1) {
+  width: 18%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table th:nth-child(2),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table td:nth-child(2) {
+  width: 280px;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table th:nth-child(3),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table td:nth-child(3),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table th:nth-child(4),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table td:nth-child(4),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table th:nth-child(5),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table td:nth-child(5) {
+  width: 13%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table th:nth-child(6),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table td:nth-child(6) {
+  width: 8%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table th:nth-child(7),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card .smplfy-table.table td:nth-child(7) {
+  width: 11%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table th:nth-child(1),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table td:nth-child(1) {
+  width: 48px;
+  padding-inline: 0;
+  text-align: center;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table {
+  --smplfy-table-min-width: 1360px;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table th:nth-child(2),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table td:nth-child(2) {
+  width: 20%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table th:nth-child(3),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table td:nth-child(3) {
+  width: 280px;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table th:nth-child(4),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table td:nth-child(4),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table th:nth-child(5),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table td:nth-child(5),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table th:nth-child(6),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table td:nth-child(6) {
+  width: 14%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table th:nth-child(7),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table td:nth-child(7) {
+  width: 8%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table th:nth-child(8),
+.smplfy-tr-listing-page > .smplfy-tr-requests-card.smplfy-card.card > .card-body:has(> .d-flex:first-child) .smplfy-table.table td:nth-child(8) {
+  width: 13%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table .smplfy-tr-job-col-id {
+  width: 22%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table .smplfy-tr-job-col-sample {
+  width: 220px;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table .smplfy-tr-job-col-status,
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table .smplfy-tr-job-col-product {
+  width: 18%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table .smplfy-tr-job-col-age,
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table .smplfy-tr-job-col-reporting {
+  width: 13%;
+}
+
+.smplfy-tr-listing-page > .smplfy-tr-jobs-card.smplfy-card.card .smplfy-table.table .smplfy-tr-job-col-action {
+  width: 164px;
+  overflow: visible;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card > .card-body > .d-flex:first-child {
+  min-height: 56px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom-color: var(--smplfy-primitive-neutral-300);
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card > .card-body > .d-flex:first-child > .d-flex:first-child {
+  gap: 16px !important;
+}
+
+.smplfy-tr-listing-page > .smplfy-card.card > .card-body > .d-flex:first-child > .d-flex:last-child {
+  gap: 8px !important;
+}
+
+@media (max-width: 1200px) {
+  .smplfy-tr-listing-page {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .smplfy-tr-listing-header {
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .smplfy-tr-listing-header h1 {
+    font-size: 20px;
+  }
+
+  .smplfy-tr-listing-page {
+    padding: 12px;
+  }
+
+  .smplfy-tr-listing-page > .smplfy-card.card > .card-body > .d-flex:first-child {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+
+  .smplfy-tr-listing-page > .smplfy-card.card > .card-body > .d-flex:first-child > .d-flex:first-child {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+
+  .smplfy-tr-listing-page > .smplfy-card.card > .card-body > .d-flex:first-child > .d-flex:last-child {
+    justify-content: flex-end;
+  }
+
+}

@@ -8,11 +8,15 @@ import SecondaryButton from '../ui/SecondaryButton.jsx';
 import { showToast } from '../ui/toast.jsx';
 import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
 import { PageHeaderContext } from './PageHeader.jsx';
+import { useNavigationGuard } from './NavigationGuard.jsx';
 
 export default function AppShell({ identity, children }) {
   const router = useRouter();
+  const navigationGuard = useNavigationGuard();
   const pathname = usePathname();
   const isDesigner = /^\/master_template_management\/[a-f\d-]+$/i.test(pathname);
+  const pageLabel = pathname.includes('/data_sheets/') ? 'Add Results' : pathname.includes('/test_requests/') ? 'Test Request'
+    : pathname.startsWith('/samples') ? 'Samples' : pathname.startsWith('/master_template_management') ? 'Master Templates' : 'My Account';
   const [collapsed, setCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -69,10 +73,12 @@ export default function AppShell({ identity, children }) {
     if (signingOut) return;
     setSigningOut(true);
     try {
-      await apiRequest('/api/auth/logout', { method: 'POST', body: {} });
-      notifySessionChange();
-      router.replace('/login');
-      router.refresh();
+      await navigationGuard.prepareLeave(async () => {
+        await apiRequest('/api/auth/logout', { method: 'POST', body: {} });
+        notifySessionChange();
+        router.replace('/login');
+        router.refresh();
+      });
     } catch (error) {
       if (error.status === 401) { router.replace('/login'); router.refresh(); }
       else showToast(error.message, 'error');
@@ -88,6 +94,7 @@ export default function AppShell({ identity, children }) {
         </Link>
       </div>
       <div className="sidebar-nav flex-grow-1">
+        {identity.permissions.some((permission) => ['samples.read', 'samples.create'].includes(permission)) ? <section className="sidebar-section"><div className="sidebar-label"><span>Samples</span></div><div className="d-grid gap-1"><Link href={identity.permissions.includes('samples.read') ? '/samples' : '/samples/new'} className={`sidebar-link btn text-start ${pathname.startsWith('/samples') ? 'is-active' : ''}`} aria-label="Samples" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="fa-flask" size={20} /></span><span className="hide-menu">Samples</span></Link></div></section> : null}
         {identity.permissions.includes('templates.read') ? <section className="sidebar-section"><div className="sidebar-label"><span>Templates</span></div><div className="d-grid gap-1"><Link href="/master_template_management" className={`sidebar-link btn text-start ${pathname.startsWith('/master_template_management') ? 'is-active' : ''}`} aria-label="Master Templates" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="file-text" size={20} /></span><span className="hide-menu">Master Templates</span></Link></div></section> : null}
         <section className="sidebar-section"><div className="sidebar-label"><span>Account</span></div>
           <div className="d-grid gap-1"><Link href="/me" className={`sidebar-link btn text-start ${pathname === '/me' ? 'is-active' : ''}`} aria-label="My Profile" onClick={() => setMobileOpen(false)}>
@@ -112,7 +119,7 @@ export default function AppShell({ identity, children }) {
           <div className="header-nav-toggle-wrap"><button className="header-nav-toggle btn" aria-label={mobileOpen ? 'Close navigation' : collapsed ? 'Expand navigation' : 'Collapse navigation'} aria-expanded={mobileOpen || !collapsed}
             onClick={() => { if (window.matchMedia('(max-width: 991.98px)').matches) setMobileOpen((value) => !value); else setCollapsed((value) => !value); }}><AppIcon name={mobileOpen ? 'close' : 'menu'} /></button></div>
           <div className="header-breadcrumb d-flex align-items-center"><Link href="/dashboard" className="header-home btn d-flex align-items-center" aria-label="Go to Dashboard"><AppIcon name="home" /></Link>
-            <span className="smplfy-header-breadcrumb-divider">{'>'}</span><span className="smplfy-header-breadcrumb-text is-current" aria-current="page">{pathname.startsWith('/master_template_management') ? 'Master Templates' : 'My Account'}</span>
+            <span className="smplfy-header-breadcrumb-divider">{'>'}</span><span className="smplfy-header-breadcrumb-text is-current" aria-current="page">{pageLabel}</span>
           </div>
         </div></div>
         <div className="col-auto"><div className="d-flex align-items-center gap-2"><div className="header-profile-shell" ref={menu}>
