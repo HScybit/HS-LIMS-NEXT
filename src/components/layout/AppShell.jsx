@@ -1,0 +1,128 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import AppIcon from '../ui/AppIcon.jsx';
+import SecondaryButton from '../ui/SecondaryButton.jsx';
+import { showToast } from '../ui/toast.jsx';
+import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
+
+export default function AppShell({ identity, children }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const menu = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    let pending = false;
+    const controller = new AbortController();
+    const expected = JSON.stringify(identity);
+    async function refreshIdentity() {
+      if (pending || document.visibilityState === 'hidden') return;
+      pending = true;
+      try {
+        const result = await apiRequest('/api/auth/session', { signal: controller.signal });
+        // A different identity must discard all prior client state, including cached scientific values.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        if (active && result.identity.userId !== identity.userId) { window.location.assign('/me'); return; }
+        if (active && JSON.stringify(result.identity) !== expected) router.refresh();
+      } catch (error) {
+        if (active && error.status === 401) { router.replace('/login'); router.refresh(); }
+      } finally { pending = false; }
+    }
+    const interval = window.setInterval(refreshIdentity, 20_000);
+    const channel = 'BroadcastChannel' in window ? new BroadcastChannel('sampleify_session') : null;
+    if (channel) channel.onmessage = refreshIdentity;
+    document.addEventListener('visibilitychange', refreshIdentity);
+    window.addEventListener('focus', refreshIdentity);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearInterval(interval);
+      channel?.close();
+      document.removeEventListener('visibilitychange', refreshIdentity);
+      window.removeEventListener('focus', refreshIdentity);
+    };
+  }, [identity, router]);
+
+  useEffect(() => {
+    function dismiss(event) {
+      if (event.type === 'keydown' && event.key !== 'Escape') return;
+      if (event.type === 'keydown' || !menu.current?.contains(event.target)) setMenuOpen(false);
+      if (event.type === 'keydown') setMobileOpen(false);
+    }
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', dismiss);
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', dismiss); };
+  }, []);
+
+  async function logout() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST', body: {} });
+      notifySessionChange();
+      router.replace('/login');
+      router.refresh();
+    } catch (error) {
+      if (error.status === 401) { router.replace('/login'); router.refresh(); }
+      else showToast(error.message, 'error');
+    } finally { setSigningOut(false); }
+  }
+
+  function navigation(mobile = false) {
+    return <aside className={`lims-sidebar d-flex flex-column ${!mobile && collapsed ? 'is-collapsed' : ''}`}>
+      <div className="sidebar-brand d-flex align-items-center border-bottom">
+        <Link href="/dashboard" className="brand-block d-flex align-items-center" onClick={() => setMobileOpen(false)}>
+          <img alt="Sampleify LIMS logo" src="/images/dcpl.png" className="brand-mark" />
+          <div className="brand-copy"><div>Sampleify LIMS</div></div>
+        </Link>
+      </div>
+      <div className="sidebar-nav flex-grow-1">
+        <section className="sidebar-section"><div className="sidebar-label"><span>Account</span></div>
+          <div className="d-grid gap-1"><Link href="/me" className={`sidebar-link btn text-start ${pathname === '/me' ? 'is-active' : ''}`} aria-label="My Profile" onClick={() => setMobileOpen(false)}>
+            <span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="user" size={20} /></span><span className="hide-menu">My Profile</span>
+          </Link></div>
+        </section>
+      </div>
+      <div className="sidebar-footer"><button type="button" className="sidebar-logout-btn" aria-label="Log out" onClick={logout} disabled={signingOut}>
+        <span className="sidebar-logout-btn__icon"><AppIcon name="logout" /></span><span className="sidebar-logout-btn__label hide-menu">Log out</span>
+      </button></div>
+    </aside>;
+  }
+
+  return <div className="lims-app">
+    <div className={`sidebar-backdrop ${mobileOpen ? 'is-visible' : ''}`} onClick={() => setMobileOpen(false)} aria-hidden="true" />
+    <div className={`sidebar-shell sidebar-shell-mobile ${mobileOpen ? 'is-open' : ''}`} inert={!mobileOpen}>{navigation(true)}</div>
+    <div className={`sidebar-shell sidebar-shell-desktop ${collapsed ? 'is-collapsed' : ''} ${hoverExpanded ? 'is-hover-expanded' : ''}`}
+      onMouseEnter={() => setHoverExpanded(collapsed)} onMouseLeave={() => setHoverExpanded(false)}>{navigation()}</div>
+    <div className="lims-main">
+      <header className="global-header"><div className="container-fluid h-100"><div className="row h-100 align-items-center justify-content-between gx-0">
+        <div className="col header-breadcrumb-col"><div className="header-breadcrumb-shell d-flex align-items-center">
+          <div className="header-nav-toggle-wrap"><button className="header-nav-toggle btn" aria-label={mobileOpen ? 'Close navigation' : collapsed ? 'Expand navigation' : 'Collapse navigation'} aria-expanded={mobileOpen || !collapsed}
+            onClick={() => { if (window.matchMedia('(max-width: 991.98px)').matches) setMobileOpen((value) => !value); else setCollapsed((value) => !value); }}><AppIcon name={mobileOpen ? 'close' : 'menu'} /></button></div>
+          <div className="header-breadcrumb d-flex align-items-center"><Link href="/dashboard" className="header-home btn d-flex align-items-center" aria-label="Go to Dashboard"><AppIcon name="home" /></Link>
+            <span className="smplfy-header-breadcrumb-divider">{'>'}</span><span className="smplfy-header-breadcrumb-text is-current" aria-current="page">My Account</span>
+          </div>
+        </div></div>
+        <div className="col-auto"><div className="d-flex align-items-center gap-2"><div className="header-profile-shell" ref={menu}>
+          <SecondaryButton size="large" tone="neutral" leftIcon="user" className="header-profile" aria-expanded={menuOpen} aria-haspopup="true" aria-label="User profile" onClick={() => setMenuOpen((value) => !value)}>{identity.displayName}</SecondaryButton>
+          {menuOpen ? <div className="user-dropdown" role="menu">
+            <div className="user-dropdown__profile"><span className="header-user-avatar header-user-avatar--lg" aria-hidden="true"><AppIcon name="user" size={18} /></span><div className="user-dropdown__info"><div className="user-dropdown__name">{identity.displayName}</div><div className="user-dropdown__role">{identity.roles.join(', ')}</div><div className="user-dropdown__username">{identity.username}</div></div></div>
+            <div className="user-dropdown__divider" />
+            <Link href="/me" role="menuitem" className="user-dropdown__item" onClick={() => setMenuOpen(false)}><span className="user-dropdown__item-icon"><AppIcon name="user" /></span><span><span className="user-dropdown__item-label">My Profile</span><span className="user-dropdown__item-sub">Account and security settings</span></span></Link>
+            <div className="user-dropdown__divider" />
+            <button type="button" role="menuitem" className="user-dropdown__item user-dropdown__item--danger" onClick={logout} disabled={signingOut}><span className="user-dropdown__item-icon"><AppIcon name="logout" /></span><span className="user-dropdown__item-label">Log out</span></button>
+          </div> : null}
+        </div></div></div>
+      </div></div></header>
+      <div className="lims-main-content">{children}</div>
+    </div>
+  </div>;
+}

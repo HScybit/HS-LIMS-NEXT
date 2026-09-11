@@ -1,0 +1,2178 @@
+:root {
+  --smplfy-primitive-neutral-100: #ffffff;
+  --smplfy-primitive-neutral-200: #f5f6f7;
+  --smplfy-primitive-neutral-300: #e6e8eb;
+  --smplfy-primitive-neutral-400: #d1d5db;
+  --smplfy-primitive-neutral-500: #9aa0a6;
+  --smplfy-primitive-neutral-600: #6d737e;
+  --smplfy-primitive-neutral-700: #4d5561;
+  --smplfy-primitive-neutral-800: #1c2126;
+  --smplfy-primitive-neutral-900: #0b1218;
+
+  --smplfy-primitive-blue-50: #f1f8fe;
+  --smplfy-primitive-blue-75: #eef7ff;
+  --smplfy-primitive-blue-100: #eef8fe;
+  --smplfy-primitive-blue-200: #dceffe;
+  --smplfy-primitive-blue-300: #b9dcfd;
+  --smplfy-primitive-blue-350: #94ccf9;
+  --smplfy-primitive-blue-400: #7dbdf8;
+  --smplfy-primitive-blue-450: #5fb3f6;
+  --smplfy-primitive-blue-500: #1379f0;
+  --smplfy-primitive-blue-600: #0e5fbb;
+  --smplfy-primitive-blue-700: #083c75;
+  --smplfy-primitive-blue-800: #021527;
+  --smplfy-primitive-blue-900: #010a14;
+  --smplfy-primitive-blue-gray-100: #eef4fb;
+  --smplfy-primitive-blue-gray-200: #d6e2f0;
+
+  --smplfy-primitive-red-25: #fef6f5;
+  --smplfy-primitive-red-50: #fff5f4;
+  --smplfy-primitive-red-100: #ffe4e1;
+  --smplfy-primitive-red-200: #ffc8c2;
+  --smplfy-primitive-red-250: #f5a8a1;
+  --smplfy-primitive-red-300: #ff9f95;
+  --smplfy-primitive-red-400: #ff6e67;
+  --smplfy-primitive-red-500: #f44336;
+  --smplfy-primitive-red-alert: #ff3131;
+  --smplfy-primitive-red-600: #d9382d;
+  --smplfy-primitive-red-700: #b62e25;
+  --smplfy-primitive-red-800: #8d241d;
+  --smplfy-primitive-red-900: #651b16;
+
+  --smplfy-primitive-orange-100: #fff5e8;
+  --smplfy-primitive-orange-200: #ffe5ba;
+  --smplfy-primitive-orange-300: #ffd07a;
+  --smplfy-primitive-orange-400: #ffb23f;
+  --smplfy-primitive-orange-500: #ff9800;
+  --smplfy-primitive-orange-600: #d28c00;
+  --smplfy-primitive-orange-650: #c37538;
+  --smplfy-primitive-orange-700: #a56f00;
+  --smplfy-primitive-orange-800: #745000;
+  --smplfy-primitive-orange-900: #4a3200;
+
+  --smplfy-primitive-yellow-50: #fefcf5;
+  --smplfy-primitive-yellow-100: #fff9e6;
+  --smplfy-primitive-yellow-150: #fef9ec;
+  --smplfy-primitive-yellow-200: #fff0b8;
+  --smplfy-primitive-yellow-225: #f5dfad;
+  --smplfy-primitive-yellow-250: #ffe599;
+  --smplfy-primitive-yellow-300: #ffe07a;
+  --smplfy-primitive-yellow-400: #ffca3f;
+  --smplfy-primitive-yellow-500: #ffc44f;
+  --smplfy-primitive-yellow-550: #ebc357;
+  --smplfy-primitive-yellow-600: #d2a000;
+  --smplfy-primitive-yellow-650: #b38632;
+  --smplfy-primitive-yellow-700: #a57b00;
+  --smplfy-primitive-yellow-800: #745500;
+  --smplfy-primitive-yellow-900: #4a3800;
+
+  --smplfy-primitive-green-100: #ebfff2;
+  --smplfy-primitive-green-150: #e9f6ea;
+  --smplfy-primitive-green-200: #c6f5d0;
+  --smplfy-primitive-green-250: #a9dca9;
+  --smplfy-primitive-green-300: #93dda2;
+  --smplfy-primitive-green-400: #63d480;
+  --smplfy-primitive-green-500: #4db04f;
+  --smplfy-primitive-green-600: #3f9443;
+  --smplfy-primitive-green-700: #327735;
+  --smplfy-primitive-green-800: #205a24;
+  --smplfy-primitive-green-900: #133817;
+
+  --smplfy-button-font-family: 'Inter', sans-serif;
+  --smplfy-button-font-size: 14px;
+  --smplfy-button-font-weight: 500;
+  --smplfy-button-line-height: 1.2;
+  --smplfy-button-radius: 6px;
+  --smplfy-button-height: 40px;
+  --smplfy-button-padding-icon-side: 12px;
+  --smplfy-button-padding-text-side: 16px;
+  --smplfy-button-padding-label-only-start: 12px;
+  --smplfy-button-padding-label-only-end: 16px;
+  --smplfy-button-icon-size: 18px;
+  --smplfy-button-gap: 8px;
+
+  /* Semantic tokens: reusable meaning shared across components. */
+  --smplfy-semantic-color-text-default: var(--smplfy-primitive-neutral-800);
+  --smplfy-semantic-color-text-muted: var(--smplfy-primitive-neutral-600);
+  --smplfy-semantic-color-text-disabled: var(--smplfy-primitive-neutral-500);
+  --smplfy-semantic-color-text-on-primary: var(--smplfy-primitive-neutral-100);
+  --smplfy-semantic-color-background-primary: var(--smplfy-primitive-blue-500);
+  --smplfy-semantic-color-background-primary-hover: var(--smplfy-primitive-blue-600);
+  --smplfy-semantic-color-background-primary-pressed: var(--smplfy-primitive-blue-700);
+  --smplfy-semantic-color-background-disabled: var(--smplfy-primitive-neutral-400);
+  --smplfy-semantic-color-border-transparent: transparent;
+  --smplfy-semantic-color-background-feedback-success: var(--smplfy-primitive-green-500);
+  --smplfy-semantic-color-background-feedback-success-hover: var(--smplfy-primitive-green-600);
+  --smplfy-semantic-color-background-feedback-success-pressed: var(--smplfy-primitive-green-700);
+  --smplfy-semantic-color-background-feedback-success-disabled: var(--smplfy-primitive-green-250);
+  --smplfy-semantic-color-background-feedback-danger: var(--smplfy-primitive-red-500);
+  --smplfy-semantic-color-background-feedback-danger-hover: var(--smplfy-primitive-red-600);
+  --smplfy-semantic-color-background-feedback-danger-pressed: var(--smplfy-primitive-red-700);
+  --smplfy-semantic-color-background-feedback-danger-disabled: var(--smplfy-primitive-red-250);
+  --smplfy-semantic-typography-control-font-family: var(--smplfy-button-font-family);
+  --smplfy-semantic-typography-control-font-size: var(--smplfy-button-font-size);
+  --smplfy-semantic-typography-control-font-weight: var(--smplfy-button-font-weight);
+  --smplfy-semantic-typography-control-line-height: var(--smplfy-button-line-height);
+  --smplfy-semantic-radius-control-default: var(--smplfy-button-radius);
+  --smplfy-semantic-size-control-height-default: var(--smplfy-button-height);
+  --smplfy-semantic-size-control-height-medium: 32px;
+  --smplfy-semantic-size-control-height-small: 24px;
+  --smplfy-semantic-size-icon-default: var(--smplfy-button-icon-size);
+  --smplfy-semantic-size-icon-medium: var(--smplfy-button-icon-size);
+  --smplfy-semantic-size-icon-small: 16px;
+  --smplfy-semantic-space-control-gap-default: var(--smplfy-button-gap);
+  --smplfy-semantic-space-control-padding-block-default: 10px;
+  --smplfy-semantic-space-control-padding-inline-default: 16px;
+  --smplfy-semantic-space-control-padding-inline-compact: 12px;
+  --smplfy-semantic-space-control-padding-inline-small-start: 8px;
+  --smplfy-semantic-space-control-padding-inline-small-end: 12px;
+
+  /* Component tokens: explicit mapping for PrimaryButton consumption. */
+  --smplfy-component-button-typography-font-family: var(--smplfy-semantic-typography-control-font-family);
+  --smplfy-component-button-typography-font-size: var(--smplfy-semantic-typography-control-font-size);
+  --smplfy-component-button-typography-font-weight: var(--smplfy-semantic-typography-control-font-weight);
+  --smplfy-component-button-typography-line-height: var(--smplfy-semantic-typography-control-line-height);
+  --smplfy-component-button-radius-default: var(--smplfy-semantic-radius-control-default);
+  --smplfy-component-button-size-height-default: var(--smplfy-semantic-size-control-height-default);
+  --smplfy-component-button-size-height-medium: var(--smplfy-semantic-size-control-height-medium);
+  --smplfy-component-button-size-height-small: var(--smplfy-semantic-size-control-height-small);
+  --smplfy-component-button-size-icon-default: var(--smplfy-semantic-size-icon-default);
+  --smplfy-component-button-size-icon-medium: var(--smplfy-semantic-size-icon-medium);
+  --smplfy-component-button-size-icon-small: var(--smplfy-semantic-size-icon-small);
+  --smplfy-component-button-space-gap-default: var(--smplfy-semantic-space-control-gap-default);
+  --smplfy-component-button-space-padding-block-default: var(--smplfy-semantic-space-control-padding-block-default);
+  --smplfy-component-button-space-padding-inline-label-only: var(--smplfy-semantic-space-control-padding-inline-default);
+  --smplfy-component-button-space-padding-inline-leading-icon-start: var(--smplfy-semantic-space-control-padding-inline-compact);
+  --smplfy-component-button-space-padding-inline-leading-icon-end: var(--smplfy-semantic-space-control-padding-inline-default);
+  --smplfy-component-button-space-padding-inline-trailing-icon-start: var(--smplfy-semantic-space-control-padding-inline-default);
+  --smplfy-component-button-space-padding-inline-trailing-icon-end: var(--smplfy-semantic-space-control-padding-inline-compact);
+  --smplfy-component-button-space-padding-inline-both-icons: var(--smplfy-semantic-space-control-padding-inline-compact);
+  --smplfy-component-button-space-padding-inline-small-leading-icon-start: var(--smplfy-semantic-space-control-padding-inline-small-start);
+  --smplfy-component-button-space-padding-inline-small-leading-icon-end: var(--smplfy-semantic-space-control-padding-inline-small-end);
+
+  --smplfy-component-button-color-background-primary-default: var(--smplfy-semantic-color-background-primary);
+  --smplfy-component-button-color-text-primary-default: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-primary-default: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-primary-hover: var(--smplfy-semantic-color-background-primary-hover);
+  --smplfy-component-button-color-text-primary-hover: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-primary-hover: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-primary-pressed: var(--smplfy-semantic-color-background-primary-pressed);
+  --smplfy-component-button-color-text-primary-pressed: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-primary-pressed: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-primary-disabled: var(--smplfy-semantic-color-background-disabled);
+  --smplfy-component-button-color-text-primary-disabled: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-primary-disabled: var(--smplfy-semantic-color-border-transparent);
+
+  --smplfy-component-button-color-background-positive-default: var(--smplfy-semantic-color-background-feedback-success);
+  --smplfy-component-button-color-text-positive-default: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-positive-default: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-positive-hover: var(--smplfy-semantic-color-background-feedback-success-hover);
+  --smplfy-component-button-color-text-positive-hover: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-positive-hover: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-positive-pressed: var(--smplfy-semantic-color-background-feedback-success-pressed);
+  --smplfy-component-button-color-text-positive-pressed: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-positive-pressed: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-positive-disabled: var(--smplfy-semantic-color-background-feedback-success-disabled);
+  --smplfy-component-button-color-text-positive-disabled: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-positive-disabled: var(--smplfy-semantic-color-border-transparent);
+
+  --smplfy-component-button-color-background-destructive-default: var(--smplfy-semantic-color-background-feedback-danger);
+  --smplfy-component-button-color-text-destructive-default: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-destructive-default: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-destructive-hover: var(--smplfy-semantic-color-background-feedback-danger-hover);
+  --smplfy-component-button-color-text-destructive-hover: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-destructive-hover: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-destructive-pressed: var(--smplfy-semantic-color-background-feedback-danger-pressed);
+  --smplfy-component-button-color-text-destructive-pressed: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-destructive-pressed: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-component-button-color-background-destructive-disabled: var(--smplfy-semantic-color-background-feedback-danger-disabled);
+  --smplfy-component-button-color-text-destructive-disabled: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-component-button-color-border-destructive-disabled: var(--smplfy-semantic-color-border-transparent);
+
+  /* Legacy aliases kept temporarily while other surfaces migrate. */
+  --smplfy-primary-default-bg: var(--smplfy-component-button-color-background-primary-default);
+  --smplfy-primary-default-hover-bg: var(--smplfy-component-button-color-background-primary-hover);
+  --smplfy-primary-default-focus-bg: var(--smplfy-component-button-color-background-primary-pressed);
+  --smplfy-primary-default-disabled-bg: var(--smplfy-component-button-color-background-primary-disabled);
+  --smplfy-primary-on-color: var(--smplfy-component-button-color-text-primary-default);
+  --smplfy-primary-disabled-text: var(--smplfy-semantic-color-text-disabled);
+
+  --smplfy-primary-positive-bg: var(--smplfy-component-button-color-background-positive-default);
+  --smplfy-primary-positive-hover-bg: var(--smplfy-component-button-color-background-positive-hover);
+  --smplfy-primary-positive-focus-bg: var(--smplfy-component-button-color-background-positive-pressed);
+
+  --smplfy-primary-red-bg: var(--smplfy-component-button-color-background-destructive-default);
+  --smplfy-primary-red-hover-bg: var(--smplfy-component-button-color-background-destructive-hover);
+  --smplfy-primary-red-focus-bg: var(--smplfy-component-button-color-background-destructive-pressed);
+
+  --smplfy-primary-shadow-blue: 3px 2px 4px rgba(10, 70, 138, 0.08);
+  --smplfy-primary-shadow-blue-focus: 3px 2px 4px rgba(8, 60, 117, 0.12);
+  --smplfy-primary-shadow-green: 3px 2px 4px rgba(63, 148, 67, 0.08);
+  --smplfy-primary-shadow-green-focus: 3px 2px 4px rgba(50, 119, 53, 0.12);
+  --smplfy-primary-shadow-red: 3px 2px 4px rgba(217, 56, 45, 0.08);
+  --smplfy-primary-shadow-red-focus: 3px 2px 4px rgba(182, 46, 37, 0.12);
+
+  --smplfy-field-font-family: 'Inter', sans-serif;
+  --smplfy-field-height: 40px;
+  --smplfy-field-radius: 8px;
+  --smplfy-field-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-field-bg-empty: var(--smplfy-primitive-neutral-200);
+  --smplfy-field-bg-disabled: var(--smplfy-primitive-neutral-200);
+  --smplfy-field-border-default: var(--smplfy-primitive-neutral-300);
+  --smplfy-field-border-hover: var(--smplfy-primitive-neutral-500);
+  --smplfy-field-border-focused: var(--smplfy-primitive-blue-500);
+  --smplfy-field-border-disabled: var(--smplfy-primitive-neutral-300);
+  --smplfy-field-border-error: var(--smplfy-primitive-red-500);
+  --smplfy-field-text: var(--smplfy-primitive-neutral-800);
+  --smplfy-field-text-disabled: var(--smplfy-primitive-neutral-500);
+  --smplfy-field-placeholder: var(--smplfy-primitive-neutral-600);
+  --smplfy-field-placeholder-disabled: var(--smplfy-primitive-neutral-400);
+  --smplfy-field-label-color: var(--smplfy-primitive-neutral-700);
+  --smplfy-field-helper-color: var(--smplfy-primitive-neutral-600);
+  --smplfy-field-warning-color: var(--smplfy-primitive-orange-600);
+  --smplfy-field-error-color: var(--smplfy-primitive-red-600);
+  --smplfy-field-required-color: var(--smplfy-primitive-red-400);
+  --smplfy-field-icon-color: var(--smplfy-primitive-neutral-700);
+  --smplfy-field-divider: var(--smplfy-primitive-neutral-300);
+  --smplfy-field-shadow-focused: 0 0 0 3px rgba(19, 121, 240, 0.12);
+  --smplfy-field-shadow-error: 0 0 0 3px rgba(244, 67, 54, 0.12);
+  --smplfy-field-border-width: 1px;
+  --smplfy-field-font-size: 14px;
+  --smplfy-field-font-weight: 400;
+  --smplfy-field-label-font-weight: 500;
+  --smplfy-field-line-height: 1.2;
+  --smplfy-field-helper-font-size: 12px;
+  --smplfy-field-helper-line-height: 16px;
+  --smplfy-field-gap: 8px;
+  --smplfy-field-label-gap: 4px;
+  --smplfy-field-padding-inline: 16px;
+  --smplfy-field-padding-inline-compact: 12px;
+  --smplfy-field-icon-size: 16px;
+  --smplfy-field-action-width: 40px;
+  --smplfy-field-split-unit-width: 78px;
+  --smplfy-field-select-icon-offset: 12px;
+  --smplfy-field-hover-action-bg: rgba(2, 21, 39, 0.08);
+  --smplfy-field-transition: 180ms cubic-bezier(0.2, 0, 0, 1);
+
+  --smplfy-badge-font-size: 12px;
+  --smplfy-badge-font-weight: 600;
+  --smplfy-badge-line-height: 12px;
+  --smplfy-badge-size-sm: 20px;
+  --smplfy-badge-radius-pill: 999px;
+  --smplfy-badge-danger-bg: var(--smplfy-primitive-red-alert);
+  --smplfy-badge-danger-text: var(--smplfy-primitive-neutral-100);
+
+  --smplfy-status-pill-height: 27px;
+  --smplfy-status-pill-padding-y: 6px;
+  --smplfy-status-pill-padding-x: 12px;
+  --smplfy-status-pill-border-width: 1px;
+  --smplfy-status-pill-radius: 24px;
+  --smplfy-status-pill-font-size: 12px;
+  --smplfy-status-pill-font-weight: 500;
+  --smplfy-status-pill-line-height: 1.2;
+  --smplfy-status-pill-letter-spacing: -0.02em;
+
+  --smplfy-status-pill-gray-subtle-bg: var(--smplfy-primitive-neutral-200);
+  --smplfy-status-pill-gray-subtle-border: var(--smplfy-primitive-neutral-300);
+  --smplfy-status-pill-gray-subtle-text: var(--smplfy-primitive-neutral-600);
+  --smplfy-status-pill-gray-solid-bg: var(--smplfy-primitive-neutral-600);
+  --smplfy-status-pill-gray-solid-border: var(--smplfy-primitive-neutral-300);
+  --smplfy-status-pill-gray-solid-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-status-pill-blue-subtle-bg: var(--smplfy-primitive-blue-50);
+  --smplfy-status-pill-blue-subtle-border: var(--smplfy-primitive-blue-350);
+  --smplfy-status-pill-blue-subtle-text: var(--smplfy-primitive-blue-600);
+  --smplfy-status-pill-blue-solid-bg: var(--smplfy-primitive-blue-600);
+  --smplfy-status-pill-blue-solid-border: var(--smplfy-primitive-blue-400);
+  --smplfy-status-pill-blue-solid-text: var(--smplfy-primitive-blue-50);
+  --smplfy-status-pill-red-subtle-bg: var(--smplfy-primitive-red-25);
+  --smplfy-status-pill-red-subtle-border: var(--smplfy-primitive-red-250);
+  --smplfy-status-pill-red-subtle-text: var(--smplfy-primitive-red-600);
+  --smplfy-status-pill-red-solid-bg: var(--smplfy-primitive-red-600);
+  --smplfy-status-pill-red-solid-border: var(--smplfy-primitive-red-250);
+  --smplfy-status-pill-red-solid-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-status-pill-orange-subtle-bg: var(--smplfy-primitive-yellow-50);
+  --smplfy-status-pill-orange-subtle-border: var(--smplfy-primitive-yellow-225);
+  --smplfy-status-pill-orange-subtle-text: var(--smplfy-primitive-orange-650);
+  --smplfy-status-pill-orange-solid-bg: var(--smplfy-primitive-orange-650);
+  --smplfy-status-pill-orange-solid-border: var(--smplfy-primitive-yellow-225);
+  --smplfy-status-pill-orange-solid-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-status-pill-green-subtle-bg: var(--smplfy-primitive-green-150);
+  --smplfy-status-pill-green-subtle-border: var(--smplfy-primitive-green-250);
+  --smplfy-status-pill-green-subtle-text: var(--smplfy-primitive-green-600);
+  --smplfy-status-pill-green-solid-bg: var(--smplfy-primitive-green-600);
+  --smplfy-status-pill-green-solid-border: var(--smplfy-primitive-green-250);
+  --smplfy-status-pill-green-solid-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-status-pill-yellow-subtle-bg: var(--smplfy-primitive-yellow-150);
+  --smplfy-status-pill-yellow-subtle-border: var(--smplfy-primitive-yellow-250);
+  --smplfy-status-pill-yellow-subtle-text: var(--smplfy-primitive-yellow-650);
+  --smplfy-status-pill-yellow-solid-bg: var(--smplfy-primitive-yellow-550);
+  --smplfy-status-pill-yellow-solid-border: var(--smplfy-primitive-yellow-250);
+  --smplfy-status-pill-yellow-solid-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-bootstrap-badge-danger-subtle-bg: var(--smplfy-primitive-red-100);
+  --smplfy-bootstrap-badge-danger-subtle-border: var(--smplfy-primitive-red-600);
+  --smplfy-bootstrap-badge-danger-subtle-text: var(--smplfy-primitive-red-600);
+  --smplfy-bootstrap-badge-warning-subtle-bg: var(--smplfy-primitive-yellow-100);
+  --smplfy-bootstrap-badge-warning-subtle-border: var(--smplfy-primitive-yellow-600);
+  --smplfy-bootstrap-badge-warning-subtle-text: var(--smplfy-primitive-yellow-600);
+
+  --smplfy-form-check-hit-size: 28px;
+  --smplfy-form-check-checkbox-box-size: 15px;
+  --smplfy-form-check-checkbox-halo-size: 25px;
+  --smplfy-form-check-checkbox-halo-radius: calc(var(--smplfy-form-check-checkbox-halo-size) / 2);
+  --smplfy-form-check-checkbox-border-width: 1.2px;
+  --smplfy-form-check-checkbox-radius: 4px;
+  --smplfy-form-check-tick-width: 6px;
+  --smplfy-form-check-tick-height: 4px;
+  --smplfy-form-check-tick-border-width: 1.2px;
+  --smplfy-form-check-tick-transform: translate(-50%, -55%) rotate(-45deg);
+  --smplfy-form-check-radio-ring-size: 14px;
+  --smplfy-form-check-radio-dot-size: 8.4px;
+  --smplfy-form-check-radio-halo-size: 25.2px;
+  --smplfy-form-check-radio-halo-radius: calc(var(--smplfy-form-check-radio-halo-size) / 2);
+  --smplfy-form-check-radio-border-width: 1.4px;
+  --smplfy-form-check-radius-round: 999px;
+  --smplfy-form-check-color-default: var(--smplfy-primitive-neutral-600);
+  --smplfy-form-check-color-selected: var(--smplfy-primitive-blue-500);
+  --smplfy-form-check-color-on-selected: var(--smplfy-primitive-neutral-100);
+  --smplfy-form-check-hover-bg: var(--smplfy-primitive-blue-50);
+  --smplfy-form-check-active-bg: var(--smplfy-primitive-neutral-400);
+  --smplfy-form-check-disabled-opacity: 0.56;
+  --smplfy-form-check-focus-ring: var(--smplfy-button-focus-ring-primary);
+  --smplfy-form-check-motion-standard: var(--smplfy-field-transition);
+  --smplfy-form-check-checkbox-hover-image: radial-gradient(
+    circle,
+    var(--smplfy-form-check-hover-bg) var(--smplfy-form-check-checkbox-halo-radius),
+    transparent var(--smplfy-form-check-checkbox-halo-radius)
+  );
+  --smplfy-form-check-checkbox-active-image: radial-gradient(
+    circle,
+    var(--smplfy-form-check-active-bg) var(--smplfy-form-check-checkbox-halo-radius),
+    transparent var(--smplfy-form-check-checkbox-halo-radius)
+  );
+  --smplfy-form-check-radio-hover-image: radial-gradient(
+    circle,
+    var(--smplfy-form-check-hover-bg) var(--smplfy-form-check-radio-halo-radius),
+    transparent var(--smplfy-form-check-radio-halo-radius)
+  );
+  --smplfy-form-check-radio-active-image: radial-gradient(
+    circle,
+    var(--smplfy-form-check-active-bg) var(--smplfy-form-check-radio-halo-radius),
+    transparent var(--smplfy-form-check-radio-halo-radius)
+  );
+
+  --smplfy-nav-link-height-large: 51px;
+  --smplfy-nav-link-height-medium: 36px;
+  --smplfy-nav-link-padding-x: 12px;
+  --smplfy-nav-link-gap: 8px;
+  --smplfy-nav-link-radius: 0;
+  --smplfy-nav-link-font-size: 14px;
+  --smplfy-nav-link-font-weight: 500;
+  --smplfy-nav-link-line-height: 17px;
+  --smplfy-nav-link-letter-spacing: -0.03em;
+  --smplfy-nav-link-badge-letter-spacing: -0.02em;
+  --smplfy-nav-link-border-width: 1px;
+  --smplfy-nav-link-border-width-active: 3px;
+  --smplfy-nav-link-text: var(--smplfy-primitive-neutral-700);
+  --smplfy-nav-link-bg: transparent;
+  --smplfy-nav-link-border: var(--smplfy-primitive-neutral-400);
+  --smplfy-nav-link-hover-text: var(--smplfy-primitive-neutral-700);
+  --smplfy-nav-link-hover-bg: var(--smplfy-primitive-neutral-200);
+  --smplfy-nav-link-hover-border: var(--smplfy-primitive-neutral-400);
+  --smplfy-nav-link-focus-text: var(--smplfy-primitive-blue-500);
+  --smplfy-nav-link-focus-bg: var(--smplfy-primitive-blue-75);
+  --smplfy-nav-link-focus-border: transparent;
+  --smplfy-nav-link-active-text: var(--smplfy-primitive-blue-500);
+  --smplfy-nav-link-active-bg: var(--smplfy-primitive-blue-75);
+  --smplfy-nav-link-active-border: var(--smplfy-primitive-blue-500);
+  --smplfy-nav-link-pressed-text: var(--smplfy-primitive-neutral-700);
+  --smplfy-nav-link-pressed-bg: var(--smplfy-primitive-neutral-300);
+  --smplfy-nav-link-pressed-border: var(--smplfy-primitive-neutral-400);
+  --smplfy-nav-link-motion-standard: var(--smplfy-field-transition);
+
+  --smplfy-dropdown-offset: 8px;
+  --smplfy-dropdown-trigger-min-width: auto;
+  --smplfy-dropdown-menu-min-width: 172px;
+  --smplfy-dropdown-menu-current-min-width: var(--smplfy-dropdown-menu-min-width);
+  --smplfy-dropdown-menu-align-start: var(--smplfy-button-space-0);
+  --smplfy-dropdown-menu-align-auto: auto;
+  --smplfy-dropdown-menu-inset-inline-start: var(--smplfy-dropdown-menu-align-auto);
+  --smplfy-dropdown-menu-inset-inline-end: var(--smplfy-dropdown-menu-align-start);
+  --smplfy-dropdown-menu-padding: 8px;
+  --smplfy-dropdown-menu-gap: var(--smplfy-button-space-0);
+  --smplfy-dropdown-menu-border-width: 1px;
+  --smplfy-dropdown-menu-radius: 16px;
+  --smplfy-dropdown-menu-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-dropdown-menu-border: var(--smplfy-primitive-neutral-400);
+  --smplfy-dropdown-menu-shadow:
+    0 18px 48px rgba(15, 23, 42, 0.12),
+    0 6px 16px rgba(15, 23, 42, 0.08);
+  --smplfy-dropdown-menu-z-index: 80;
+  --smplfy-dropdown-item-min-height: 32px;
+  --smplfy-dropdown-item-padding-y: 4px;
+  --smplfy-dropdown-item-padding-start: 12px;
+  --smplfy-dropdown-item-padding-end: 16px;
+  --smplfy-dropdown-item-gap: 8px;
+  --smplfy-dropdown-item-radius: 8px;
+  --smplfy-dropdown-item-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-dropdown-item-text: var(--smplfy-primitive-neutral-800);
+  --smplfy-dropdown-item-hover-bg: var(--smplfy-primitive-neutral-200);
+  --smplfy-dropdown-item-selected-bg: var(--smplfy-primitive-neutral-200);
+  --smplfy-dropdown-item-pressed-bg: var(--smplfy-primitive-neutral-300);
+  --smplfy-dropdown-item-active-scale: 0.99;
+  --smplfy-dropdown-item-icon-size: 16px;
+  --smplfy-dropdown-item-font-size: 14px;
+  --smplfy-dropdown-item-font-weight: 500;
+  --smplfy-dropdown-item-line-height: 20px;
+  --smplfy-dropdown-item-letter-spacing: 0;
+  --smplfy-dropdown-item-motion-standard: var(--smplfy-field-transition);
+  --smplfy-dropdown-item-motion-press: var(--smplfy-button-motion-press);
+
+  /* Production still has legacy Bootstrap overlays on a very high layer. Keep
+     design-system overlays ordered above/below that layer with named tokens. */
+  --athena-z-modal: 100000000;
+  --athena-z-toast: 100000001;
+
+  --smplfy-modal-z-index: 1055;
+  --smplfy-modal-backdrop-z-index: 0;
+  --smplfy-modal-backdrop-bg: rgba(28, 33, 38, 0.28);
+  --smplfy-modal-backdrop-filter: blur(2px);
+  --smplfy-modal-inline-gutter: 32px;
+  --smplfy-modal-inline-gutter-mobile: 24px;
+  --smplfy-modal-max-block-size: calc(100vh - var(--smplfy-modal-inline-gutter));
+  --smplfy-modal-width-sm: 464px;
+  --smplfy-modal-width-md: 500px;
+  --smplfy-modal-width-lg: 544px;
+  --smplfy-modal-width-xl: 720px;
+  --smplfy-modal-radius: 12px;
+  --smplfy-modal-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-modal-border-width: 0;
+  --smplfy-modal-shadow:
+    0 16px 40px rgba(15, 23, 42, 0.16),
+    0 6px 18px rgba(15, 23, 42, 0.08);
+  --smplfy-modal-header-padding-y: 20px;
+  --smplfy-modal-header-padding-x: 24px;
+  --smplfy-modal-header-padding-x-mobile: 20px;
+  --smplfy-modal-header-gap: 16px;
+  --smplfy-modal-title-gap: 8px;
+  --smplfy-modal-title-font-size: 22px;
+  --smplfy-modal-title-line-height: 27px;
+  --smplfy-modal-title-font-weight: 500;
+  --smplfy-modal-title-letter-spacing: -0.03em;
+  --smplfy-modal-title-color: var(--smplfy-primitive-neutral-800);
+  --smplfy-modal-title-icon-size: 24px;
+  --smplfy-modal-divider: var(--smplfy-primitive-neutral-300);
+  --smplfy-modal-body-padding: 24px;
+  --smplfy-modal-body-padding-x-mobile: 20px;
+  --smplfy-modal-footer-min-height: 88px;
+  --smplfy-modal-footer-padding: 24px;
+  --smplfy-modal-footer-padding-x-mobile: 20px;
+  --smplfy-modal-footer-gap: 12px;
+
+  --smplfy-card-width: 329px;
+  --smplfy-card-min-height: 114px;
+  --smplfy-card-padding: 16px;
+  --smplfy-card-radius: 12px;
+  --smplfy-card-gap: 12px;
+  --smplfy-card-gap-relaxed: 16px;
+  --smplfy-card-header-gap: 12px;
+  --smplfy-card-desc-indent: 40px;
+  --smplfy-card-desc-indent-relaxed: 48px;
+  --smplfy-card-border-width: 1px;
+  --smplfy-card-active-border-width: 2px;
+  --smplfy-card-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-card-border: var(--smplfy-primitive-neutral-400);
+  --smplfy-card-hover-border: var(--smplfy-primitive-neutral-500);
+  --smplfy-card-focus-border: var(--smplfy-primitive-blue-450);
+  --smplfy-card-active-border: var(--smplfy-primitive-blue-500);
+  --smplfy-card-text: var(--smplfy-primitive-neutral-800);
+  --smplfy-card-muted-text: var(--smplfy-primitive-neutral-700);
+  --smplfy-card-title-font-size: 18px;
+  --smplfy-card-title-line-height: 23px;
+  --smplfy-card-title-font-weight: 600;
+  --smplfy-card-title-letter-spacing: -0.03em;
+  --smplfy-card-description-font-size: 14px;
+  --smplfy-card-description-line-height: 21px;
+  --smplfy-card-description-font-weight: 400;
+  --smplfy-card-motion-standard: var(--smplfy-field-transition);
+
+  --smplfy-table-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-table-head-bg: var(--smplfy-primitive-neutral-200);
+  --smplfy-table-text: var(--smplfy-primitive-neutral-800);
+  --smplfy-table-muted-text: var(--smplfy-primitive-neutral-600);
+  --smplfy-table-border: var(--smplfy-primitive-neutral-300);
+  --smplfy-table-hover-bg: var(--smplfy-primitive-blue-50);
+  --smplfy-table-radius: 12px;
+  --smplfy-table-min-width: 900px;
+  --smplfy-table-head-padding-y: 14px;
+  --smplfy-table-cell-padding-y: 16px;
+  --smplfy-table-cell-padding-x: 20px;
+  --smplfy-table-head-font-size: 12px;
+  --smplfy-table-head-line-height: 16px;
+  --smplfy-table-head-font-weight: 600;
+  --smplfy-table-cell-font-size: 14px;
+  --smplfy-table-cell-line-height: 20px;
+  --smplfy-table-cell-font-weight: 500;
+  --smplfy-table-link-font-size: 16px;
+  --smplfy-table-link-line-height: 19px;
+  --smplfy-table-link-font-weight: 600;
+
+  --smplfy-sample-workspace-search-min-height: 224px;
+  --smplfy-sample-workspace-search-padding-y: 56px;
+  --smplfy-sample-workspace-search-bg: linear-gradient(135deg, var(--hero-top) 0%, var(--hero-bottom) 100%);
+  --smplfy-sample-workspace-content-max-width: 1166px;
+  --smplfy-sample-workspace-search-row-padding-y: 32px;
+  --smplfy-sample-workspace-search-row-padding-x: 40px;
+  --smplfy-sample-workspace-search-row-padding-x-tablet: 20px;
+  --smplfy-sample-workspace-search-row-padding-y-mobile: 16px;
+  --smplfy-sample-workspace-search-row-padding-x-mobile: 8px;
+  --smplfy-sample-workspace-search-padding-y-mobile: 28px;
+  --smplfy-sample-workspace-search-group-max-width: 483px;
+  --smplfy-sample-workspace-search-group-height: 48px;
+  --smplfy-sample-workspace-search-group-height-mobile: 44px;
+  --smplfy-sample-workspace-search-group-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  --smplfy-sample-workspace-search-icon-padding-left: 24px;
+  --smplfy-sample-workspace-search-icon-padding-left-mobile: 16px;
+  --smplfy-sample-workspace-search-input-padding-left: 12px;
+  --smplfy-sample-workspace-search-input-padding-right: 24px;
+  --smplfy-sample-workspace-search-action-size: 48px;
+  --smplfy-sample-workspace-search-action-size-mobile: 44px;
+  --smplfy-sample-workspace-filter-list-margin-top: 20px;
+  --smplfy-sample-workspace-filter-list-margin-top-mobile: 16px;
+  --smplfy-sample-workspace-filter-list-padding-x: 8px;
+  --smplfy-sample-workspace-filter-badge-height: 32px;
+  --smplfy-sample-workspace-filter-badge-padding-y: 6px;
+  --smplfy-sample-workspace-filter-badge-padding-x: 12px;
+  --smplfy-sample-workspace-filter-badge-close-size: 18px;
+  --smplfy-sample-workspace-filter-badge-close-bg-size: 10px;
+  --smplfy-sample-workspace-offcanvas-backdrop-bg: rgba(28, 33, 38, 0.28);
+  --smplfy-sample-workspace-offcanvas-backdrop-blur: 2px;
+  --smplfy-sample-workspace-offcanvas-backdrop-motion: 220ms cubic-bezier(0.2, 0, 0, 1);
+  --smplfy-sample-workspace-offcanvas-backdrop-z-index: 70;
+  --smplfy-sample-workspace-offcanvas-width: min(420px, 100vw);
+  --smplfy-sample-workspace-offcanvas-padding: 24px;
+  --smplfy-sample-workspace-offcanvas-padding-mobile: 20px 16px 16px;
+  --smplfy-sample-workspace-offcanvas-shadow:
+    -18px 0 44px rgba(15, 23, 42, 0.12),
+    -4px 0 12px rgba(15, 23, 42, 0.08);
+  --smplfy-sample-workspace-offcanvas-motion: 240ms cubic-bezier(0.2, 0, 0, 1);
+  --smplfy-sample-workspace-offcanvas-z-index: 71;
+  --smplfy-sample-workspace-offcanvas-header-min-height: 56px;
+  --smplfy-sample-workspace-offcanvas-header-padding-bottom: 16px;
+  --smplfy-sample-workspace-offcanvas-title-font-size: 20px;
+  --smplfy-sample-workspace-offcanvas-close-size: 24px;
+  --smplfy-sample-workspace-offcanvas-body-padding-y: 24px;
+  --smplfy-sample-workspace-offcanvas-body-gap: 24px;
+  --smplfy-sample-workspace-offcanvas-footer-padding-top: 16px;
+  --smplfy-sample-workspace-offcanvas-footer-gap: 12px;
+  --smplfy-sample-workspace-offcanvas-submit-min-width: 88px;
+  --smplfy-sample-workspace-panel-min-height: 580px;
+  --smplfy-sample-workspace-panel-padding: 24px;
+  --smplfy-sample-workspace-panel-padding-mobile: 16px;
+
+  --smplfy-sample-card-min-height: 124px;
+  --smplfy-sample-card-hover-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  --smplfy-sample-card-panel-min-primary: 180px;
+  --smplfy-sample-card-panel-min-details: 220px;
+  --smplfy-sample-card-panel-min-dates: 200px;
+  --smplfy-sample-card-panel-min-custom: 180px;
+  --smplfy-sample-card-panel-primary-fr: 1.05fr;
+  --smplfy-sample-card-panel-details-fr: 1.2fr;
+  --smplfy-sample-card-panel-dates-fr: 1fr;
+  --smplfy-sample-card-panel-custom-fr: 0.95fr;
+  --smplfy-sample-card-panel-padding-y: 18px;
+  --smplfy-sample-card-panel-padding-x: 20px;
+  --smplfy-sample-card-fields-gap: 12px;
+  --smplfy-sample-card-empty-field-min-height: 44px;
+  --smplfy-sample-card-empty-field-font-size: 14px;
+  --smplfy-sample-card-empty-field-font-weight: 500;
+  --smplfy-sample-card-id-font-size: 16px;
+  --smplfy-sample-card-id-line-height: 19px;
+  --smplfy-sample-card-id-font-weight: 600;
+  --smplfy-sample-card-id-color: var(--smplfy-primitive-blue-500);
+  --smplfy-sample-card-id-hover-color: var(--smplfy-primitive-blue-500);
+  --smplfy-sample-card-meta-label-font-size: 12px;
+  --smplfy-sample-card-meta-label-line-height: 16px;
+  --smplfy-sample-card-meta-label-font-weight: 400;
+  --smplfy-sample-card-meta-value-line-height: 18px;
+  --smplfy-sample-card-meta-value-font-weight: 500;
+  --smplfy-sample-card-parameters-row-min-height: 52px;
+  --smplfy-sample-card-parameters-row-padding-x: 16px;
+  --smplfy-sample-card-parameters-row-gap: 8px;
+  --smplfy-sample-card-parameters-font-size: 13px;
+  --smplfy-sample-card-parameters-line-height: 16px;
+  --smplfy-sample-card-parameters-font-weight: 500;
+  --smplfy-sample-card-parameters-summary-width: 120px;
+  --smplfy-sample-card-grid-header-min-height: 52px;
+  --smplfy-sample-card-grid-header-padding-x: 16px;
+  --smplfy-sample-card-grid-header-gap: 8px;
+  --smplfy-sample-card-grid-body-padding: 12px;
+  --smplfy-sample-card-grid-body-row-gap: 12px;
+  --smplfy-sample-card-data-item-min-height: 40px;
+  --smplfy-sample-card-data-item-gap: 4px;
+  --smplfy-sample-card-view-toggle-padding: 4px;
+  --smplfy-sample-card-view-toggle-radius: 12px;
+  --smplfy-sample-card-view-toggle-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-sample-card-view-toggle-border: var(--smplfy-primitive-neutral-300);
+  --smplfy-sample-card-view-toggle-gap: 4px;
+  --smplfy-sample-card-view-toggle-button-width: 34px;
+  --smplfy-sample-card-view-toggle-button-height: 32px;
+  --smplfy-sample-card-view-toggle-button-radius: 8px;
+  --smplfy-sample-card-view-toggle-icon-size: 16px;
+  --smplfy-sample-card-view-toggle-active-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+
+  --smplfy-list-group-item-width: 248px;
+  --smplfy-list-group-item-min-height: 48px;
+  --smplfy-list-group-item-padding-y: 8px;
+  --smplfy-list-group-item-padding-x: 16px;
+  --smplfy-list-group-item-gap: 8px;
+  --smplfy-list-group-item-radius: 0;
+  --smplfy-list-group-item-border-width: 1px;
+  --smplfy-list-group-item-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-list-group-item-border: var(--smplfy-primitive-neutral-400);
+  --smplfy-list-group-item-text: var(--smplfy-primitive-neutral-800);
+  --smplfy-list-group-item-hover-bg: var(--smplfy-primitive-neutral-200);
+  --smplfy-list-group-item-focus-ring: inset 0 0 0 1px var(--smplfy-primitive-blue-450);
+  --smplfy-list-group-item-active-bg: var(--smplfy-primitive-blue-500);
+  --smplfy-list-group-item-active-border: var(--smplfy-primitive-blue-500);
+  --smplfy-list-group-item-active-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-list-group-item-icon-size: 24px;
+  --smplfy-list-group-item-font-size: 14px;
+  --smplfy-list-group-item-line-height: 18px;
+  --smplfy-list-group-item-font-weight: 500;
+  --smplfy-list-group-item-motion-standard: var(--smplfy-field-transition);
+
+  --smplfy-link-min-height: calc(var(--smplfy-button-font-size) * 1.5);
+  --smplfy-link-padding-y: calc(var(--smplfy-button-gap) / 4);
+  --smplfy-link-padding-x: calc(var(--smplfy-button-gap) / 2);
+  --smplfy-link-radius: calc(var(--smplfy-field-radius) / 4);
+  --smplfy-link-gap: var(--smplfy-button-gap);
+  --smplfy-link-font-family: var(--smplfy-field-font-family);
+  --smplfy-link-font-size: var(--smplfy-button-font-size);
+  --smplfy-link-line-height: var(--smplfy-button-line-height);
+  --smplfy-link-font-weight: 400;
+  --smplfy-link-letter-spacing: -0.02em;
+  --smplfy-link-text: var(--smplfy-primitive-neutral-800);
+  --smplfy-link-hover-text: var(--smplfy-primitive-blue-500);
+  --smplfy-link-active-text: var(--smplfy-primitive-blue-600);
+  --smplfy-link-focus-text: var(--smplfy-primitive-neutral-800);
+  --smplfy-link-focus-bg: var(--smplfy-primitive-blue-200);
+  --smplfy-link-underline-offset: calc(var(--smplfy-button-gap) / 4);
+  --smplfy-link-icon-size: var(--smplfy-semantic-size-icon-medium);
+
+  --smplfy-search-result-min-height: var(--smplfy-semantic-size-control-height-medium);
+  --smplfy-search-result-padding-y: calc(var(--smplfy-button-gap) / 2);
+  --smplfy-search-result-padding-x: var(--smplfy-semantic-space-control-padding-inline-small-start);
+  --smplfy-search-result-gap: calc(var(--smplfy-button-gap) * 2);
+  --smplfy-search-result-radius: var(--smplfy-field-radius);
+  --smplfy-search-result-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-search-result-text: var(--smplfy-primitive-neutral-900);
+  --smplfy-search-result-address-text: var(--smplfy-primitive-neutral-700);
+  --smplfy-search-result-hover-bg: var(--smplfy-primitive-neutral-200);
+  --smplfy-search-result-pressed-bg: var(--smplfy-primitive-neutral-300);
+  --smplfy-search-result-focus-ring: inset 0 0 0 1px var(--smplfy-primitive-blue-400);
+  --smplfy-search-result-font-family: var(--smplfy-field-font-family);
+  --smplfy-search-result-font-size: var(--smplfy-button-font-size);
+  --smplfy-search-result-address-font-size: calc(var(--smplfy-button-font-size) - 2px);
+  --smplfy-search-result-line-height: 1.3;
+  --smplfy-search-result-font-weight: 400;
+  --smplfy-search-result-letter-spacing: -0.02em;
+  --smplfy-search-result-address-max-width: 46%;
+  --smplfy-search-result-icon-size: calc(var(--smplfy-button-gap) * 2.5);
+
+  --smplfy-loading-screen-gap: 24px;
+  --smplfy-loading-screen-padding-y: 48px;
+  --smplfy-loading-screen-padding-x: 24px;
+  --smplfy-loading-title-color: var(--smplfy-primitive-neutral-800);
+  --smplfy-loading-title-font-size: 16px;
+  --smplfy-loading-title-line-height: 24px;
+  --smplfy-loading-title-font-weight: 600;
+  --smplfy-loading-title-letter-spacing: -0.03em;
+  --smplfy-progress-width: 373px;
+  --smplfy-progress-height: 8px;
+  --smplfy-progress-radius: var(--smplfy-badge-radius-pill);
+  --smplfy-progress-bg: var(--smplfy-primitive-neutral-400);
+  --smplfy-progress-bar-bg: var(--smplfy-primitive-blue-500);
+  --smplfy-progress-animation-duration: 1200ms;
+  --smplfy-progress-animation-easing: cubic-bezier(0.2, 0, 0, 1);
+
+  --smplfy-parameter-gap: 4px;
+  --smplfy-parameter-max-width: 228px;
+  --smplfy-parameter-item-size: 24px;
+  --smplfy-parameter-item-radius: var(--smplfy-badge-radius-pill);
+  --smplfy-parameter-item-shadow: inset 0 0 0 1.2px rgba(0, 0, 0, 0.05);
+  --smplfy-parameter-item-z-index: 0;
+  --smplfy-parameter-item-active-z-index: 20;
+  --smplfy-parameter-icon-z-index: 1;
+  --smplfy-parameter-tooltip-offset: 8px;
+  --smplfy-parameter-tooltip-min-width: 168px;
+  --smplfy-parameter-tooltip-max-width: 240px;
+  --smplfy-parameter-tooltip-padding-y: 10px;
+  --smplfy-parameter-tooltip-padding-x: 12px;
+  --smplfy-parameter-tooltip-radius: 16px;
+  --smplfy-parameter-tooltip-bg: var(--smplfy-primitive-neutral-800);
+  --smplfy-parameter-tooltip-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-parameter-tooltip-muted-text: rgba(255, 255, 255, 0.74);
+  --smplfy-parameter-tooltip-gap: 4px;
+  --smplfy-parameter-tooltip-translate-y: 4px;
+  --smplfy-parameter-tooltip-motion: 160ms ease;
+  --smplfy-parameter-tooltip-z-index: 30;
+  --smplfy-parameter-tooltip-shadow: 0 10px 24px rgba(11, 18, 24, 0.22);
+  --smplfy-parameter-tooltip-arrow-width: 14px;
+  --smplfy-parameter-tooltip-arrow-height: 10px;
+  --smplfy-parameter-tooltip-name-font-size: 14px;
+  --smplfy-parameter-tooltip-name-line-height: 18px;
+  --smplfy-parameter-tooltip-status-font-size: 12px;
+  --smplfy-parameter-tooltip-status-line-height: 16px;
+  --smplfy-parameter-tooltip-font-weight: 500;
+  --smplfy-parameter-mobile-max-width: 100%;
+
+  --smplfy-stepper-gap: var(--smplfy-button-space-0);
+  --smplfy-stepper-item-height: 41px;
+  --smplfy-stepper-item-padding-start: 37px;
+  --smplfy-stepper-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-stepper-font-size: 16px;
+  --smplfy-stepper-font-weight: 500;
+  --smplfy-stepper-line-height: 1.4375;
+  --smplfy-stepper-button-padding: var(--smplfy-button-space-0);
+  --smplfy-stepper-indicator-left: 8px;
+  --smplfy-stepper-indicator-top: 12px;
+  --smplfy-stepper-indicator-size: 17px;
+  --smplfy-stepper-indicator-radius: var(--smplfy-badge-radius-pill);
+  --smplfy-stepper-indicator-border-width: 1px;
+  --smplfy-stepper-indicator-border: var(--smplfy-primitive-neutral-400);
+  --smplfy-stepper-connector-left: 16px;
+  --smplfy-stepper-connector-width: 1px;
+  --smplfy-stepper-connector-bg: var(--smplfy-primitive-neutral-400);
+  --smplfy-stepper-connector-before-height: 13px;
+  --smplfy-stepper-connector-after-top: 28px;
+  --smplfy-stepper-connector-after-height: 13px;
+  --smplfy-stepper-active-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-stepper-completed-bg: var(--smplfy-primitive-green-500);
+  --smplfy-stepper-check-width: 7px;
+  --smplfy-stepper-check-height: 4px;
+  --smplfy-stepper-check-border-width: 1.5px;
+  --smplfy-stepper-check-transform: rotate(-45deg) translateY(-1px);
+  --smplfy-stepper-label-min-height: 17px;
+  --smplfy-stepper-mobile-min-width: 168px;
+  --smplfy-stepper-mobile-min-height: 61px;
+  --smplfy-stepper-mobile-padding-top: 32px;
+  --smplfy-stepper-mobile-indicator-top: 8px;
+  --smplfy-stepper-mobile-connector-top: 16px;
+  --smplfy-stepper-mobile-connector-width: calc(50% - 18px);
+  --smplfy-stepper-mobile-line-height: 1.25;
+
+  --smplfy-version-selector-trigger-min-width: 148px;
+  --smplfy-version-selector-menu-min-width: 196px;
+  --smplfy-version-selector-menu-radius: 12px;
+  --smplfy-version-selector-menu-gap: 4px;
+  --smplfy-version-selector-item-min-height: 36px;
+  --smplfy-version-selector-item-padding-y: 8px;
+  --smplfy-version-selector-item-padding-x: 12px;
+
+  --smplfy-split-button-width: 124px;
+  --smplfy-split-button-height: var(--smplfy-button-height-md);
+  --smplfy-split-button-primary-width: 86px;
+  --smplfy-split-button-secondary-width: 38px;
+  --smplfy-split-button-radius: 8px;
+  --smplfy-split-button-gap: 6px;
+  --smplfy-split-button-icon-size: 20px;
+  --smplfy-split-button-padding-y: 10px;
+  --smplfy-split-button-padding-x: 12px;
+  --smplfy-split-button-divider-width: 1px;
+  --smplfy-split-button-divider-color: rgba(255, 255, 255, 0.28);
+  --smplfy-split-button-outline-shadow: inset 0 0 0 1px var(--smplfy-button-primary-bg);
+  --smplfy-shadow-floating-panel:
+    0 0 8.432px rgb(0 0 0 / 2.1847%),
+    0 0 17.639px rgb(0 0 0 / 2.9354%),
+    0 0 29.056px rgb(0 0 0 / 3.4177%),
+    0 12.772px 45.196px rgb(0 0 0 / 3.872%),
+    0 35.522px 71.972px rgb(0 0 0 / 4.5109%),
+    0 64px 141px rgb(0 0 0 / 6%);
+
+  --smplfy-toast-success-bg: var(--smplfy-primitive-green-500);
+  --smplfy-toast-success-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-toast-success-border: var(--smplfy-primitive-green-700);
+  --smplfy-toast-shadow: 0 10px 24px rgba(11, 182, 59, 0.22);
+  --smplfy-toast-error-bg: var(--smplfy-primitive-red-400);
+  --smplfy-toast-error-text: var(--smplfy-primitive-neutral-100);
+  --smplfy-toast-error-border: var(--smplfy-primitive-red-600);
+  --smplfy-toast-error-shadow: 0 10px 24px rgba(217, 56, 45, 0.22);
+  --smplfy-toast-width: 304px;
+  --smplfy-toast-min-height: 41px;
+  --smplfy-toast-padding: 12px;
+  --smplfy-toast-border-width: 1px;
+  --smplfy-toast-radius: 6px;
+  --smplfy-toast-motion-standard: 220ms cubic-bezier(0.2, 0, 0, 1);
+  --smplfy-toast-content-gap: 8px;
+  --smplfy-toast-font-size: 14px;
+  --smplfy-toast-line-height: 17px;
+  --smplfy-toast-font-weight: 500;
+  --smplfy-toast-icon-size: 16px;
+  --smplfy-toast-close-margin-start: 12px;
+  --smplfy-toast-z-index: var(--athena-z-toast, 1100);
+
+  /* Button foundation tokens */
+  --smplfy-button-space-0: 0;
+  --smplfy-button-space-1: 0.25rem;
+  --smplfy-button-space-1-5: 0.375rem;
+  --smplfy-button-space-2: 0.5rem;
+  --smplfy-button-space-3: 0.75rem;
+  --smplfy-button-space-4: 1rem;
+  --smplfy-button-border-width: 0.0625rem;
+  --smplfy-button-radius-control: var(--smplfy-component-button-radius-default);
+  --smplfy-button-height-sm: var(--smplfy-component-button-size-height-medium);
+  --smplfy-button-height-md: var(--smplfy-component-button-size-height-default);
+  --smplfy-button-height-lg: var(--smplfy-button-height-md);
+  --smplfy-button-icon-sm: var(--smplfy-component-button-size-icon-medium);
+  --smplfy-button-icon-md: var(--smplfy-component-button-size-icon-default);
+  --smplfy-button-active-scale: 0.98;
+  --smplfy-button-disabled-opacity: 1;
+  --smplfy-button-motion-standard: 180ms cubic-bezier(0.2, 0, 0, 1);
+  --smplfy-button-motion-press: 120ms cubic-bezier(0.2, 0, 0, 1);
+  --smplfy-button-focus-ring-primary: 0 0 0 0.1875rem rgba(19, 121, 240, 0.12);
+  --smplfy-button-focus-ring-secondary: 0 0 0 0.1875rem rgba(77, 85, 97, 0.14);
+  --smplfy-button-focus-ring-success: 0 0 0 0.1875rem rgba(77, 176, 79, 0.18);
+  --smplfy-button-focus-ring-danger: 0 0 0 0.1875rem rgba(244, 67, 54, 0.16);
+
+  /* Button semantic tokens */
+  --smplfy-button-font-family-base: var(--smplfy-semantic-typography-control-font-family);
+  --smplfy-button-font-size-base: var(--smplfy-semantic-typography-control-font-size);
+  --smplfy-button-font-size-sm: var(--smplfy-semantic-typography-control-font-size);
+  --smplfy-button-font-weight-base: var(--smplfy-semantic-typography-control-font-weight);
+  --smplfy-button-line-height-base: var(--smplfy-semantic-typography-control-line-height);
+  --smplfy-button-letter-spacing: 0;
+  --smplfy-button-gap-base: var(--smplfy-component-button-space-gap-default);
+  --smplfy-button-gap-compact: var(--smplfy-button-space-1);
+  --smplfy-button-padding-x-base: var(--smplfy-component-button-space-padding-inline-label-only);
+  --smplfy-button-padding-x-compact: var(--smplfy-component-button-space-padding-inline-leading-icon-start);
+  --smplfy-button-padding-y-base: var(--smplfy-component-button-space-padding-block-default);
+  --smplfy-button-padding-y-compact: var(--smplfy-button-space-1-5);
+  --smplfy-button-padding-leading-icon-start: var(--smplfy-component-button-space-padding-inline-leading-icon-start);
+  --smplfy-button-padding-leading-icon-end: var(--smplfy-component-button-space-padding-inline-leading-icon-end);
+  --smplfy-button-padding-trailing-icon-start: var(--smplfy-component-button-space-padding-inline-trailing-icon-start);
+  --smplfy-button-padding-trailing-icon-end: var(--smplfy-component-button-space-padding-inline-trailing-icon-end);
+  --smplfy-button-padding-both-icons-start: var(--smplfy-component-button-space-padding-inline-both-icons);
+  --smplfy-button-padding-both-icons-end: var(--smplfy-component-button-space-padding-inline-both-icons);
+  --smplfy-button-padding-sm-leading-icon-start: var(--smplfy-component-button-space-padding-inline-small-leading-icon-start);
+  --smplfy-button-padding-sm-leading-icon-end: var(--smplfy-component-button-space-padding-inline-small-leading-icon-end);
+  --smplfy-button-padding-sm-trailing-icon-start: var(--smplfy-component-button-space-padding-inline-small-leading-icon-end);
+  --smplfy-button-padding-sm-trailing-icon-end: var(--smplfy-component-button-space-padding-inline-small-leading-icon-start);
+  --smplfy-button-padding-sm-both-icons-start: var(--smplfy-component-button-space-padding-inline-small-leading-icon-start);
+  --smplfy-button-padding-sm-both-icons-end: var(--smplfy-component-button-space-padding-inline-small-leading-icon-start);
+  --smplfy-button-radius-base: var(--smplfy-button-radius-control);
+  --smplfy-button-disabled-bg: var(--smplfy-semantic-color-background-disabled);
+  --smplfy-button-disabled-text: var(--smplfy-semantic-color-text-disabled);
+  --smplfy-button-disabled-border: var(--smplfy-primitive-neutral-300);
+
+  --smplfy-button-primary-bg: var(--smplfy-semantic-color-background-primary);
+  --smplfy-button-primary-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-primary-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-primary-hover-bg: var(--smplfy-semantic-color-background-primary-hover);
+  --smplfy-button-primary-hover-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-primary-hover-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-primary-active-bg: var(--smplfy-semantic-color-background-primary-pressed);
+  --smplfy-button-primary-active-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-primary-active-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-primary-disabled-bg: var(--smplfy-component-button-color-background-primary-disabled);
+  --smplfy-button-primary-disabled-text: var(--smplfy-component-button-color-text-primary-disabled);
+  --smplfy-button-primary-disabled-border: var(--smplfy-component-button-color-border-primary-disabled);
+  --smplfy-button-primary-shadow-hover: var(--smplfy-primary-shadow-blue);
+  --smplfy-button-primary-shadow-focus: var(--smplfy-primary-shadow-blue-focus);
+
+  --smplfy-button-success-bg: var(--smplfy-semantic-color-background-feedback-success);
+  --smplfy-button-success-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-success-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-success-hover-bg: var(--smplfy-semantic-color-background-feedback-success-hover);
+  --smplfy-button-success-hover-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-success-hover-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-success-active-bg: var(--smplfy-semantic-color-background-feedback-success-pressed);
+  --smplfy-button-success-active-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-success-active-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-success-disabled-bg: var(--smplfy-component-button-color-background-positive-disabled);
+  --smplfy-button-success-disabled-text: var(--smplfy-component-button-color-text-positive-disabled);
+  --smplfy-button-success-disabled-border: var(--smplfy-component-button-color-border-positive-disabled);
+  --smplfy-button-success-shadow-hover: var(--smplfy-primary-shadow-green);
+  --smplfy-button-success-shadow-focus: var(--smplfy-primary-shadow-green-focus);
+
+  --smplfy-button-danger-bg: var(--smplfy-semantic-color-background-feedback-danger);
+  --smplfy-button-danger-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-danger-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-danger-hover-bg: var(--smplfy-semantic-color-background-feedback-danger-hover);
+  --smplfy-button-danger-hover-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-danger-hover-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-danger-active-bg: var(--smplfy-semantic-color-background-feedback-danger-pressed);
+  --smplfy-button-danger-active-text: var(--smplfy-semantic-color-text-on-primary);
+  --smplfy-button-danger-active-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-danger-disabled-bg: var(--smplfy-component-button-color-background-destructive-disabled);
+  --smplfy-button-danger-disabled-text: var(--smplfy-component-button-color-text-destructive-disabled);
+  --smplfy-button-danger-disabled-border: var(--smplfy-component-button-color-border-destructive-disabled);
+  --smplfy-button-danger-shadow-hover: var(--smplfy-primary-shadow-red);
+  --smplfy-button-danger-shadow-focus: var(--smplfy-primary-shadow-red-focus);
+
+  --smplfy-button-outline-primary-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-button-outline-primary-text: var(--smplfy-primitive-blue-500);
+  --smplfy-button-outline-primary-border: var(--smplfy-primitive-blue-500);
+  --smplfy-button-outline-primary-hover-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-button-outline-primary-hover-text: var(--smplfy-primitive-blue-600);
+  --smplfy-button-outline-primary-hover-border: var(--smplfy-primitive-blue-600);
+  --smplfy-button-outline-primary-active-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-button-outline-primary-active-text: var(--smplfy-primitive-blue-700);
+  --smplfy-button-outline-primary-active-border: var(--smplfy-primitive-blue-700);
+
+  --smplfy-button-outline-secondary-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-button-outline-secondary-text: var(--smplfy-primitive-neutral-700);
+  --smplfy-button-outline-secondary-border: var(--smplfy-primitive-neutral-500);
+  --smplfy-button-outline-secondary-hover-bg: var(--smplfy-primitive-neutral-200);
+  --smplfy-button-outline-secondary-hover-text: var(--smplfy-primitive-neutral-800);
+  --smplfy-button-outline-secondary-hover-border: var(--smplfy-primitive-neutral-600);
+  --smplfy-button-outline-secondary-active-bg: var(--smplfy-primitive-neutral-300);
+  --smplfy-button-outline-secondary-active-text: var(--smplfy-primitive-neutral-900);
+  --smplfy-button-outline-secondary-active-border: var(--smplfy-primitive-neutral-700);
+
+  --smplfy-button-outline-info-bg: var(--smplfy-primitive-blue-200);
+  --smplfy-button-outline-info-text: var(--smplfy-primitive-blue-500);
+  --smplfy-button-outline-info-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-outline-info-hover-bg: var(--smplfy-primitive-blue-300);
+  --smplfy-button-outline-info-hover-text: var(--smplfy-primitive-blue-600);
+  --smplfy-button-outline-info-hover-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-outline-info-active-bg: var(--smplfy-primitive-blue-300);
+  --smplfy-button-outline-info-active-text: var(--smplfy-primitive-blue-700);
+  --smplfy-button-outline-info-active-border: var(--smplfy-semantic-color-border-transparent);
+
+  --smplfy-button-outline-success-bg: var(--smplfy-primitive-green-100);
+  --smplfy-button-outline-success-text: var(--smplfy-primitive-green-500);
+  --smplfy-button-outline-success-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-outline-success-hover-bg: var(--smplfy-primitive-green-200);
+  --smplfy-button-outline-success-hover-text: var(--smplfy-primitive-green-600);
+  --smplfy-button-outline-success-hover-border: var(--smplfy-semantic-color-border-transparent);
+  --smplfy-button-outline-success-active-bg: var(--smplfy-primitive-green-200);
+  --smplfy-button-outline-success-active-text: var(--smplfy-primitive-green-700);
+  --smplfy-button-outline-success-active-border: var(--smplfy-semantic-color-border-transparent);
+
+  --smplfy-button-outline-danger-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-button-outline-danger-text: #4b5662;
+  --smplfy-button-outline-danger-border: #99a0a7;
+  --smplfy-button-outline-danger-hover-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-button-outline-danger-hover-text: #ff2725;
+  --smplfy-button-outline-danger-hover-border: #ff2725;
+  --smplfy-button-outline-danger-active-bg: var(--smplfy-primitive-neutral-100);
+  --smplfy-button-outline-danger-active-text: #ec1d1d;
+  --smplfy-button-outline-danger-active-border: #ec1d1d;
+}
+
+.smplfy-btn {
+  --bs-btn-padding-x: var(--smplfy-button-padding-x-base);
+  --bs-btn-padding-y: var(--smplfy-button-padding-y-base);
+  --bs-btn-font-family: var(--smplfy-button-font-family-base);
+  --bs-btn-font-size: var(--smplfy-button-font-size-base);
+  --bs-btn-font-weight: var(--smplfy-button-font-weight-base);
+  --bs-btn-line-height: var(--smplfy-button-line-height-base);
+  --bs-btn-border-width: var(--smplfy-button-border-width);
+  --bs-btn-border-radius: var(--smplfy-button-radius-base);
+  --bs-btn-disabled-opacity: var(--smplfy-button-disabled-opacity);
+  --smplfy-button-current-height: var(--smplfy-button-height-md);
+  --smplfy-button-current-icon-size: var(--smplfy-button-icon-md);
+  --smplfy-button-current-gap: var(--smplfy-button-gap-base);
+  --smplfy-button-current-padding-inline-start: var(--bs-btn-padding-x);
+  --smplfy-button-current-padding-inline-end: var(--bs-btn-padding-x);
+  --smplfy-button-current-focus-shadow: var(--smplfy-button-focus-ring-primary);
+  --bs-btn-focus-box-shadow: var(--smplfy-button-current-focus-shadow);
+
+  min-height: var(--smplfy-button-current-height);
+  height: var(--smplfy-button-current-height);
+  padding-inline: var(--smplfy-button-current-padding-inline-start) var(--smplfy-button-current-padding-inline-end);
+  letter-spacing: var(--smplfy-button-letter-spacing);
+  transition:
+    color var(--smplfy-button-motion-standard),
+    background-color var(--smplfy-button-motion-standard),
+    border-color var(--smplfy-button-motion-standard),
+    box-shadow var(--smplfy-button-motion-standard),
+    transform var(--smplfy-button-motion-press);
+}
+
+.smplfy-btn:not(:disabled):not(.disabled):active,
+.smplfy-btn:not(:disabled):not(.disabled).active {
+  transform: scale(var(--smplfy-button-active-scale));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smplfy-btn {
+    transition: none;
+  }
+}
+
+.smplfy-icon {
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  flex-shrink: 0;
+  vertical-align: -0.125em;
+}
+
+.smplfy-btn:has(> svg),
+.smplfy-btn:has(> .smplfy-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--smplfy-button-current-gap);
+}
+
+.smplfy-btn.btn-sm {
+  --bs-btn-padding-x: var(--smplfy-button-padding-x-compact);
+  --bs-btn-padding-y: var(--smplfy-button-padding-y-compact);
+  --bs-btn-font-size: var(--smplfy-button-font-size-sm);
+  --smplfy-button-current-height: var(--smplfy-button-height-sm);
+  --smplfy-button-current-icon-size: var(--smplfy-button-icon-sm);
+}
+
+.smplfy-btn.btn-lg {
+  --smplfy-button-current-height: var(--smplfy-button-height-lg);
+}
+
+.smplfy-btn > svg,
+.smplfy-btn > .smplfy-icon {
+  width: var(--smplfy-button-current-icon-size);
+  height: var(--smplfy-button-current-icon-size);
+  flex: 0 0 var(--smplfy-button-current-icon-size);
+  font-size: var(--smplfy-button-current-icon-size);
+}
+
+.smplfy-btn > span {
+  min-width: var(--smplfy-button-space-0);
+}
+
+.smplfy-btn:has(> svg:first-child + span),
+.smplfy-btn:has(> .smplfy-icon:first-child + span) {
+  --smplfy-button-current-padding-inline-start: var(--smplfy-button-padding-leading-icon-start);
+  --smplfy-button-current-padding-inline-end: var(--smplfy-button-padding-leading-icon-end);
+}
+
+.smplfy-btn:has(> span:first-child + svg:last-child),
+.smplfy-btn:has(> span:first-child + .smplfy-icon:last-child) {
+  --smplfy-button-current-padding-inline-start: var(--smplfy-button-padding-trailing-icon-start);
+  --smplfy-button-current-padding-inline-end: var(--smplfy-button-padding-trailing-icon-end);
+}
+
+.smplfy-btn:has(> svg:first-child + span + svg:last-child),
+.smplfy-btn:has(> .smplfy-icon:first-child + span + .smplfy-icon:last-child) {
+  --smplfy-button-current-padding-inline-start: var(--smplfy-button-padding-both-icons-start);
+  --smplfy-button-current-padding-inline-end: var(--smplfy-button-padding-both-icons-end);
+}
+
+.smplfy-btn.btn-sm:has(> svg:first-child + span),
+.smplfy-btn.btn-sm:has(> .smplfy-icon:first-child + span) {
+  --smplfy-button-current-padding-inline-start: var(--smplfy-button-padding-sm-leading-icon-start);
+  --smplfy-button-current-padding-inline-end: var(--smplfy-button-padding-sm-leading-icon-end);
+}
+
+.smplfy-btn.btn-sm:has(> span:first-child + svg:last-child),
+.smplfy-btn.btn-sm:has(> span:first-child + .smplfy-icon:last-child) {
+  --smplfy-button-current-padding-inline-start: var(--smplfy-button-padding-sm-trailing-icon-start);
+  --smplfy-button-current-padding-inline-end: var(--smplfy-button-padding-sm-trailing-icon-end);
+}
+
+.smplfy-btn.btn-sm:has(> svg:first-child + span + svg:last-child),
+.smplfy-btn.btn-sm:has(> .smplfy-icon:first-child + span + .smplfy-icon:last-child) {
+  --smplfy-button-current-padding-inline-start: var(--smplfy-button-padding-sm-both-icons-start);
+  --smplfy-button-current-padding-inline-end: var(--smplfy-button-padding-sm-both-icons-end);
+}
+
+.smplfy-btn:has(> svg:only-child),
+.smplfy-btn:has(> .smplfy-icon:only-child) {
+  width: var(--smplfy-button-current-height);
+  min-width: var(--smplfy-button-current-height);
+  padding-inline: var(--smplfy-button-space-0);
+  gap: var(--smplfy-button-space-0);
+}
+
+.smplfy-btn.btn-primary {
+  --bs-btn-color: var(--smplfy-button-primary-text);
+  --bs-btn-bg: var(--smplfy-button-primary-bg);
+  --bs-btn-border-color: var(--smplfy-button-primary-border);
+  --bs-btn-hover-color: var(--smplfy-button-primary-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-primary-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-primary-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-primary-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-primary-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-primary-active-border);
+  --bs-btn-disabled-color: var(--smplfy-button-primary-disabled-text);
+  --bs-btn-disabled-bg: var(--smplfy-button-primary-disabled-bg);
+  --bs-btn-disabled-border-color: var(--smplfy-button-primary-disabled-border);
+  --smplfy-button-current-focus-shadow: var(--smplfy-button-primary-shadow-focus);
+}
+
+.smplfy-btn.btn-success {
+  --bs-btn-color: var(--smplfy-button-success-text);
+  --bs-btn-bg: var(--smplfy-button-success-bg);
+  --bs-btn-border-color: var(--smplfy-button-success-border);
+  --bs-btn-hover-color: var(--smplfy-button-success-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-success-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-success-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-success-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-success-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-success-active-border);
+  --bs-btn-disabled-color: var(--smplfy-button-success-disabled-text);
+  --bs-btn-disabled-bg: var(--smplfy-button-success-disabled-bg);
+  --bs-btn-disabled-border-color: var(--smplfy-button-success-disabled-border);
+  --smplfy-button-current-focus-shadow: var(--smplfy-button-success-shadow-focus);
+}
+
+.smplfy-btn.btn-danger {
+  --bs-btn-color: var(--smplfy-button-danger-text);
+  --bs-btn-bg: var(--smplfy-button-danger-bg);
+  --bs-btn-border-color: var(--smplfy-button-danger-border);
+  --bs-btn-hover-color: var(--smplfy-button-danger-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-danger-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-danger-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-danger-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-danger-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-danger-active-border);
+  --bs-btn-disabled-color: var(--smplfy-button-danger-disabled-text);
+  --bs-btn-disabled-bg: var(--smplfy-button-danger-disabled-bg);
+  --bs-btn-disabled-border-color: var(--smplfy-button-danger-disabled-border);
+  --smplfy-button-current-focus-shadow: var(--smplfy-button-danger-shadow-focus);
+}
+
+.smplfy-btn.btn-outline-primary {
+  --bs-btn-color: var(--smplfy-button-outline-primary-text);
+  --bs-btn-bg: var(--smplfy-button-outline-primary-bg);
+  --bs-btn-border-color: var(--smplfy-button-outline-primary-border);
+  --bs-btn-hover-color: var(--smplfy-button-outline-primary-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-outline-primary-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-outline-primary-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-outline-primary-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-outline-primary-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-outline-primary-active-border);
+  --bs-btn-disabled-color: var(--smplfy-button-disabled-text);
+  --bs-btn-disabled-bg: var(--smplfy-button-outline-primary-bg);
+  --bs-btn-disabled-border-color: var(--smplfy-button-disabled-border);
+  --smplfy-button-current-focus-shadow: var(--smplfy-button-focus-ring-primary);
+}
+
+.smplfy-btn.btn-outline-secondary {
+  --bs-btn-color: var(--smplfy-button-outline-secondary-text);
+  --bs-btn-bg: var(--smplfy-button-outline-secondary-bg);
+  --bs-btn-border-color: var(--smplfy-button-outline-secondary-border);
+  --bs-btn-hover-color: var(--smplfy-button-outline-secondary-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-outline-secondary-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-outline-secondary-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-outline-secondary-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-outline-secondary-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-outline-secondary-active-border);
+  --bs-btn-disabled-color: var(--smplfy-button-disabled-text);
+  --bs-btn-disabled-bg: var(--smplfy-button-outline-secondary-bg);
+  --bs-btn-disabled-border-color: var(--smplfy-button-disabled-border);
+  --smplfy-button-current-focus-shadow: var(--smplfy-button-focus-ring-secondary);
+}
+
+.smplfy-btn.btn-outline-info {
+  --bs-btn-color: var(--smplfy-button-outline-info-text);
+  --bs-btn-bg: var(--smplfy-button-outline-info-bg);
+  --bs-btn-border-color: var(--smplfy-button-outline-info-border);
+  --bs-btn-hover-color: var(--smplfy-button-outline-info-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-outline-info-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-outline-info-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-outline-info-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-outline-info-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-outline-info-active-border);
+  --bs-btn-disabled-color: var(--smplfy-button-disabled-text);
+  --bs-btn-disabled-bg: var(--smplfy-button-outline-info-bg);
+  --bs-btn-disabled-border-color: var(--smplfy-button-outline-info-border);
+}
+
+.smplfy-btn.btn-outline-success {
+  --bs-btn-color: var(--smplfy-button-outline-success-text);
+  --bs-btn-bg: var(--smplfy-button-outline-success-bg);
+  --bs-btn-border-color: var(--smplfy-button-outline-success-border);
+  --bs-btn-hover-color: var(--smplfy-button-outline-success-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-outline-success-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-outline-success-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-outline-success-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-outline-success-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-outline-success-active-border);
+  --bs-btn-disabled-color: var(--smplfy-button-disabled-text);
+  --bs-btn-disabled-bg: var(--smplfy-button-outline-success-bg);
+  --bs-btn-disabled-border-color: var(--smplfy-button-outline-success-border);
+  --smplfy-button-current-focus-shadow: var(--smplfy-button-focus-ring-success);
+}
+
+.smplfy-btn.btn-outline-danger {
+  --bs-btn-color: var(--smplfy-button-outline-danger-text);
+  --bs-btn-bg: var(--smplfy-button-outline-danger-bg);
+  --bs-btn-border-color: var(--smplfy-button-outline-danger-border);
+  --bs-btn-hover-color: var(--smplfy-button-outline-danger-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-outline-danger-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-outline-danger-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-outline-danger-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-outline-danger-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-outline-danger-active-border);
+  --bs-btn-disabled-color: var(--smplfy-button-disabled-text);
+  --bs-btn-disabled-bg: var(--smplfy-button-outline-danger-bg);
+  --bs-btn-disabled-border-color: var(--smplfy-button-outline-danger-border);
+  --smplfy-button-current-focus-shadow: var(--smplfy-button-focus-ring-danger);
+  --smplfy-button-current-gap: 4px;
+  --smplfy-button-current-icon-size: 16px;
+
+  letter-spacing: 0;
+}
+
+.smplfy-btn.btn-outline-danger:has(> svg:first-child + span),
+.smplfy-btn.btn-outline-danger:has(> .smplfy-icon:first-child + span) {
+  --smplfy-button-current-padding-inline-start: 12px;
+  --smplfy-button-current-padding-inline-end: 16px;
+}
+
+.smplfy-btn-group.btn-group:not(:has(.dropdown-toggle-split)) {
+  padding: var(--smplfy-sample-card-view-toggle-padding);
+  border: var(--smplfy-card-border-width) solid var(--smplfy-sample-card-view-toggle-border);
+  border-radius: var(--smplfy-sample-card-view-toggle-radius);
+  background: var(--smplfy-sample-card-view-toggle-bg);
+  gap: var(--smplfy-sample-card-view-toggle-gap);
+}
+
+.smplfy-btn-group.btn-group:not(:has(.dropdown-toggle-split)) > .smplfy-btn.btn {
+  --smplfy-button-current-height: var(--smplfy-sample-card-view-toggle-button-height);
+  --smplfy-button-current-icon-size: var(--smplfy-sample-card-view-toggle-icon-size);
+  --bs-btn-padding-x: var(--smplfy-button-space-0);
+  --bs-btn-padding-y: var(--smplfy-button-space-0);
+  --bs-btn-color: var(--smplfy-primitive-neutral-700);
+  --bs-btn-bg: transparent;
+  --bs-btn-border-width: var(--smplfy-button-space-0);
+  --bs-btn-border-color: transparent;
+  --bs-btn-border-radius: var(--smplfy-sample-card-view-toggle-button-radius);
+  --bs-btn-hover-color: var(--smplfy-primitive-neutral-800);
+  --bs-btn-hover-bg: transparent;
+  --bs-btn-hover-border-color: transparent;
+  --bs-btn-active-color: var(--smplfy-primitive-blue-600);
+  --bs-btn-active-bg: var(--smplfy-primitive-neutral-100);
+  --bs-btn-active-border-color: transparent;
+  --bs-btn-active-shadow: var(--smplfy-sample-card-view-toggle-active-shadow);
+  --bs-btn-focus-box-shadow: none;
+
+  width: var(--smplfy-sample-card-view-toggle-button-width);
+  min-width: var(--smplfy-sample-card-view-toggle-button-width);
+}
+
+.smplfy-btn-group.btn-group:not(:has(.dropdown-toggle-split)) > .smplfy-btn.btn.active {
+  box-shadow: var(--smplfy-sample-card-view-toggle-active-shadow);
+}
+
+.smplfy-table.table {
+  --bs-table-bg: var(--smplfy-table-bg);
+  --bs-table-color: var(--smplfy-table-text);
+  --bs-table-border-color: var(--smplfy-table-border);
+  --bs-table-hover-bg: var(--smplfy-table-hover-bg);
+  --bs-table-hover-color: var(--smplfy-table-text);
+
+  min-width: var(--smplfy-table-min-width);
+}
+
+.table-responsive:has(> .smplfy-table.table) {
+  border: var(--bs-border-width) solid var(--smplfy-table-border);
+  border-radius: var(--smplfy-table-radius);
+  background: var(--smplfy-table-bg);
+}
+
+.smplfy-table.table > :not(caption) > * > * {
+  padding:
+    var(--smplfy-table-cell-padding-y)
+    var(--smplfy-table-cell-padding-x);
+  border-bottom-color: var(--smplfy-table-border);
+  color: var(--smplfy-table-text);
+  font-size: var(--smplfy-table-cell-font-size);
+  line-height: var(--smplfy-table-cell-line-height);
+  font-weight: var(--smplfy-table-cell-font-weight);
+  vertical-align: middle;
+}
+
+.smplfy-table.table thead th {
+  padding-block: var(--smplfy-table-head-padding-y);
+  background: var(--smplfy-table-head-bg);
+  color: var(--smplfy-table-muted-text);
+  font-size: var(--smplfy-table-head-font-size);
+  line-height: var(--smplfy-table-head-line-height);
+  font-weight: var(--smplfy-table-head-font-weight);
+  white-space: nowrap;
+}
+
+.smplfy-table.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.smplfy-table.table.smplfy-table-sticky-action th:last-child,
+.smplfy-table.table.smplfy-table-sticky-action td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  width: 1%;
+  min-width: max-content;
+  white-space: nowrap;
+  border-left: 1px solid var(--smplfy-primitive-neutral-300);
+  background: var(--smplfy-table-bg);
+}
+
+.smplfy-table.table.smplfy-table-sticky-action th:last-child::before,
+.smplfy-table.table.smplfy-table-sticky-action td:last-child::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  width: 12px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(28, 33, 38, 0),
+    rgba(28, 33, 38, 0.07)
+  );
+  transition: opacity 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.smplfy-table.table.smplfy-table-sticky-action thead th:last-child {
+  z-index: 3;
+  background: var(--smplfy-table-head-bg);
+}
+
+.table-responsive.smplfy-table-responsive-sticky-action.is-scroll-at-end > .smplfy-table.table.smplfy-table-sticky-action th:last-child,
+.table-responsive.smplfy-table-responsive-sticky-action.is-scroll-at-end > .smplfy-table.table.smplfy-table-sticky-action td:last-child {
+  box-shadow: none;
+}
+
+.table-responsive.smplfy-table-responsive-sticky-action.is-scroll-at-end > .smplfy-table.table.smplfy-table-sticky-action th:last-child::before,
+.table-responsive.smplfy-table-responsive-sticky-action.is-scroll-at-end > .smplfy-table.table.smplfy-table-sticky-action td:last-child::before {
+  opacity: 0;
+}
+
+.smplfy-table.table-hover.smplfy-table-sticky-action tbody tr:hover > td:last-child {
+  background: var(--smplfy-table-hover-bg);
+}
+
+.smplfy-table.table .smplfy-link.link-primary {
+  --smplfy-link-text: var(--smplfy-primitive-blue-500);
+  --smplfy-link-hover-text: var(--smplfy-primitive-blue-500);
+  --smplfy-link-active-text: var(--smplfy-primitive-blue-500);
+
+  font-size: var(--smplfy-table-link-font-size);
+  line-height: var(--smplfy-table-link-line-height);
+  font-weight: var(--smplfy-table-link-font-weight);
+}
+
+.smplfy-table.table .text-primary {
+  color: var(--smplfy-primitive-blue-500) !important;
+}
+
+.smplfy-card.card {
+  --bs-card-bg: var(--smplfy-card-bg);
+  --bs-card-border-width: var(--smplfy-card-border-width);
+  --bs-card-border-color: var(--smplfy-primitive-neutral-300);
+  --bs-card-border-radius: var(--smplfy-card-radius);
+}
+
+.smplfy-list-group-item.list-group-item {
+  --bs-list-group-item-padding-x: var(--smplfy-list-group-item-padding-x);
+  --bs-list-group-item-padding-y: var(--smplfy-list-group-item-padding-y);
+  --bs-list-group-color: var(--smplfy-list-group-item-text);
+  --bs-list-group-bg: var(--smplfy-list-group-item-bg);
+  --bs-list-group-border-color: var(--smplfy-list-group-item-border);
+  --bs-list-group-border-width: var(--smplfy-list-group-item-border-width);
+  --bs-list-group-action-color: var(--smplfy-list-group-item-text);
+  --bs-list-group-action-hover-color: var(--smplfy-list-group-item-text);
+  --bs-list-group-action-hover-bg: var(--smplfy-list-group-item-hover-bg);
+  --bs-list-group-action-active-color: var(--smplfy-list-group-item-text);
+  --bs-list-group-action-active-bg: var(--smplfy-list-group-item-hover-bg);
+  --bs-list-group-active-color: var(--smplfy-list-group-item-active-text);
+  --bs-list-group-active-bg: var(--smplfy-list-group-item-active-bg);
+  --bs-list-group-active-border-color: var(--smplfy-list-group-item-active-border);
+
+  width: var(--smplfy-list-group-item-width);
+  min-height: var(--smplfy-list-group-item-min-height);
+  border-radius: var(--smplfy-list-group-item-radius);
+  display: flex;
+  align-items: center;
+  gap: var(--smplfy-list-group-item-gap);
+  text-align: left;
+  transition:
+    background-color var(--smplfy-list-group-item-motion-standard),
+    border-color var(--smplfy-list-group-item-motion-standard),
+    color var(--smplfy-list-group-item-motion-standard),
+    box-shadow var(--smplfy-list-group-item-motion-standard);
+}
+
+.smplfy-list-group-item.list-group-item:hover {
+  background-color: var(--smplfy-list-group-item-hover-bg);
+  border-color: var(--smplfy-list-group-item-border);
+  color: var(--smplfy-list-group-item-text);
+}
+
+.smplfy-list-group-item.list-group-item:focus-visible {
+  background-color: var(--smplfy-list-group-item-hover-bg);
+  border-color: var(--smplfy-list-group-item-border);
+  box-shadow: var(--smplfy-list-group-item-focus-ring);
+  color: var(--smplfy-list-group-item-text);
+  outline: none;
+}
+
+.smplfy-list-group-item.list-group-item.active {
+  background-color: var(--smplfy-list-group-item-active-bg);
+  border-color: var(--smplfy-list-group-item-active-border);
+  color: var(--smplfy-list-group-item-active-text);
+}
+
+.smplfy-link.link-primary {
+  min-height: var(--smplfy-link-min-height);
+  padding:
+    var(--smplfy-link-padding-y)
+    var(--smplfy-link-padding-x);
+  border: var(--smplfy-button-space-0);
+  border-radius: var(--smplfy-link-radius);
+  background: transparent;
+  color: var(--smplfy-link-text) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--smplfy-link-gap);
+  font-family: var(--smplfy-link-font-family);
+  font-size: var(--smplfy-link-font-size);
+  line-height: var(--smplfy-link-line-height);
+  font-weight: var(--smplfy-link-font-weight);
+  letter-spacing: var(--smplfy-link-letter-spacing);
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 160ms cubic-bezier(0.2, 0, 0, 1),
+    color 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.smplfy-link.link-primary:hover {
+  color: var(--smplfy-link-hover-text) !important;
+  text-decoration: underline;
+  text-underline-offset: var(--smplfy-link-underline-offset);
+  background: transparent;
+}
+
+.smplfy-link.link-primary:active {
+  color: var(--smplfy-link-active-text) !important;
+  text-decoration: underline;
+  text-underline-offset: var(--smplfy-link-underline-offset);
+  background: transparent;
+}
+
+.smplfy-link.link-primary:focus-visible {
+  color: var(--smplfy-link-focus-text) !important;
+  background: var(--smplfy-link-focus-bg);
+  outline: none;
+  text-decoration: none;
+}
+
+.smplfy-link.link-primary > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.smplfy-link.link-primary > svg,
+.smplfy-link.link-primary > .smplfy-icon {
+  width: var(--smplfy-link-icon-size);
+  height: var(--smplfy-link-icon-size);
+  flex: 0 0 var(--smplfy-link-icon-size);
+  font-size: var(--smplfy-link-icon-size);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+
+.smplfy-link.link-primary:hover > svg,
+.smplfy-link.link-primary:active > svg,
+.smplfy-link.link-primary:hover > .smplfy-icon,
+.smplfy-link.link-primary:active > .smplfy-icon {
+  display: inline-flex;
+  opacity: 1;
+}
+
+.smplfy-link.link-primary:focus-visible > svg,
+.smplfy-link.link-primary:focus-visible > .smplfy-icon {
+  display: none;
+  opacity: 0;
+}
+
+/* Workflow master editor */
+.workflow-page {
+  background: #f5f7fb;
+  min-height: 100vh;
+  padding: 22px;
+}
+
+.workflow-page--editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workflow-card,
+.workflow-editor-card {
+  background: #ffffff;
+  border: 1px solid #dde3ec;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+}
+
+.workflow-card {
+  overflow: hidden;
+}
+
+.workflow-editor-card {
+  overflow: hidden;
+}
+
+.workflow-page--editor {
+  --workflow-accent: #2563eb;
+  --workflow-accent-soft: #eff6ff;
+  --workflow-accent-border: #bfdbfe;
+  --workflow-alt-accent: #0f766e;
+}
+
+.workflow-modal--details {
+  --smplfy-modal-custom-width: 760px;
+}
+
+.workflow-modal--node {
+  --smplfy-modal-custom-width: 1120px;
+}
+
+.workflow-modal--connection {
+  --smplfy-modal-custom-width: 980px;
+}
+
+.workflow-modal .smplfy-modal-body {
+  max-height: min(76vh, 760px);
+}
+
+.workflow-node-modal-layout,
+.workflow-connection-modal-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.workflow-node-modal-layout {
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.workflow-node-modal-column {
+  display: grid;
+  gap: 16px;
+  grid-column: 1;
+}
+
+.workflow-connection-modal-layout {
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  align-items: start;
+}
+
+.workflow-modal-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  padding: 16px;
+}
+
+.workflow-modal-section--basic {
+  grid-column: 1;
+}
+
+.workflow-modal-section--badge {
+  grid-column: 1;
+  padding: 14px 16px;
+}
+
+.workflow-modal-section--badge .workflow-modal-section__title {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.workflow-modal-section--actions {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.workflow-modal-section--permissions {
+  grid-column: 1 / -1;
+}
+
+.workflow-modal-section__title {
+  align-items: center;
+  color: #0f172a;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 8px;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+
+.workflow-modal-section__title::before {
+  background: #2563eb;
+  border-radius: 999px;
+  content: "";
+  height: 8px;
+  width: 8px;
+}
+
+.workflow-toolbar {
+  border-bottom: 1px solid #e5e9f0;
+  padding: 16px;
+}
+
+.workflow-row-actions,
+.workflow-header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workflow-row-actions {
+  justify-content: flex-end;
+}
+
+.workflow-header-actions {
+  justify-content: flex-end;
+}
+
+.workflow-editor-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.workflow-pill {
+  align-items: center;
+  background: #eef2f7;
+  border: 1px solid #d9e0ea;
+  border-radius: 6px;
+  color: #475569;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  min-height: 26px;
+  padding: 0 9px;
+  white-space: nowrap;
+}
+
+.workflow-pill--success {
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.workflow-pill--warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.workflow-loading {
+  color: #64748b;
+  padding: 40px;
+  text-align: center;
+}
+
+.workflow-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.workflow-form-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.workflow-form-grid--basic {
+  grid-template-columns: 1fr;
+}
+
+.workflow-form-grid--ports {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workflow-form-grid--dropdown-rows {
+  grid-template-columns: 1fr;
+}
+
+.workflow-form-grid--single {
+  grid-template-columns: 1fr;
+}
+
+.workflow-field {
+  color: #334155;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.workflow-field b {
+  color: #dc2626;
+  margin-left: 3px;
+}
+
+.workflow-field input,
+.workflow-field select {
+  border-color: #cbd5e1;
+  border-radius: 6px;
+}
+
+.workflow-field input:focus,
+.workflow-field select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.workflow-field .smplfy-rselect__control {
+  min-height: 42px;
+  border-color: #cbd5e1;
+  border-radius: 6px;
+}
+
+.workflow-field .smplfy-rselect__value-container {
+  min-height: 40px;
+  padding: 6px 12px;
+}
+
+.workflow-field .smplfy-rselect__menu {
+  z-index: 100000021;
+}
+
+.workflow-check-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.workflow-modal-section--actions .workflow-check-grid {
+  align-content: start;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+}
+
+.workflow-badge-style {
+  display: grid;
+  gap: 12px;
+}
+
+.workflow-badge-style__field {
+  align-items: center;
+  column-gap: 10px;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.workflow-badge-style__field--preview {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.workflow-badge-style__label {
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.workflow-badge-color-list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.workflow-badge-color-option,
+.workflow-badge-style-toggle__option {
+  position: relative;
+}
+
+.workflow-badge-color-option {
+  border: 2px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0;
+  width: 30px;
+}
+
+.workflow-badge-color-option:focus-visible,
+.workflow-badge-style-toggle__option:focus-visible {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  outline: none;
+}
+
+.workflow-badge-color-option.is-selected {
+  border-color: #111827;
+}
+
+.workflow-badge-color-option--gray {
+  background: #a0a7ae;
+  border-color: #6b7280;
+}
+
+.workflow-badge-color-option--blue {
+  background: #1683ea;
+  border-color: #0f66c2;
+}
+
+.workflow-badge-color-option--orange {
+  background: #fb8c36;
+  border-color: #d36c1f;
+}
+
+.workflow-badge-color-option--yellow {
+  background: #ffd052;
+  border-color: #d7a92d;
+}
+
+.workflow-badge-color-option--red {
+  background: #ff2d2d;
+  border-color: #dc2626;
+}
+
+.workflow-badge-color-option--green {
+  background: #05b344;
+  border-color: #079337;
+}
+
+.workflow-badge-style__check {
+  align-items: center;
+  background: #ffffff;
+  border: 2px solid #111827;
+  border-radius: 50%;
+  color: #111827;
+  display: inline-flex;
+  font-size: 12px;
+  height: 18px;
+  justify-content: center;
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  width: 18px;
+  z-index: 1;
+}
+
+.workflow-badge-style__footer {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(128px, auto);
+}
+
+.workflow-badge-style-toggle {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.workflow-badge-style-toggle__option {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe1e8;
+  border-radius: 8px;
+  color: #111827;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 500;
+  justify-content: center;
+  line-height: 1;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.workflow-badge-style-toggle__option.is-selected {
+  border-color: #111827;
+  border-width: 2px;
+  padding-left: 9px;
+  padding-right: 9px;
+}
+
+.workflow-check {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dde3ec;
+  border-radius: 6px;
+  color: #334155;
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 9px;
+}
+
+.workflow-check:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.workflow-canvas-shell {
+  background-color: #f7fbff;
+  background-image:
+    linear-gradient(to right, rgba(96, 165, 250, 0.16) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(96, 165, 250, 0.16) 1px, transparent 1px);
+  background-position: -1px -1px;
+  background-size: 28px 28px;
+  height: calc(100vh - 176px);
+  min-height: 560px;
+  overflow: auto;
+  position: relative;
+}
+
+.workflow-canvas-shell.is-linking {
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.26);
+}
+
+.workflow-canvas {
+  position: relative;
+}
+
+.workflow-lines {
+  color: #334155;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+}
+
+.workflow-line {
+  cursor: pointer;
+  fill: none;
+  pointer-events: stroke;
+  stroke: #2563eb;
+  stroke-linecap: round;
+  stroke-width: 3.5;
+}
+
+.workflow-line:hover {
+  stroke: #0f766e;
+  stroke-width: 4;
+}
+
+.workflow-empty-state {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.09);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  left: 50%;
+  min-width: 260px;
+  padding: 24px;
+  position: absolute;
+  top: 110px;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+
+.workflow-empty-state__icon {
+  align-items: center;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  display: inline-flex;
+  height: 52px;
+  justify-content: center;
+  width: 52px;
+}
+
+.workflow-empty-state h2 {
+  color: #111827;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.workflow-node {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+  color: #111827;
+  cursor: move;
+  display: block;
+  position: absolute;
+  user-select: none;
+  z-index: 2;
+}
+
+.workflow-node::before {
+  background: #2563eb;
+  border-radius: 8px 8px 0 0;
+  content: "";
+  height: 3px;
+  left: -1px;
+  position: absolute;
+  right: -1px;
+  top: -1px;
+}
+
+.workflow-node:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.13);
+}
+
+.workflow-node__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  min-width: 0;
+  padding: 14px 14px 12px;
+}
+
+.workflow-node__title {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  max-height: 42px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.workflow-node__meta {
+  align-items: center;
+  color: #475569;
+  display: flex;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.workflow-node__meta span {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  line-height: 1;
+  padding: 3px 5px;
+}
+
+.workflow-node__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 9px;
+}
+
+.workflow-node__actions button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  color: #2563eb;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.workflow-node__actions button:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.workflow-port {
+  background: #ffffff;
+  border: 2px solid #2563eb;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+  cursor: crosshair;
+  height: 10px;
+  padding: 0;
+  position: absolute;
+  width: 10px;
+  z-index: 3;
+}
+
+.workflow-port--input {
+  border-color: #0f766e;
+  left: -5px;
+}
+
+.workflow-port--output {
+  right: -5px;
+}
+
+.workflow-port:hover,
+.workflow-port.is-pending {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  transform: scale(1.12);
+}
+
+.workflow-port--input:hover {
+  background: #0f766e;
+  border-color: #0f766e;
+}
+
+@media (max-width: 768px) {
+  .workflow-page {
+    padding: 14px;
+  }
+
+  .workflow-row-actions,
+  .workflow-header-actions {
+    justify-content: flex-start;
+  }
+
+  .workflow-canvas-shell {
+    height: 70vh;
+    min-height: 520px;
+  }
+
+  .workflow-node-modal-layout,
+  .workflow-connection-modal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-node-modal-column {
+    grid-column: 1;
+  }
+
+  .workflow-modal-section--basic,
+  .workflow-modal-section--badge,
+  .workflow-modal-section--actions,
+  .workflow-modal-section--permissions {
+    grid-column: 1;
+  }
+
+  .workflow-badge-style__footer {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-empty-state {
+    left: 24px;
+    right: 24px;
+    transform: none;
+  }
+}
