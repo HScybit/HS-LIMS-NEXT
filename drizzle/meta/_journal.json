@@ -190,6 +190,97 @@
       "when": 1789163334299,
       "tag": "0026_registration_reference_access",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789167847810,
+      "tag": "0027_solid_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789167891811,
+      "tag": "0028_workflow_approval_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789168847172,
+      "tag": "0029_workflow_request_completeness",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789169167813,
+      "tag": "0030_workflow_runtime_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789169601763,
+      "tag": "0031_normal_toad",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789169643772,
+      "tag": "0032_workflow_checklist_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789170035084,
+      "tag": "0033_workflow_generation_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789170888346,
+      "tag": "0034_approval_record_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789172070521,
+      "tag": "0035_outgoing_havok",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789172086075,
+      "tag": "0036_datasheet_submission_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789172847000,
+      "tag": "0037_workflow_result_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789172906166,
+      "tag": "0038_test_request_workflow_completion",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1789173160164,
+      "tag": "0039_test_request_completion_status",
+      "breakpoints": true
     }
   ]
 }

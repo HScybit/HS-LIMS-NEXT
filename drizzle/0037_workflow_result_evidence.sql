@@ -1,0 +1,2 @@
+ALTER TABLE "workflow_run_history" ADD COLUMN "datasheet_submission_id" uuid;--> statement-breakpoint
+ALTER TABLE "workflow_run_history" ADD CONSTRAINT "workflow_run_history_organization_id_datasheet_submission_id_datasheet_submissions_organization_id_id_fk" FOREIGN KEY ("organization_id","datasheet_submission_id") REFERENCES "public"."datasheet_submissions"("organization_id","id") ON DELETE no action ON UPDATE no action;

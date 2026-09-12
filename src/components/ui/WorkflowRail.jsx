@@ -272,6 +272,8 @@ export function WorkflowTransitionRequestModal({
   stateOptions,
   submitting = false,
   title = 'Request Approval',
+  commentsRequired = false,
+  children,
   onCancel,
   onCommentsChange,
   onStateChange,
@@ -283,11 +285,11 @@ export function WorkflowTransitionRequestModal({
       title={title}
       titleId="workflow-transition-request-title"
       titleIcon="user"
-      onClose={onCancel}
+      onClose={submitting ? undefined : onCancel}
       size="md"
       actions={
         <>
-          <SecondaryButton leftIcon="close" size="large" onClick={onCancel}>
+          <SecondaryButton leftIcon="close" size="large" onClick={onCancel} disabled={submitting}>
             Cancel
           </SecondaryButton>
           <PrimaryButton leftIcon="send" onClick={onSubmit} disabled={submitting}>
@@ -318,6 +320,7 @@ export function WorkflowTransitionRequestModal({
                 value: selectedState,
                 placeholder: 'Select state',
                 options: stateOptions,
+                disabled: submitting,
                 onChange: (event) => onStateChange(event.target.value),
               }}
             />
@@ -328,13 +331,17 @@ export function WorkflowTransitionRequestModal({
           <FormElement
             type="text"
             label="Comments"
+            mandatory={commentsRequired}
             inputProps={{
               value: comments,
               placeholder: 'eg.',
+              disabled: submitting,
+              maxLength: 5000,
               onChange: (event) => onCommentsChange(event.target.value),
             }}
           />
         </div>
+        {children}
       </div>
     </Modal>
   );

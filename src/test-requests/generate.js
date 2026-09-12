@@ -8,9 +8,15 @@ import { requireWorkflowAction } from '../workflows/access.js';
 import { sampleTimestamp } from '../samples/input.js';
 import { createSpecifications } from './specifications.js';
 
-export async function generateTestRequests(client, identity, sampleId, input = {}, { automatic = false } = {}) {
+export async function generateTestRequests(client, identity, sampleId, input = {}, { automatic = false, workflowRunId = null } = {}) {
   uuid(sampleId, 'Sample');
-  if (automatic) {
+  if (workflowRunId) {
+    uuid(workflowRunId, 'Workflow run');
+    if (!automatic) throw new HttpError(403, 'workflow_generation_required', 'Workflow generation requires an automatic transition.');
+    await client.query("SELECT set_config('app.workflow_generation_run_id', $1, true)", [workflowRunId]);
+    const context = await client.query('SELECT workflow_generating_sample() AS id');
+    if (context.rows[0].id !== sampleId) throw new HttpError(403, 'workflow_generation_required', 'Automatic generation requires a recorded workflow transition for this sample.');
+  } else if (automatic) {
     requirePermission(identity, 'samples.create');
     const registration = await client.query('SELECT laboratory_registering_sample() AS id');
     if (registration.rows[0].id !== sampleId) throw new HttpError(403, 'registration_required', 'Automatic generation requires an active sample registration.');

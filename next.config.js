@@ -17,9 +17,11 @@ const nextConfig = {
     }, ...[
       '/api/templates', '/api/templates/:templateId',
       '/api/template-versions/:versionId', '/api/template-versions/:versionId/:action(freeze|draft)',
-      '/api/datasheets/:datasheetId', '/api/datasheets/:datasheetId/:action(values|calculate|repeats)',
+      '/api/datasheets/:datasheetId', '/api/datasheets/:datasheetId/:action(values|calculate|repeats|submit)',
       '/api/samples', '/api/samples/:sampleId', '/api/samples/:sampleId/test-requests',
       '/api/test-requests/:requestId', '/api/test-requests/:requestId/:action(assignments|allocation-options)',
+      '/api/workflow-runs/:runId', '/api/workflow-runs/:runId/:action(transitions|datasheet-transitions)',
+      '/api/approvals/:caseId', '/api/approval-assignments/:assignmentId/approve',
     ].map((source) => ({ source, headers: [{ key: 'Content-Type', value: 'application/json; charset=utf-8' }] }))];
   },
 };

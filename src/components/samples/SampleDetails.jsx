@@ -6,7 +6,7 @@ import PageHeader from '../layout/PageHeader.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import MoreActionButton from '../ui/MoreActionButton.jsx';
 import StatusPill from '../ui/StatusPill.jsx';
-import { WorkflowDetailsRail } from '../ui/WorkflowRail.jsx';
+import WorkflowPanel from '../workflows/WorkflowPanel.jsx';
 import { AppLoader } from '../ui/AppLoader.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import '../../styles/sample-details-page.scss';
@@ -22,12 +22,14 @@ function SectionHeader({ children }) { return <div className="card-header"><h2 c
 
 export default function SampleDetails({ sampleId }) {
   const router = useRouter(); const [sample, setSample] = useState(null); const [error, setError] = useState(''); const [reload, setReload] = useState(0); const [generating, setGenerating] = useState(false);
+  const [workflow, setWorkflow] = useState(null);
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
       try {
         const result = await apiRequest(`/api/samples/${sampleId}`, { signal: controller.signal });
-        if (!controller.signal.aborted) { setSample(result); setError(''); }
+        const run = result.workflowRunId ? await apiRequest(`/api/workflow-runs/${result.workflowRunId}`, { signal: controller.signal }) : null;
+        if (!controller.signal.aborted) { setSample(result); setWorkflow(run); setError(''); }
       } catch (failure) { if (!controller.signal.aborted) setError(failure.message); }
     }
     void load(); return () => controller.abort();
@@ -79,8 +81,8 @@ export default function SampleDetails({ sampleId }) {
           </article>)}
         </div></div></section>
         <section className="smplfy-sample-details-additional"><SectionHeader>Additional Details</SectionHeader><div className="card-body p-0"><DetailGrid items={additional} /></div></section>
-      </div></div><WorkflowDetailsRail ariaLabel="Sample actions and activity" emptyActionMessage="No pending approval request for this sample."
-        activityItems={sample.activity.map((item) => ({ key: item.id, date: item.occurredAt, title: item.description, user: item.actorName, tone: 'info' }))} />
+      </div></div><WorkflowPanel ariaLabel="Sample actions and activity" workflow={workflow} currentState={sample.stateName || sample.status} onChanged={() => setReload((value) => value + 1)}
+        activity={sample.activity.map((item) => ({ key: item.id, date: item.occurredAt, title: item.description, user: item.actorName, tone: 'info' }))} />
       </div>
     </main>
   </>;

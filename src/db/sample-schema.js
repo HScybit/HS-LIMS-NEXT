@@ -1,9 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, boolean, timestamp, integer, bigint, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
-import { templates, templateInstances } from './template-schema.js';
+import { templates, templateInstances, templateValues } from './template-schema.js';
 import { sampleCategories, products, productSampleCategories, customers, customerQuotations, laboratories, measurementUnits, testParameters, methodsOfAnalysis, parameterMethods, decisionRules, tags } from './master-schema.js';
-import { workflowVersions, workflowStates } from './workflow-schema.js';
+import { workflowVersions, workflowStates, workflowTransitions } from './workflow-schema.js';
 
 const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
 const tenant = () => uuid('organization_id').notNull().references(() => organizations.id);
@@ -133,13 +133,43 @@ export const testRequestAssignments = pgTable('test_request_assignments', {
 export const datasheets = pgTable('datasheets', {
   ...identity(), testRequestId: uuid('test_request_id').notNull(), templateInstanceId: uuid('template_instance_id').notNull(), specificationId: uuid('specification_id').notNull(), methodId: uuid('method_id').notNull(),
   attemptNumber: integer('attempt_number').notNull(), status: text('status').notNull().default('in_progress'), revision: integer('revision').notNull().default(1),
-  createdBy: uuid('created_by').notNull(), createdAt: time('created_at').notNull().defaultNow(), completedBy: uuid('completed_by'), completedAt: time('completed_at'),
+  createdBy: uuid('created_by').notNull(), createdAt: time('created_at').notNull().defaultNow(), completedBy: uuid('completed_by'), completedAt: time('completed_at'), latestSubmissionId: uuid('latest_submission_id'),
 }, (t) => [key(t), link(t, t.testRequestId, testRequests), link(t, t.templateInstanceId, templateInstances), link(t, t.methodId, methodsOfAnalysis), actor(t, t.createdBy), actor(t, t.completedBy),
   foreignKey({ columns: [t.organizationId, t.specificationId, t.methodId], foreignColumns: [analyticalSpecifications.organizationId, analyticalSpecifications.id, analyticalSpecifications.methodId] }),
   unique('datasheet_request_id_key').on(t.organizationId, t.testRequestId, t.id), unique('datasheet_capture_key').on(t.organizationId, t.templateInstanceId),
+  unique('datasheet_instance_id_key').on(t.organizationId, t.id, t.templateInstanceId),
+  foreignKey({ name: 'datasheet_latest_submission_fk', columns: [t.organizationId, t.id, t.latestSubmissionId], foreignColumns: [datasheetSubmissions.organizationId, datasheetSubmissions.datasheetId, datasheetSubmissions.id] }),
   unique('datasheet_attempt_key').on(t.organizationId, t.testRequestId, t.attemptNumber),
   check('datasheet_status', sql`${t.status} in ('in_progress', 'completed', 'under_review', 'approved', 'rejected', 'void') and ${t.revision} > 0 and ${t.attemptNumber} > 0`),
   check('datasheet_completion', sql`(${t.completedAt} is null) = (${t.completedBy} is null) and (${t.status} not in ('completed', 'under_review', 'approved') or ${t.completedAt} is not null)`)]);
+
+// Each submission pins the authoritative capture history and exact selected
+// value. HTML and result objects are derived for transport/printing only.
+export const datasheetSubmissions = pgTable('datasheet_submissions', {
+  ...identity(), datasheetId: uuid('datasheet_id').notNull(), number: integer('number').notNull(),
+  instanceId: uuid('instance_id').notNull(), versionId: uuid('version_id').notNull(), captureRevision: integer('capture_revision').notNull(),
+  fieldId: uuid('field_id').notNull(), occurrenceId: uuid('occurrence_id').notNull(), valueRevision: integer('value_revision').notNull(),
+  source: text('source').notNull(), selectionSemantics: text('selection_semantics').notNull(), resultType: text('result_type').notNull(),
+  numberValue: numeric('number_value'), textValue: text('text_value'), booleanValue: boolean('boolean_value'),
+  measurementUnitId: uuid('measurement_unit_id'), unitRevision: integer('unit_revision'), unitCode: text('unit_code'), unitName: text('unit_name'), unitSymbol: text('unit_symbol'), unitDimension: text('unit_dimension'),
+  narration: text('narration'), submittedBy: uuid('submitted_by').notNull(), submittedAt: time('submitted_at').notNull().defaultNow(),
+}, (t) => [key(t), actor(t, t.submittedBy), link(t, t.measurementUnitId, measurementUnits),
+  foreignKey({ name: 'submission_datasheet_capture_fk', columns: [t.organizationId, t.datasheetId, t.instanceId], foreignColumns: [datasheets.organizationId, datasheets.id, datasheets.templateInstanceId] }),
+  foreignKey({ name: 'submission_capture_version_fk', columns: [t.organizationId, t.instanceId, t.versionId], foreignColumns: [templateInstances.organizationId, templateInstances.id, templateInstances.versionId] }),
+  foreignKey({ name: 'submission_selected_value_fk', columns: [t.organizationId, t.instanceId, t.fieldId, t.occurrenceId, t.valueRevision], foreignColumns: [templateValues.organizationId, templateValues.instanceId, templateValues.fieldId, templateValues.occurrenceId, templateValues.revision] }),
+  unique('submission_datasheet_id_key').on(t.organizationId, t.datasheetId, t.id),
+  unique('submission_number_key').on(t.organizationId, t.datasheetId, t.number),
+  unique('submission_capture_revision_key').on(t.organizationId, t.instanceId, t.captureRevision),
+  check('submission_revision', sql`${t.number} > 0 and ${t.captureRevision} > 0 and ${t.valueRevision} > 0 and ${t.valueRevision} <= ${t.captureRevision}`),
+  check('submission_source', sql`${t.source} in ('section', 'column') and ${t.selectionSemantics} = 'source-agreement-v1'`),
+  check('submission_payload', sql`num_nonnulls(${t.numberValue}, ${t.textValue}, ${t.booleanValue}) = 1 and (
+    (${t.resultType} = 'numeric' and ${t.numberValue} is not null and ${finite(t.numberValue)}) or
+    (${t.resultType} = 'text' and ${t.textValue} is not null and length(trim(${t.textValue})) between 1 and 100000) or
+    (${t.resultType} = 'boolean' and ${t.booleanValue} is not null))`),
+  check('submission_unit', sql`(${t.measurementUnitId} is null and num_nonnulls(${t.unitRevision}, ${t.unitCode}, ${t.unitName}, ${t.unitSymbol}, ${t.unitDimension}) = 0)
+    or (${t.measurementUnitId} is not null and ${t.unitRevision} is not null and ${t.unitRevision} > 0 and ${t.unitCode} is not null and ${t.unitName} is not null and ${t.unitSymbol} is not null)`),
+  check('submission_narration', sql`${t.narration} is null or length(${t.narration}) <= 5000`),
+]);
 
 export const workflowRuns = pgTable('workflow_runs', {
   ...identity(), workflowVersionId: uuid('workflow_version_id').notNull(), sampleId: uuid('sample_id'), testRequestId: uuid('test_request_id'), currentStateId: uuid('current_state_id').notNull(),
@@ -153,13 +183,15 @@ export const workflowRuns = pgTable('workflow_runs', {
 
 export const workflowRunHistory = pgTable('workflow_run_history', {
   ...identity(), workflowRunId: uuid('workflow_run_id').notNull(), workflowVersionId: uuid('workflow_version_id').notNull(), fromStateId: uuid('from_state_id'), toStateId: uuid('to_state_id').notNull(),
+  transitionId: uuid('transition_id'), datasheetSubmissionId: uuid('datasheet_submission_id'),
   action: text('action').notNull(), actorUserId: uuid('actor_user_id').notNull(), comment: text('comment'), occurredAt: time('occurred_at').notNull().defaultNow(),
-}, (t) => [key(t), actor(t, t.actorUserId),
+}, (t) => [key(t), actor(t, t.actorUserId), link(t, t.datasheetSubmissionId, datasheetSubmissions), unique('workflow_history_transition_key').on(t.organizationId, t.id, t.transitionId),
+  foreignKey({ name: 'workflow_history_transition_fk', columns: [t.organizationId, t.workflowVersionId, t.transitionId], foreignColumns: [workflowTransitions.organizationId, workflowTransitions.workflowVersionId, workflowTransitions.id] }),
   foreignKey({ columns: [t.organizationId, t.workflowRunId, t.workflowVersionId], foreignColumns: [workflowRuns.organizationId, workflowRuns.id, workflowRuns.workflowVersionId] }),
   foreignKey({ columns: [t.organizationId, t.workflowVersionId, t.fromStateId], foreignColumns: [workflowStates.organizationId, workflowStates.workflowVersionId, workflowStates.id] }),
   foreignKey({ columns: [t.organizationId, t.workflowVersionId, t.toStateId], foreignColumns: [workflowStates.organizationId, workflowStates.workflowVersionId, workflowStates.id] }),
   index('workflow_run_history_idx').on(t.organizationId, t.workflowRunId, t.occurredAt),
-  check('workflow_run_history_action', sql`${t.action} in ('started', 'transitioned', 'approved', 'rejected', 'cancelled', 'completed')`)]);
+  check('workflow_run_history_action', sql`${t.action} in ('started', 'requested', 'transitioned', 'approved', 'rejected', 'cancelled', 'completed')`)]);
 
 export const sampleEvents = pgTable('sample_events', {
   ...identity(), sampleId: uuid('sample_id').notNull(), testRequestId: uuid('test_request_id'), eventType: text('event_type').notNull(), actorUserId: uuid('actor_user_id').notNull(),
