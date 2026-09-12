@@ -2,6 +2,8 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { ownerPool, createAccount } from '../helpers/database.js';
 import { createLaboratoryFixture } from '../helpers/laboratory.js';
+import { createAlternateMethod } from '../helpers/methods.js';
+import { addTestRequestMethod, deleteTestRequestMethod } from '../../src/test-requests/methods.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { registerSample } from '../../src/samples/register.js';
@@ -87,7 +89,9 @@ test('reassignment serializes revisions, reuses the existing datasheet and immed
   const value = [{ fieldId: raw.id, occurrenceId: occurrence.id, state: 'present', value: '7.5' }];
   await assert.rejects(work(analyst, (client, identity) => saveCapture(client, identity, stored.template_instance_id, 1, value)), { code: 'capture_write_denied' });
   await work(replacement, (client, identity) => saveCapture(client, identity, stored.template_instance_id, 1, value));
-  await owner.query("UPDATE datasheets SET status='void', revision=revision+1 WHERE organization_id=$1 AND id=$2", [author.organizationId, stored.id]);
+  const method = await createAlternateMethod(owner, author, fixture);
+  const added = await work(replacement, (client, identity) => addTestRequestMethod(client, identity, fixture.requestId, { revision: 3, methodId: method.id }));
+  await work(replacement, (client, identity) => deleteTestRequestMethod(client, identity, fixture.requestId, stored.id, { revision: added.revision }));
   await assert.rejects(work(replacement, (client, identity) => saveCapture(client, identity, stored.template_instance_id, 2, value)), { code: 'capture_write_denied' });
 });
 

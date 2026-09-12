@@ -40,6 +40,7 @@ export async function allocateTestRequest(client, identity, requestId, input) {
   requirePermission(identity, 'test_requests.allocate'); uuid(requestId, 'Test request');
   fieldsOnly(input, ['revision', 'assignmentType', 'assignedUserId']); revision(input.revision); uuid(input.assignedUserId, 'Assigned user');
   if (!['analyst', 'reviewer', 'final_approver'].includes(input.assignmentType)) throw new HttpError(400, 'invalid_assignment_type', 'Select a supported assignment type.');
+  await client.query('SELECT laboratory_lock_request_sample($1)', [requestId]);
   const result = await client.query(`SELECT request.*, product.sample_id, sample.sample_category_id, specification.method_id
     FROM test_requests request JOIN sample_tests selected ON selected.organization_id = request.organization_id AND selected.id = request.sample_test_id
     JOIN sample_products product ON product.organization_id = selected.organization_id AND product.id = selected.sample_product_id

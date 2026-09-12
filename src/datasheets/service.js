@@ -13,6 +13,7 @@ export async function datasheetRecord(client, identity, datasheetId, sampleId) {
   const result = await client.query(`SELECT sheet.id, sheet.test_request_id AS "testRequestId", sheet.template_instance_id AS "templateInstanceId",
     sheet.status, sheet.revision, sheet.attempt_number AS "attemptNumber", request.request_number AS "requestNumber", request.status AS "requestStatus",
     sample.id AS "sampleId", sample.sample_number AS "sampleNumber", specification.method_name AS "methodName",
+    laboratory_request_can_work(sheet.test_request_id) AS "canWork",
     EXISTS (SELECT 1 FROM test_request_assignments assignment WHERE assignment.organization_id = sheet.organization_id
       AND assignment.test_request_id = sheet.test_request_id AND assignment.assignment_type = 'analyst'
       AND assignment.assigned_user_id = $3 AND assignment.unassigned_at IS NULL) AS "assignedAnalyst"
@@ -39,7 +40,7 @@ export async function loadDatasheet(client, identity, datasheetId, { sampleId, a
   const modelView = datasheetTemplateView(definition.model); const runtimeView = datasheetCaptureView(capture);
   const projectionMs = performance.now() - projectionStart;
   return { datasheet: sheet, model: modelView, capture: runtimeView, validation: calculation.validation,
-    canExecute: atRevision === undefined && identity.permission_codes.includes('datasheets.execute') && sheet.assignedAnalyst
+    canExecute: atRevision === undefined && sheet.canWork && identity.permission_codes.includes('datasheets.execute') && sheet.assignedAnalyst
       && ['allocated', 'in_progress', 'rejected'].includes(sheet.requestStatus) && ['in_progress', 'rejected'].includes(sheet.status) && capture.instance.status === 'editing',
     metrics: { metadataQueryCount: 1, metadataMs, definition: definition.metrics, capture: capture.metrics, calculationMs: calculation.durationMs, projectionMs } };
 }

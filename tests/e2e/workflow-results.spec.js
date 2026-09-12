@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { ownerPool, createAccount } from '../helpers/database.js';
 import { createLaboratoryFixture } from '../helpers/laboratory.js';
+import { createAlternateMethod } from '../helpers/methods.js';
+import { addTestRequestMethod } from '../../src/test-requests/methods.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { editTemplate } from '../../src/templates/authoring.js';
@@ -36,8 +38,10 @@ async function fixture() {
   const generated = await work((client, identity) => generateTestRequests(client, identity, sample.id));
   const requestId = generated.items[0].id;
   const allocated = await work((client, identity) => allocateTestRequest(client, identity, requestId, { revision: 1, assignmentType: 'analyst', assignedUserId: analyst.userId }));
-  return { analyst, approver, source, sample, requestId, ...allocated,
-    requestPath: `/samples/${sample.id}/test_requests/${requestId}`, datasheetPath: `/samples/${sample.id}/data_sheets/${allocated.datasheetId}` };
+  const method = await createAlternateMethod(owner, analyst, source);
+  const added = await work((client, identity) => addTestRequestMethod(client, identity, requestId, { revision: allocated.revision, methodId: method.id }));
+  return { analyst, approver, source, sample, requestId, ...allocated, datasheetId: added.datasheetId, originalDatasheetId: allocated.datasheetId,
+    requestPath: `/samples/${sample.id}/test_requests/${requestId}`, datasheetPath: `/samples/${sample.id}/data_sheets/${added.datasheetId}` };
 }
 async function login(page, user) {
   await page.goto('/login');
@@ -60,7 +64,7 @@ test('source workflow dialogs submit results, preserve failed comments/checks an
   await page.getByRole('spinbutton', { name: 'raw_0', exact: true }).nth(1).fill('2.5');
   await page.getByRole('spinbutton', { name: 'raw_1', exact: true }).fill('0');
   await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(page).toHaveURL(source.requestPath);
+  await expect(page).toHaveURL(`${source.requestPath}?datasheetId=${source.datasheetId}`);
   await page.getByRole('button', { name: 'Request Approval', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Request Approval', exact: true });
   await dialog.getByRole('button', { name: 'Send Request', exact: true }).click();
@@ -89,6 +93,12 @@ test('source workflow dialogs submit results, preserve failed comments/checks an
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'View details', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Add Results', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add Method', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Delete method', exact: true })).toHaveCount(0);
+  const pending = await page.request.get(`/api/test-requests/${source.requestId}`).then((response) => response.json());
+  const changePending = await page.request.delete(`/api/test-requests/${source.requestId}/methods/${source.originalDatasheetId}`, { headers, data: { revision: pending.revision } });
+  expect(changePending.status()).toBe(409);
+  expect((await page.request.get(`/api/datasheets/${source.originalDatasheetId}`).then((response) => response.json())).canExecute).toBe(false);
 
   const approvalContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const approvalPage = await approvalContext.newPage(); approvalPage.on('pageerror', (error) => errors.push(error.message));
@@ -119,5 +129,6 @@ test('source workflow dialogs submit results, preserve failed comments/checks an
   await expect(page.locator('.tr-details-page-header__title-row')).toContainText('Completed');
   const persisted = await page.request.get(`/api/datasheets/${source.datasheetId}`).then((response) => response.json());
   expect(persisted.datasheet.status).toBe('approved'); expect(persisted.capture.instance.status).toBe('frozen'); expect(persisted.canExecute).toBe(false);
+  expect((await page.request.get(`/api/datasheets/${source.originalDatasheetId}`).then((response) => response.json())).datasheet.status).toBe('in_progress');
   expect(errors).toEqual([]);
 });

@@ -344,6 +344,34 @@
       "when": 1789183046270,
       "tag": "0048_private_trigger_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789183902459,
+      "tag": "0049_alternate_datasheet_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789184801435,
+      "tag": "0050_alternate_datasheet_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1789185634654,
+      "tag": "0051_alternate_capture_ownership",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1789186102289,
+      "tag": "0052_method_cancellation_evidence",
+      "breakpoints": true
     }
   ]
 }

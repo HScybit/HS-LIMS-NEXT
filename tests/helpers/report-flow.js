@@ -11,9 +11,9 @@ import { saveCapture } from '../../src/templates/capture.js';
 import { loadWorkflowRun } from '../../src/workflows/load.js';
 import { submitDatasheetTransition } from '../../src/workflows/requests.js';
 
-export async function prepareReportFlow(owner, account, { complete = true, printRoleId, finalSection = false, productLines = 1 } = {}) {
+export async function prepareReportFlow(owner, account, { complete = true, printRoleId, finalSection = false, productLines = 1, sampleCanWork = true, cancelTestRequest = false } = {}) {
   const work = (callback, options) => withSession(account.token, callback, { csrfToken: account.csrfToken, ...options });
-  const fixture = await createLaboratoryFixture(owner, account, { repeated: finalSection, printRoleId });
+  const fixture = await createLaboratoryFixture(owner, account, { repeated: finalSection, printRoleId, sampleCanWork, cancelTestRequest });
   await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 1,
     { type: 'configureColumn', id: fixture.template.records.columns.at(-1).id, span: 6, isFinalResult: true }));
   if (finalSection) await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 2,

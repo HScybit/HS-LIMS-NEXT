@@ -133,7 +133,8 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
   }, [persistInput]);
 
   function done() {
-    void perform(async () => router.push(`/samples/${data.datasheet.sampleId}/test_requests/${data.datasheet.testRequestId}`));
+    const selected = data.datasheet.attemptNumber > 1 ? `?datasheetId=${data.datasheet.id}` : '';
+    void perform(async () => router.push(`/samples/${data.datasheet.sampleId}/test_requests/${data.datasheet.testRequestId}${selected}`));
   }
   function calculate() {
     void perform(async () => {

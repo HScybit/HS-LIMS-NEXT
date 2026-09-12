@@ -10,6 +10,8 @@ export async function setCaptureContext(client, instanceId) {
 
 export async function requireCaptureWrite(client, instanceId) {
   await setCaptureContext(client, instanceId);
+  await client.query(`SELECT laboratory_lock_request_sample(sheet.test_request_id) FROM datasheets sheet
+    WHERE sheet.organization_id=nullif(current_setting('app.organization_id',true),'')::uuid AND sheet.template_instance_id=$1`, [instanceId]);
   // Assignment changes lock the request too. A save and reassignment therefore
   // have one order instead of authorizing against a mid-transaction assignment.
   await client.query(`SELECT request.id FROM test_requests request JOIN datasheets sheet

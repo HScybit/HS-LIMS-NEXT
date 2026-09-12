@@ -82,7 +82,7 @@ export const sampleParticipatingLabs = pgTable('sample_participating_labs', {
 // Immutable interpretation at test-request generation. Each datasheet references
 // the specification actually used; later master edits cannot reinterpret it.
 export const analyticalSpecifications = pgTable('analytical_specifications', {
-  ...identity(), testParameterId: uuid('test_parameter_id').notNull(), parameterRevision: integer('parameter_revision').notNull(), parameterCode: text('parameter_code').notNull(), parameterName: text('parameter_name').notNull(),
+  ...identity(), basisSpecificationId: uuid('basis_specification_id'), testParameterId: uuid('test_parameter_id').notNull(), parameterRevision: integer('parameter_revision').notNull(), parameterCode: text('parameter_code').notNull(), parameterName: text('parameter_name').notNull(),
   parameterMasterKey: text('parameter_master_key').notNull(), parameterScale: integer('parameter_scale').notNull(),
   methodId: uuid('method_id').notNull(), methodRevision: integer('method_revision').notNull(), methodCode: text('method_code').notNull(), methodName: text('method_name').notNull(),
   methodDescription: text('method_description').notNull(), methodUuid: text('method_uuid').notNull(), decimalScale: integer('decimal_scale').notNull(), parseNumber: boolean('parse_number').notNull(),
@@ -94,6 +94,8 @@ export const analyticalSpecifications = pgTable('analytical_specifications', {
   showDetectableLimitText: boolean('show_detectable_limit_text').notNull().default(false), showStandardLimitText: boolean('show_standard_limit_text').notNull().default(false), conformanceLimit: numeric('conformance_limit'),
   recordedBy: uuid('recorded_by').notNull(), recordedAt: time('recorded_at').notNull().defaultNow(),
 }, (t) => [key(t), link(t, t.testParameterId, testParameters), link(t, t.methodId, methodsOfAnalysis), link(t, t.measurementUnitId, measurementUnits), link(t, t.decisionRuleId, decisionRules), link(t, t.templateId, templates), actor(t, t.recordedBy),
+  foreignKey({ name: 'analytical_spec_basis_fk', columns: [t.organizationId, t.basisSpecificationId], foreignColumns: [t.organizationId, t.id] }),
+  check('analytical_spec_basis_identity', sql`${t.basisSpecificationId} is distinct from ${t.id}`),
   unique('analytical_specification_method_key').on(t.organizationId, t.id, t.methodId),
   check('analytical_specification_revisions', sql`${t.parameterRevision} > 0 and ${t.methodRevision} > 0 and ${t.parameterScale} between 0 and 12 and ${t.decimalScale} between 0 and 12`),
   check('analytical_specification_unit', sql`(${t.measurementUnitId} is null and num_nonnulls(${t.unitRevision}, ${t.unitCode}, ${t.unitName}, ${t.unitSymbol}, ${t.unitDimension}) = 0)
@@ -194,8 +196,10 @@ export const workflowRunHistory = pgTable('workflow_run_history', {
   check('workflow_run_history_action', sql`${t.action} in ('started', 'requested', 'transitioned', 'approved', 'rejected', 'cancelled', 'completed')`)]);
 
 export const sampleEvents = pgTable('sample_events', {
-  ...identity(), sampleId: uuid('sample_id').notNull(), testRequestId: uuid('test_request_id'), eventType: text('event_type').notNull(), actorUserId: uuid('actor_user_id').notNull(),
+  ...identity(), sampleId: uuid('sample_id').notNull(), testRequestId: uuid('test_request_id'), datasheetId: uuid('datasheet_id'), eventType: text('event_type').notNull(), actorUserId: uuid('actor_user_id').notNull(),
   description: text('description').notNull(), occurredAt: time('occurred_at').notNull().defaultNow(),
 }, (t) => [key(t), link(t, t.sampleId, samples), link(t, t.testRequestId, testRequests), actor(t, t.actorUserId),
+  foreignKey({ name: 'sample_event_datasheet_fk', columns: [t.organizationId, t.testRequestId, t.datasheetId], foreignColumns: [datasheets.organizationId, datasheets.testRequestId, datasheets.id] }),
+  check('sample_event_datasheet_owner', sql`(${t.datasheetId} is null or ${t.testRequestId} is not null) and (${t.eventType} not in ('datasheet_method_added','datasheet_method_voided') or ${t.datasheetId} is not null)`),
   index('sample_events_time_idx').on(t.organizationId, t.sampleId, t.occurredAt),
-  check('sample_event_type', sql`${t.eventType} in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted', 'reports_generated')`)]);
+  check('sample_event_type', sql`${t.eventType} in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted', 'reports_generated', 'datasheet_method_added', 'datasheet_method_voided')`)]);
