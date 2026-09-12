@@ -12,6 +12,38 @@ let owner;
 test.beforeAll(() => { owner = ownerPool(); });
 test.afterAll(async () => { await closePool(); await owner.end(); });
 
+test('manual job creation uses the Product form fallback when organization summary settings are absent', async ({ page }) => {
+  const user = await createAccount(owner, { permissions: ['masters.manage', 'samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute'] });
+  const session = await signIn({ identifier: user.username, password: user.password });
+  const work = (callback) => withSession(session.token, callback, { csrfToken: session.csrfToken });
+  const fixture = await createLaboratoryFixture(owner, user, { repeated: false });
+  const sample = await work((client, identity) => registerSample(client, identity, fixture.registration));
+  const generated = await work((client, identity) => generateTestRequests(client, identity, sample.id));
+  await page.goto('/login'); await page.getByLabel('Username', { exact: true }).fill(user.username);
+  await page.getByLabel('Password', { exact: true }).fill(user.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/me$/);
+  const select = async () => {
+    await page.goto(`/samples/${sample.id}/test_requests`); await page.getByRole('button', { name: 'Create Job', exact: true }).click();
+    await page.getByRole('checkbox', { name: 'Select all test requests', exact: true }).check();
+    await page.getByRole('combobox', { name: 'Assignee:', exact: true }).fill('Synthetic Analyst');
+    await page.getByRole('option', { name: 'Synthetic Analyst', exact: true }).click();
+  };
+  await select(); await page.getByRole('button', { name: 'Create Job', exact: true }).click();
+  await expect(page.locator('.smplfy-tr-listing-page').getByRole('alert')).toContainText('a Job Template for each selected Product');
+  await expect(page.getByRole('checkbox', { name: `Select ${generated.items[0].requestNumber}`, exact: true })).toBeChecked();
+  await page.goto(`/products/${fixture.product.id}/edit`);
+  await page.getByLabel('Job Template', { exact: true }).fill('Synthetic'); await page.getByRole('option', { name: /Synthetic/ }).click();
+  await page.getByRole('button', { name: 'Update', exact: true }).click(); await expect(page).toHaveURL(/\/products$/);
+  await select();
+  const created = page.waitForResponse((response) => response.url().endsWith('/api/test-requests/jobs') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Create Job', exact: true }).click(); const response = await created;
+  expect(response.status()).toBe(201); const result = await response.json(); expect(result.items).toHaveLength(1);
+  await expect(page.getByRole('link', { name: result.items[0].requestNumber, exact: true })).toBeVisible();
+  const job = (await owner.query('SELECT datasheet_template_id FROM test_requests WHERE organization_id=$1 AND id=$2', [user.organizationId, result.items[0].id])).rows[0];
+  expect(job.datasheet_template_id).toBe(fixture.template.templateId);
+  expect((await owner.query('SELECT 1 FROM organization_laboratory_settings WHERE organization_id=$1', [user.organizationId])).rowCount).toBe(0);
+});
+
 test('source settings and job selection preserve failed choices and create one assigned job per product line', async ({ page, context }, testInfo) => {
   test.setTimeout(60_000);
   const user = await createAccount(owner, { permissions: ['samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'templates.manage', 'settings.manage'] });

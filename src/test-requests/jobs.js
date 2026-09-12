@@ -19,14 +19,17 @@ function jobInput(input) {
 
 export async function createAutomaticJobs(client, identity, sampleId, requests) {
   const settings = (await client.query('SELECT * FROM laboratory_generation_job_settings($1)', [sampleId])).rows[0];
-  if (!settings?.auto_create_jobs || !settings.result_summary_template_id) return { jobs: [], members: new Map() };
+  if (!settings?.auto_create_jobs || !requests.length) return { jobs: [], members: new Map() };
   const groups = new Map();
   for (const request of requests) {
     if (!groups.has(request.sampleProductId)) groups.set(request.sampleProductId, []);
     groups.get(request.sampleProductId).push(request.id);
   }
   const jobs = []; const members = new Map();
-  for (const requestIds of groups.values()) {
+  const templates = (await client.query('SELECT * FROM laboratory_product_job_templates($1,$2::uuid[],true)', [sampleId, [...groups.keys()]])).rows;
+  const available = new Set(templates.filter((row) => row.template_id).map((row) => row.sample_product_id));
+  for (const [productLineId, requestIds] of groups) {
+    if (!available.has(productLineId)) continue;
     const job = (await client.query('SELECT * FROM laboratory_start_auto_job($1::uuid[])', [requestIds])).rows[0];
     for (const requestId of requestIds) {
       await client.query("SELECT set_config('app.auto_job_request_id',$1,true)", [requestId]);
@@ -69,13 +72,14 @@ export async function createTestRequestJobs(client, identity, rawInput) {
   if ((await client.query('SELECT user_id FROM laboratory_assignment_users() WHERE user_id=ANY($1::uuid[])', [assigneeIds])).rowCount !== assigneeIds.length) {
     throw new HttpError(422, 'invalid_assignee', 'Select active assignees from this organization.');
   }
-  const settings = (await client.query('SELECT * FROM laboratory_job_settings()')).rows[0];
-  if (!settings?.result_summary_template_id) throw new HttpError(422, 'job_template_not_configured', 'Select a Test Result Summary Template in Organization Settings.');
   const groups = new Map();
   for (const request of selected) {
     if (!groups.has(request.sample_product_id)) groups.set(request.sample_product_id, []);
     groups.get(request.sample_product_id).push(request);
   }
+  const templates = new Map((await client.query('SELECT * FROM laboratory_product_job_templates($1,$2::uuid[],false)', [sampleId, [...groups.keys()]])).rows
+    .map((row) => [row.sample_product_id, row.template_id]));
+  if ([...groups.keys()].some((id) => !templates.get(id))) throw new HttpError(422, 'job_template_not_configured', 'Select an active Test Result Summary Template in Organization Settings or a Job Template for each selected Product.');
   const items = [];
   for (const [productLineId, members] of groups) {
     const jobId = randomUUID(); const memberIds = members.map((request) => request.id);
@@ -84,7 +88,7 @@ export async function createTestRequestJobs(client, identity, rawInput) {
     // Preserve PostgreSQL timestamp precision when deriving the earliest due date.
     await client.query(`INSERT INTO test_requests(organization_id,id,request_number,is_job,job_sample_product_id,priority,due_at,datasheet_template_id,created_by)
       SELECT $1,$2,$3,true,$4,$5,min(due_at),$6,$7 FROM test_requests WHERE organization_id=$1 AND id=ANY($8::uuid[])`,
-    [org, jobId, number, productLineId, priority, settings.result_summary_template_id, identity.user_id, memberIds]);
+    [org, jobId, number, productLineId, priority, templates.get(productLineId), identity.user_id, memberIds]);
     await client.query(`UPDATE test_requests request SET parent_test_request_id=$3,job_member_position=member.ordinality-1,job_linked_by=$4,
       job_linked_at=now(),revision=request.revision+1 FROM unnest($2::uuid[]) WITH ORDINALITY member(id,ordinality)
       WHERE request.organization_id=$1 AND request.id=member.id`, [org, memberIds, jobId, identity.user_id]);

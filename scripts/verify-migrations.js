@@ -29,6 +29,8 @@ import { reportSvg } from '../tests/helpers/report-svg.js';
 import { emptyUncertaintyGrid, updateUncertaintyGrid } from '../src/masters/parameter-grid.js';
 import { loadTestParameter, saveTestParameter, retireTestParameter } from '../src/masters/test-parameters.js';
 import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
+import { loadProduct, saveProduct, retireProduct, listProducts } from '../src/masters/products.js';
+import { createTestRequestJobs } from '../src/test-requests/jobs.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
@@ -118,6 +120,32 @@ try {
     assert.equal((await retireMethod(client, identity, removal)).revision, 3);
     assert.deepEqual(await loadMethod(client, identity, command.id, { atRevision: 1 }), historical);
     await assert.rejects(loadMethod(client, identity, command.id), { code: 'method_not_found' });
+  }, { csrfToken: session.csrfToken });
+  const productTags = (await owner.query(`INSERT INTO tags(organization_id,code,name) VALUES($1,$2,'Fresh Alpha'),($1,$3,'Fresh Beta') RETURNING id`,
+    [account.organizationId, randomUUID(), randomUUID()])).rows.map((row) => row.id);
+  await withSession(session.token, async (client, identity) => {
+    const command = { id: laboratory.product.id, revision: 1, requestId: randomUUID(), name: laboratory.product.name, key: laboratory.product.code,
+      description: '  Exact Product notes  ', abbreviation: '0', jobTemplateId: laboratory.template.templateId, tagIds: productTags.toReversed() };
+    const saved = await saveProduct(client, identity, command);
+    assert.deepEqual(saved.sampleCategoryIds, [laboratory.category.id]); assert.deepEqual(saved.tagIds, productTags.toReversed());
+    assert.equal(saved.abbreviation, '0'); assert.equal((await saveProduct(client, identity, command)).revision, 2);
+    const historical = await loadProduct(client, identity, command.id, { atRevision: 2 });
+    await saveProduct(client, identity, { ...command, revision: 2, requestId: randomUUID(), description: '', tagIds: [productTags[0]] });
+    assert.deepEqual(await loadProduct(client, identity, command.id, { atRevision: 2 }), historical);
+    assert.equal((await listProducts(client, identity, { filters: { tags: { type: 'relation', value: [productTags[0]] } } })).totalCount, 1);
+    const standalone = await saveProduct(client, identity, { ...command, id: randomUUID(), revision: 0, requestId: randomUUID(), key: `FRESH-${randomUUID()}` });
+    const removal = { id: standalone.id, revision: 1, requestId: randomUUID() };
+    assert.equal((await retireProduct(client, identity, removal)).revision, 2); assert.equal((await retireProduct(client, identity, removal)).revision, 2);
+    assert.deepEqual((await loadProduct(client, identity, standalone.id, { atRevision: 2 })).tagIds, standalone.tagIds);
+    await assert.rejects(loadProduct(client, identity, standalone.id), { code: 'product_not_found' });
+  }, { csrfToken: session.csrfToken });
+  const productJobSample = await withSession(session.token, (client, identity) => registerSample(client, identity, laboratory.registration), { csrfToken: session.csrfToken });
+  await withSession(session.token, async (client, identity) => {
+    const generated = await generateTestRequests(client, identity, productJobSample.id);
+    const created = await createTestRequestJobs(client, identity, { requestIds: generated.items.map((row) => row.id), analystUserId: account.userId });
+    assert.equal(created.items.length, 1); assert.ok(created.items[0].datasheetId);
+    const job = (await client.query('SELECT datasheet_template_id FROM test_requests WHERE organization_id=$1 AND id=$2', [identity.organization_id, created.items[0].id])).rows[0];
+    assert.equal(job.datasheet_template_id, laboratory.template.templateId);
   }, { csrfToken: session.csrfToken });
   for (const [table, extraColumns, retire, load] of [
     ['methods_of_analysis', 'method_uuid', retireMethod, loadMethod],
@@ -227,7 +255,7 @@ try {
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, typed parameter uncertainty and method/user history/retry/retirement, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, typed parameter uncertainty, method/user and Product/tag history/retry/retirement, Product job fallback, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

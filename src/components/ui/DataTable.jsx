@@ -1,7 +1,7 @@
 'use client';
 
 import "../../styles/datatable.scss";
-import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef, useId } from "react";
 import cx from "classnames";
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import AppIcon from "./AppIcon.jsx";
@@ -168,14 +168,31 @@ function useUrlTableState(defaults = {}) {
 
 export function MultiSelectFilterField({ column, filter, onUpdate }) {
   const [search, setSearch] = useState('');
-  const options = column.filterOptions || [];
   const [open, setOpen] = useState(false);
+  const [remote, setRemote] = useState({ options: [], hasMore: false, loading: false, error: '' });
+  const [retry, setRetry] = useState(0);
+  const inputId = useId(); const listId = `${inputId}-options`;
+  const loadOptions = column.loadFilterOptions;
+  useEffect(() => {
+    if (!open || !loadOptions) return undefined;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setRemote((current) => ({ ...current, loading: true, error: '' }));
+      try {
+        const result = await loadOptions(search, { signal: controller.signal });
+        if (!controller.signal.aborted) setRemote({ options: result.options, hasMore: result.hasMore, loading: false, error: '' });
+      } catch (failure) {
+        if (!controller.signal.aborted) setRemote((current) => ({ ...current, hasMore: false, loading: false, error: failure.message }));
+      }
+    }, 200);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [open, search, loadOptions, retry]);
+  const options = loadOptions ? remote.options : column.filterOptions || [];
 
   const selected = Array.isArray(filter?.value) ? filter.value : [];
 
-
-  const filtered = options.filter(o =>
-    o.label.toLowerCase().includes(search.toLowerCase())
+  const filtered = loadOptions ? options : options.filter(o =>
+    String(o.label).toLowerCase().includes(search.toLowerCase())
   );
 
   const toggle = (value) => {
@@ -185,7 +202,7 @@ export function MultiSelectFilterField({ column, filter, onUpdate }) {
 
     const labelsMap = nextSelected.reduce((acc, val) => {
       const match = options.find(o => o.value === val);
-      acc[val] = match ? match.label : val;
+      acc[val] = match ? match.label : filter?.labels?.[val] ?? val;
       return acc;
     }, {});
 
@@ -197,20 +214,28 @@ export function MultiSelectFilterField({ column, filter, onUpdate }) {
   };
 
   const selectedLabels = selected
-    .map(v => options.find(o => o.value === v)?.label || v)
+    .map(v => options.find(o => o.value === v)?.label ?? filter?.labels?.[v] ?? v)
     .join(', ');
 
   return (
     <div className="dt-filter-field">
-      <label>{column.header || column.key}</label>
+      <label htmlFor={inputId}>{column.header || column.key}</label>
 
       <input
+        id={inputId}
         type="text"
         readOnly
         value={selected.length ? selectedLabels : ''}
         placeholder={`Filter ${column.header || column.key}`}
         style={{ cursor: 'pointer' }}
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-haspopup="listbox"
+        onKeyDown={(event) => {
+          if (['Enter', ' ', 'ArrowDown'].includes(event.key)) { event.preventDefault(); setOpen(true); }
+          if (event.key === 'Escape') setOpen(false);
+        }}
       />
 
       {open && (
@@ -221,12 +246,17 @@ export function MultiSelectFilterField({ column, filter, onUpdate }) {
               value={search}
               placeholder="Search..."
               autoFocus
+              aria-label={`Search ${column.header || column.key} filters`}
               onChange={e => setSearch(e.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Escape') setOpen(false); }}
             />
           </div>
 
-          <div className="dt-multiselect-list">
-            {filtered.length === 0 ? (
+          {loadOptions && remote.error ? <div className="dt-multiselect-empty" role="alert">{remote.error}
+            <button type="button" className="btn btn-link btn-sm" onClick={() => setRetry((value) => value + 1)}>Retry</button></div> : null}
+          {loadOptions && remote.loading ? <div className="dt-multiselect-empty" role="status">Loading...</div> : null}
+          <div className="dt-multiselect-list" id={listId} role="listbox" aria-label={`${column.header || column.key} filters`} aria-multiselectable="true" aria-busy={loadOptions && remote.loading}>
+            {filtered.length === 0 && !remote.loading && !remote.error ? (
               <div className="dt-multiselect-empty">
                 No options found
               </div>
@@ -237,6 +267,13 @@ export function MultiSelectFilterField({ column, filter, onUpdate }) {
                   <div
                     key={opt.value}
                     onClick={() => toggle(opt.value)}
+                    role="option"
+                    aria-selected={isChecked}
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (['Enter', ' '].includes(event.key)) { event.preventDefault(); toggle(opt.value); }
+                      if (event.key === 'Escape') setOpen(false);
+                    }}
                     className={cx('dt-multiselect-option', isChecked && 'is-selected')}
                   >
                     <div className="dt-multiselect-checkbox" />
@@ -246,6 +283,7 @@ export function MultiSelectFilterField({ column, filter, onUpdate }) {
               })
             )}
           </div>
+          {loadOptions && remote.hasMore ? <div className="dt-multiselect-empty">More options match. Refine your search.</div> : null}
 
           {selected.length > 0 && (
             <div className="dt-multiselect-footer">
