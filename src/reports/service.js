@@ -16,7 +16,7 @@ import { finalResultSectionRoots } from '../datasheets/final-result.js';
 import { assertReportSize } from './render-model.js';
 
 const scope = (table, organizationId) => eq(table.organizationId, organizationId);
-const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, generatedAt: report.generatedAt });
+const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, isFinalized: report.isFinalized, generatedAt: report.generatedAt });
 function requireRead(identity) {
   if (!identity.permission_codes.some((permission) => ['samples.read', 'samples.manage'].includes(permission))) throw new HttpError(403, 'forbidden', 'You cannot view sample reports.');
 }
@@ -70,7 +70,7 @@ export async function reportOptions(client, identity, sampleId) {
     products.get(result.sampleProductId).tests.push({ id: result.sampleTestId, parameterName: result.parameterName, methodName: result.methodName,
       hasSubmission: result.submissionId !== null, isApproved: result.testStatus === 'completed' && result.datasheetStatus === 'approved' });
   }
-  return { sample: { id: sample.id, sampleNumber: sample.sample_number, revision: sample.revision }, templates: templates.rows, defaultTemplateId: defaults.rows[0]?.templateId ?? null,
+  return { sample: { id: sample.id, sampleNumber: sample.sample_number, revision: sample.revision, status: sample.status }, templates: templates.rows, defaultTemplateId: defaults.rows[0]?.templateId ?? null,
     products: [...products.values()], requireApprovedTestRequests: access.state?.require_all_test_requests_approved || access.permissionFallbackActions.printCoa,
     canGenerate: identity.permission_codes.includes('samples.manage') && sample.status !== 'cancelled' };
 }
@@ -97,7 +97,7 @@ async function checkReplay(client, identity, sampleId, input) {
   const templates = new Map(input.templateSelections.map((selection) => [selection.key, selection.templateId]));
   const settings = (await client.query('SELECT * FROM sample_report_print_settings WHERE organization_id=$1 AND report_id=ANY($2::uuid[])', [identity.organization_id, reportIds])).rows;
   const snake = (key) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-  if (reports.some((report) => report.sampleId !== sampleId || report.generatedBy !== identity.user_id || report.sampleRevision !== input.revision || report.reportType !== input.reportType)
+  if (reports.some((report) => report.sampleId !== sampleId || report.generatedBy !== identity.user_id || report.sampleRevision !== input.revision || report.reportType !== input.reportType || report.isFinalized !== input.finalizeSample)
     || expected.size !== found.size || [...expected].some((id) => !found.has(id))
     || rows.some((row) => templates.get(input.reportType === 'consolidated' ? 'consolidated' : row.sampleProductId) !== row.templateId)
     || settings.some((setting) => Object.entries(input.printConfig).some(([key, value]) => typeof value === 'string' && ['scale', 'xMargin', 'topMargin', 'bottomMargin'].includes(key)
@@ -111,7 +111,7 @@ export async function generateReports(client, identity, sampleId, rawInput) {
   const input = reportGenerationInput(rawInput);
   const { sample, access } = await reportSample(client, identity, sampleId, { lock: true });
   const replay = await checkReplay(client, identity, sampleId, input);
-  if (replay) return replay;
+  if (replay) return { ...replay, sample: { id: sample.id, revision: sample.revision, status: sample.status } };
   if (sample.revision !== input.revision) throw new HttpError(409, 'stale_sample', 'The sample changed. Reload before generating reports.');
   if (sample.status === 'cancelled') throw new HttpError(409, 'sample_cancelled', 'Cancelled samples cannot generate reports.');
   const candidates = await reportCandidates(client, identity, sampleId);
@@ -127,7 +127,9 @@ export async function generateReports(client, identity, sampleId, rawInput) {
   const history = await reportFinalSections(client, identity, selectedResults, definitions);
   for (const group of groups) assertReportSize(models.get(group.templateId), group.results, history.finalCaptures, history.datasheetModels);
   const db = database(client);
-  await db.insert(sampleEvents).values({ organizationId: identity.organization_id, id: input.requestId, sampleId, eventType: 'reports_generated', actorUserId: identity.user_id, description: `Generated ${groups.length} ${input.reportType.replaceAll('_', ' ')} report${groups.length === 1 ? '' : 's'}.` });
+  await db.insert(sampleEvents).values({ organizationId: identity.organization_id, id: input.requestId, sampleId,
+    eventType: input.finalizeSample ? 'reports_finalized' : 'reports_generated', actorUserId: identity.user_id,
+    description: `${input.finalizeSample ? 'Finalised and generated' : 'Generated'} ${groups.length} ${input.reportType.replaceAll('_', ' ')} report${groups.length === 1 ? '' : 's'}.` });
   const previous = (await client.query('SELECT DISTINCT ON(group_key) group_key, report_number, revision FROM sample_reports WHERE organization_id=$1 AND sample_id=$2 ORDER BY group_key, revision DESC', [identity.organization_id, sampleId])).rows;
   const byGroup = new Map(previous.map((row) => [row.group_key, row]));
   const reports = [];
@@ -139,13 +141,13 @@ export async function generateReports(client, identity, sampleId, rawInput) {
     // original microseconds and change the historical record.
     const report = (await client.query(`INSERT INTO sample_reports(organization_id, id, sample_id, template_version_id, report_number, revision, report_type, group_key,
       sample_product_id, sample_test_id, generated_by, generated_event_id, sample_revision, sample_number, sample_type, sample_category_name, customer_name, customer_address,
-      customer_reference, received_at, registered_at, due_at, description)
+      customer_reference, received_at, registered_at, due_at, description, is_finalized)
       SELECT $1,$2,sample.id,$4,$5,$6,$7,$8,$9,$10,$11,$12,sample.revision,sample.sample_number,sample.sample_type,sample.category_name,sample.customer_name,sample.customer_address,
-        sample.customer_reference,sample.received_at,sample.registered_at,sample.due_at,sample.description
+        sample.customer_reference,sample.received_at,sample.registered_at,sample.due_at,sample.description,$13
       FROM samples sample WHERE sample.organization_id=$1 AND sample.id=$3
-      RETURNING id, report_number AS "reportNumber", revision, report_type AS "reportType", group_key AS "groupKey", status, generated_at AS "generatedAt"`,
+      RETURNING id, report_number AS "reportNumber", revision, report_type AS "reportType", group_key AS "groupKey", status, is_finalized AS "isFinalized", generated_at AS "generatedAt"`,
     [identity.organization_id, id, sampleId, versions.get(group.templateId), reportNumber, (prior?.revision ?? 0) + 1, input.reportType, group.key,
-      group.sampleProductId, group.sampleTestId, identity.user_id, input.requestId])).rows[0];
+      group.sampleProductId, group.sampleTestId, identity.user_id, input.requestId, input.finalizeSample])).rows[0];
     await insertBatch(db, sampleReportTests, group.results.map((row, displayOrder) => ({ organizationId: identity.organization_id, reportId: id, displayOrder,
       sampleTestId: row.sampleTestId, sampleProductId: row.sampleProductId, testRequestId: row.testRequestId, submissionId: row.submissionId, specificationId: row.specificationId,
       decisionLimitId: row.decisionLimitId, productCode: row.productCode, productName: row.productName, requestNumber: row.requestNumber, analystName: actors.get(row.submittedBy),
@@ -154,7 +156,9 @@ export async function generateReports(client, identity, sampleId, rawInput) {
     await db.insert(sampleReportPrintSettings).values({ organizationId: identity.organization_id, reportId: id, ...input.printConfig });
     reports.push(report);
   }
-  return { items: reports, replayed: false };
+  const sampleRevision = input.finalizeSample
+    ? (await client.query('SELECT report_finalize_sample($1) AS revision', [input.requestId])).rows[0].revision : sample.revision;
+  return { items: reports, replayed: false, sample: { id: sample.id, revision: sampleRevision, status: input.finalizeSample ? 'completed' : sample.status } };
 }
 
 async function reportFinalSections(client, identity, results, definitions) {

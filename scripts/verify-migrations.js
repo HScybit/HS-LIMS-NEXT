@@ -90,7 +90,12 @@ try {
     assert.equal(loaded.customerName, customer.name); assert.equal(loaded.products[0].tests[0].requestStatus, 'allocated');
   }, { csrfToken: session.csrfToken });
   const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true });
-  const generated = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, reportFlow.input), { csrfToken: session.csrfToken });
+  const generationInput = { ...reportFlow.input, finalizeSample: true };
+  const generated = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, generationInput), { csrfToken: session.csrfToken });
+  assert.equal(generated.items[0].isFinalized, true);
+  assert.equal(generated.sample.status, 'completed'); assert.equal(generated.sample.revision, 2);
+  const retried = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, generationInput), { csrfToken: session.csrfToken });
+  assert.equal(retried.replayed, true); assert.equal(retried.sample.revision, 2);
   const reportId = generated.items[0].id;
   const queued = await withSession(session.token, (client, identity) => enqueueReportPdf(client, identity, reportId), { csrfToken: session.csrfToken });
   worker = createReportWorkerPool(workerUrl.href); await verifyReportWorkerRole(worker);
@@ -127,7 +132,7 @@ try {
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, grouped results/workflow and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, grouped results/workflow, report finalisation/retry and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

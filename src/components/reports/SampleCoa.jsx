@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from '../layout/PageHeader.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import PrimaryButton from '../ui/PrimaryButton.jsx';
 import CardSelector from '../ui/CardSelector.jsx';
 import ReportSelector from '../ui/ReportSelector.jsx';
 import VersionSelector from '../ui/VersionSelector.jsx';
@@ -80,15 +81,16 @@ export default function SampleCoa({ sampleId }) {
   const canGenerate = !blocker && reportType && selectedTestIds.length > 0 && templateKeys.every((key) => templates[key]);
   const activePreview = preview?.report.id === selectedId ? preview : null;
 
-  async function generate() {
+  async function generate(finalizeSample = false) {
     if (busyRef.current || !canGenerate) return;
-    busyRef.current = true; setBusy(true); setError('');
-    const input = { revision: options.sample.revision, reportType, selectedSampleTestIds: selectedTestIds,
+    busyRef.current = true; setBusy(finalizeSample ? 'finalize' : 'generate'); setError('');
+    const input = { revision: options.sample.revision, reportType, finalizeSample, selectedSampleTestIds: selectedTestIds,
       templateSelections: templateKeys.map((key) => ({ key, templateId: templates[key] })), printConfig };
     const content = JSON.stringify(input);
     if (attempt.current?.content !== content) attempt.current = { content, id: crypto.randomUUID() };
     try {
       const result = await apiRequest(`/api/samples/${sampleId}/reports`, { method: 'POST', body: { ...input, requestId: attempt.current.id } });
+      setOptions((current) => ({ ...current, sample: { ...current.sample, ...result.sample } }));
       setReports((current) => [...result.items, ...current.filter((report) => !result.items.some((item) => item.id === report.id))]);
       setSelectedId(result.items[0].id); setExpandedType(reportType); setSelecting(false); setPreviewError(''); attempt.current = null;
     } catch (failure) { setError(failure.message); }
@@ -104,14 +106,15 @@ export default function SampleCoa({ sampleId }) {
       <div className="d-flex align-items-center gap-3 flex-wrap">
         {reports.length ? <SecondaryButton onClick={() => setSelecting(false)} disabled={busy}>View Reports</SecondaryButton> : null}
         <SecondaryButton leftIcon="edit" onClick={() => setModal('parameters')} disabled={busy || !allTests.length}>Edit Parameters</SecondaryButton>
-        <SecondaryButton leftIcon="file-text" onClick={generate} disabled={busy || !canGenerate}>{busy ? 'Generating...' : 'Generate'}</SecondaryButton>
+        <PrimaryButton leftIcon="file-text" onClick={() => generate(true)} disabled={Boolean(busy) || !canGenerate}>{busy === 'finalize' ? 'Finalising...' : 'Finalise'}</PrimaryButton>
+        <SecondaryButton leftIcon="file-text" onClick={() => generate(false)} disabled={Boolean(busy) || !canGenerate}>{busy === 'generate' ? 'Generating...' : 'Generate'}</SecondaryButton>
         <MoreActionButton disabled={busy} items={[{ key: 'config', label: 'Print Configs', leftIcon: 'settings', onClick: () => setModal('print') }]} />
       </div>
     </section> : <section className="finalised-report-page-header"><div className="finalised-report-page-header__title-wrap">
       <SecondaryButton size="medium" className="finalised-report-page-header__back" leftIcon="chevron-left" aria-label="Go back" href={`/samples/${sampleId}`} />
       <h1>{selectedReport?.reportNumber || options.sample.sampleNumber}</h1>
       <VersionSelector value={selectedId} options={versions.map((report) => ({ value: report.id, label: `Version ${report.revision}` }))} disabled={versions.length < 2} onChange={selectReport} />
-      {selectedReport ? <StatusPill color="blue">{selectedReport.status === 'draft' ? 'Draft' : selectedReport.status}</StatusPill> : null}
+      {selectedReport ? <StatusPill color="blue">{selectedReport.status === 'draft' ? selectedReport.isFinalized ? 'Finalised' : 'Draft' : selectedReport.status}</StatusPill> : null}
     </div><div className="finalised-report-page-header__actions">
       {selectedId ? <ReportPrintControl key={selectedId} reportId={selectedId} disabled={!activePreview || Boolean(previewError)} onError={setError} /> : null}
       {options.canGenerate ? <MoreActionButton items={[{ key: 'regenerate', label: 'Regenerate', leftIcon: 'refresh', onClick: () => { setSelecting(true); setError(''); } }]} /> : null}

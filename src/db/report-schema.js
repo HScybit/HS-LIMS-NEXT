@@ -1,10 +1,11 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, numeric, primaryKey, unique, index, check, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, integer, numeric, primaryKey, unique, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 import { templateVersions } from './template-schema.js';
 import { samples, sampleProducts, sampleTests, testRequests, datasheetSubmissions, analyticalSpecifications, analyticalSpecificationLimits, sampleEvents } from './sample-schema.js';
 
 const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
+const transactionId = customType({ dataType: () => 'xid8' });
 const tenant = () => uuid('organization_id').notNull().references(() => organizations.id);
 const link = (t, column, target, name) => foreignKey({ name, columns: [t.organizationId, column], foreignColumns: [target.organizationId, target.id] });
 
@@ -15,7 +16,7 @@ export const sampleReports = pgTable('sample_reports', {
   templateVersionId: uuid('template_version_id').notNull(), reportNumber: text('report_number').notNull(), revision: integer('revision').notNull(),
   reportType: text('report_type').notNull(), groupKey: text('group_key').notNull(), sampleProductId: uuid('sample_product_id'), sampleTestId: uuid('sample_test_id'),
   status: text('status').notNull().default('draft'), generatedBy: uuid('generated_by').notNull(), generatedAt: time('generated_at').notNull().defaultNow(),
-  generatedEventId: uuid('generated_event_id').notNull(),
+  generatedEventId: uuid('generated_event_id').notNull(), isFinalized: boolean('is_finalized').notNull().default(false),
   issuedBy: uuid('issued_by'), issuedAt: time('issued_at'),
   sampleRevision: integer('sample_revision').notNull(), sampleNumber: text('sample_number').notNull(), sampleType: text('sample_type').notNull(),
   sampleCategoryName: text('sample_category_name').notNull(), customerName: text('customer_name'), customerAddress: text('customer_address'),
@@ -33,6 +34,19 @@ export const sampleReports = pgTable('sample_reports', {
     or (${t.reportType} = 'parameter_wise' and ${t.sampleProductId} is not null and ${t.sampleTestId} is not null and ${t.groupKey} = 'parameter:' || ${t.sampleTestId}::text)`),
   check('report_status', sql`(${t.status} = 'draft' and ${t.issuedBy} is null and ${t.issuedAt} is null)
     or (${t.status} in ('issued', 'superseded') and ${t.issuedBy} is not null and ${t.issuedAt} is not null and ${t.issuedAt} >= ${t.generatedAt})`),
+]);
+
+// Finalise completes the sample when a generation succeeds. It is separate
+// from report issue and from a transition in the sample's workflow graph.
+export const sampleReportFinalizations = pgTable('sample_report_finalizations', {
+  organizationId: tenant(), eventId: uuid('event_id').notNull(), sampleId: uuid('sample_id').notNull(),
+  previousRevision: integer('previous_revision').notNull(), completedRevision: integer('completed_revision').notNull(),
+  finalizedBy: uuid('finalized_by').notNull(), finalizedAt: time('finalized_at').notNull(), transactionId: transactionId('transaction_id').notNull(),
+}, (t) => [primaryKey({ name: 'report_finalization_pk', columns: [t.organizationId, t.eventId] }),
+  link(t, t.eventId, sampleEvents, 'report_finalization_event_fk'), link(t, t.sampleId, samples, 'report_finalization_sample_fk'),
+  foreignKey({ name: 'report_finalization_actor_fk', columns: [t.organizationId, t.finalizedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  unique('report_finalization_sample_revision_key').on(t.organizationId, t.sampleId, t.completedRevision),
+  check('report_finalization_revision', sql`${t.previousRevision} > 0 and ${t.completedRevision} = ${t.previousRevision} + 1`),
 ]);
 
 export const sampleReportTests = pgTable('sample_report_tests', {

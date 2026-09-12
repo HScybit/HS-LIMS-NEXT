@@ -20,7 +20,7 @@ export function printSettingsInput(input = {}) {
 }
 
 export function reportGenerationInput(input) {
-  fieldsOnly(input, ['requestId', 'revision', 'reportType', 'templateSelections', 'selectedSampleTestIds', 'printConfig']);
+  fieldsOnly(input, ['requestId', 'revision', 'reportType', 'templateSelections', 'selectedSampleTestIds', 'printConfig', 'finalizeSample']);
   const requestId = uuid(input.requestId, 'Generation request').toLowerCase();
   const expectedRevision = revision(input.revision);
   if (!reportTypes.includes(input.reportType)) throw new HttpError(400, 'invalid_report_type', 'Select a report type.');
@@ -34,7 +34,8 @@ export function reportGenerationInput(input) {
     return { key, templateId: uuid(selection.templateId, 'Report template').toLowerCase() };
   });
   if (new Set(templateSelections.map((selection) => selection.key)).size !== templateSelections.length) throw new HttpError(400, 'duplicate_report_template', 'Select one template for each group.');
-  return { requestId, revision: expectedRevision, reportType: input.reportType, selectedSampleTestIds, templateSelections, printConfig: printSettingsInput(input.printConfig) };
+  return { requestId, revision: expectedRevision, reportType: input.reportType, selectedSampleTestIds, templateSelections,
+    printConfig: printSettingsInput(input.printConfig), finalizeSample: bool(input.finalizeSample === undefined ? false : input.finalizeSample, 'Finalise sample') };
 }
 
 export function reportGroups(results, input) {

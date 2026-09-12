@@ -16,6 +16,9 @@ test('COA grouping uses selected test and product identities instead of repeated
 test('generation validates duplicate, empty, unknown, excessive and malformed input while preserving zero margins and false flags', () => {
   const testId = randomUUID(); const templateId = randomUUID();
   const input = { requestId: randomUUID(), revision: 1, reportType: 'consolidated', selectedSampleTestIds: [testId], templateSelections: [{ key: 'consolidated', templateId }] };
+  assert.equal(reportGenerationInput(input).finalizeSample, false);
+  assert.equal(reportGenerationInput({ ...input, finalizeSample: true }).finalizeSample, true);
+  for (const finalizeSample of [null, 'true', 1]) assert.throws(() => reportGenerationInput({ ...input, finalizeSample }), { code: 'invalid_input' });
   assert.equal(printSettingsInput({ xMargin: 0, printHeader: false }).xMargin, '0');
   assert.equal(printSettingsInput({ xMargin: 0, printHeader: false }).printHeader, false);
   assert.throws(() => reportGenerationInput({ ...input, selectedSampleTestIds: [] }), { code: 'invalid_report_selection' });
