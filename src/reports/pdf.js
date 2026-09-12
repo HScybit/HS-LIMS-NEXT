@@ -2,14 +2,28 @@ import { chromium } from 'playwright-core';
 import { HttpError } from '../auth/errors.js';
 import { printSettingsInput, defaultPrintSettings } from './input.js';
 
+// Source pdfLayout.buildTemplateViewport measures at the printable paper width.
+// Keep its CSS-pixel dimensions so responsive sections wrap before measurement.
+const paperSizes = { A3: [1123, 1587], A4: [794, 1123], A5: [559, 794], Letter: [816, 1056], Legal: [816, 1344] };
+function normalizedSettings(config) {
+  return printSettingsInput(Object.fromEntries(Object.entries(config).filter(([key]) => Object.hasOwn(defaultPrintSettings, key))));
+}
+
+export function pdfViewport(config) {
+  const settings = normalizedSettings(config);
+  const dimensions = paperSizes[settings.pageSize];
+  const [width, height] = settings.isLandscape ? [dimensions[1], dimensions[0]] : dimensions;
+  return { width: Math.round(Math.max(width - 2 * Number(settings.xMargin), 320)), height: Math.max(height, 600) };
+}
+
 function pageChromeTemplate(html, stylesheet, xMargin) {
   if (!html) return '<div></div>';
-  return `<style>${stylesheet}\nhtml{font-size:16px!important}body{margin:0!important;font-size:11px!important}</style><div style="box-sizing:border-box;width:100%;padding-left:${xMargin}px;padding-right:${xMargin}px;background:#fff;color:#1c2126;font-family:Inter,Arial,sans-serif;font-size:11px;line-height:1.35">${html}</div>`;
+  return `<style>${stylesheet}\nhtml{font-size:16px!important}body{margin:0!important;font-size:11px!important}#header,#footer{padding:0!important}</style><div style="box-sizing:border-box;width:100%;padding-left:${xMargin}px;padding-right:${xMargin}px;background:#fff;color:#1c2126;font-family:Inter,Arial,sans-serif;font-size:11px;line-height:1.35">${html}</div>`;
 }
 
 // Source PDF margins are CSS pixels, including measured page header/footer.
 export function pdfOptions(config, chrome = {}, stylesheet = '') {
-  const settings = printSettingsInput(Object.fromEntries(Object.entries(config).filter(([key]) => Object.hasOwn(defaultPrintSettings, key))));
+  const settings = normalizedSettings(config);
   const header = settings.printHeader ? chrome.header : null;
   const footer = settings.printFooter ? chrome.footer : null;
   return { format: settings.pageSize, landscape: settings.isLandscape, printBackground: true, preferCSSPageSize: false, scale: Number(settings.scale),
@@ -21,10 +35,11 @@ export function pdfOptions(config, chrome = {}, stylesheet = '') {
 }
 
 export async function renderReportPdf({ html, printConfig, stylesheet }, { browser, timeoutMs = 30_000 } = {}) {
+  const viewport = pdfViewport(printConfig);
   const launched = browser ?? await chromium.launch({ channel: 'chrome', headless: true, timeout: timeoutMs });
   let context; let timer; let timedOut = false;
   try {
-    context = await launched.newContext({ javaScriptEnabled: false, serviceWorkers: 'block' });
+    context = await launched.newContext({ javaScriptEnabled: false, serviceWorkers: 'block', viewport, deviceScaleFactor: 1 });
     let blockedRequests = 0;
     await context.route('**/*', (route) => { blockedRequests += 1; return route.abort(); });
     const page = await context.newPage();

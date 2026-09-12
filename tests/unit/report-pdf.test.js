@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pdfOptions } from '../../src/reports/pdf.js';
+import { pdfOptions, pdfViewport } from '../../src/reports/pdf.js';
 import { reportPdfFailure } from '../../src/reports/worker.js';
 
 test('PDF margins retain source CSS-pixel units, measured headers, custom margins and explicit zero/false choices', () => {
@@ -14,6 +14,15 @@ test('PDF margins retain source CSS-pixel units, measured headers, custom margin
   assert.deepEqual(hidden.margin, { top: '0px', right: '1px', bottom: '0px', left: '1px' });
   assert.equal(hidden.displayHeaderFooter, undefined);
   assert.throws(() => pdfOptions({ scale: 0 }), { code: 'invalid_print_setting' });
+});
+
+test('PDF measurement uses the source paper dimensions, orientation and explicit horizontal margin', () => {
+  assert.deepEqual(pdfViewport({ pageSize: 'A4', xMargin: 0 }), { width: 794, height: 1123 });
+  assert.deepEqual(pdfViewport({ pageSize: 'A5', xMargin: 1 }), { width: 557, height: 794 });
+  assert.deepEqual(pdfViewport({ pageSize: 'A5', isLandscape: true, xMargin: 10 }), { width: 774, height: 600 });
+  assert.deepEqual(pdfViewport({ pageSize: 'Letter', xMargin: 1, scale: 0.5 }), { width: 814, height: 1056 });
+  assert.deepEqual(pdfViewport({ pageSize: 'Legal', isLandscape: true }), { width: 1342, height: 816 });
+  assert.throws(() => pdfViewport({ pageSize: 'unknown' }), { code: 'invalid_page_size' });
 });
 
 test('worker failures classify retryable rendering errors without exposing database or browser diagnostics', () => {
