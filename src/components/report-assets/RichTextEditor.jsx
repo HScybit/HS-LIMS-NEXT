@@ -247,6 +247,7 @@ function buildEditorConfig(ckeditor, {
       ],
     },
     image: {
+      upload: { types: ["jpeg", "png", "webp", "svg+xml"] },
       insert: {
         integrations: ["upload", "url"],
       },

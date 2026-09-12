@@ -5,16 +5,18 @@ import { HttpError } from '../auth/errors.js';
 import { database } from '../db/pool.js';
 import { reportImageAssets } from '../db/report-assets-schema.js';
 import { requirePermission, uuid } from '../templates/input.js';
+import { validateReportSvg } from './svg.js';
 
 export const reportImageByteLimit = 10 * 1024 * 1024;
-const mediaTypes = new Map([['png', 'image/png'], ['jpeg', 'image/jpeg'], ['webp', 'image/webp']]);
+const mediaTypes = new Map([['png', 'image/png'], ['jpeg', 'image/jpeg'], ['webp', 'image/webp'], ['svg', 'image/svg+xml']]);
 const summary = (row) => ({ id: row.id, originalName: row.originalName, mediaType: row.mediaType, byteLength: row.byteLength,
   sha256: row.sha256, width: row.width, height: row.height, url: `/api/report-assets/images/${row.id}` });
 
 export async function validateReportImage(content, declaredType) {
   if (!Buffer.isBuffer(content) || !content.length) throw new HttpError(422, 'empty_report_image', 'Select a non-empty report image.');
   if (content.length > reportImageByteLimit) throw new HttpError(413, 'report_image_size_limit', 'Report images can be at most 10 MiB.');
-  if (![...mediaTypes.values()].includes(declaredType)) throw new HttpError(415, 'report_image_type', 'Use a PNG, JPEG or WebP report image.');
+  if (![...mediaTypes.values()].includes(declaredType)) throw new HttpError(415, 'report_image_type', 'Use a PNG, JPEG, WebP or static SVG report image.');
+  if (declaredType === 'image/svg+xml') validateReportSvg(content);
   const decoder = sharp(content, { failOn: 'error', limitInputPixels: 40_000_000 });
   try {
     const metadata = await decoder.metadata();
@@ -28,7 +30,7 @@ export async function validateReportImage(content, declaredType) {
     return { width: metadata.width, height: metadata.height, mediaType: declaredType, byteLength: content.length, sha256: createHash('sha256').update(content).digest('hex') };
   } catch (error) {
     if (error instanceof HttpError) throw error;
-    throw new HttpError(422, 'invalid_report_image', 'The image could not be decoded. Select a valid PNG, JPEG or WebP file.');
+    throw new HttpError(422, 'invalid_report_image', 'The image could not be decoded. Select a valid PNG, JPEG, WebP or static SVG file.');
   } finally { decoder.destroy(); }
 }
 
@@ -55,5 +57,6 @@ export async function readReportImage(client, identity, imageId) {
   const id = uuid(imageId, 'Report image').toLowerCase();
   const [row] = await database(client).select().from(reportImageAssets).where(and(eq(reportImageAssets.organizationId, identity.organization_id), eq(reportImageAssets.id, id)));
   if (!row) throw new HttpError(404, 'report_image_not_found', 'Report image was not found.');
+  if (row.mediaType === 'image/svg+xml') validateReportSvg(row.content);
   return { ...summary(row), content: row.content };
 }

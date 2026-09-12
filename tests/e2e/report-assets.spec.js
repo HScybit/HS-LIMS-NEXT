@@ -7,6 +7,7 @@ import { prepareReportFlow } from '../helpers/report-flow.js';
 import { createReportAssets } from '../helpers/report-assets.js';
 import { saveReportDocument } from '../../src/report-assets/documents.js';
 import { randomUUID } from 'node:crypto';
+import { reportSvg } from '../helpers/report-svg.js';
 
 let owner;
 test.beforeAll(() => { owner = ownerPool(); });
@@ -75,6 +76,35 @@ test('source rich header editor uploads an image, survives a lost save response,
   await expect(page.getByText('No header templates found.', { exact: true })).toBeVisible();
   const versions = (await owner.query('SELECT revision,is_retired FROM report_document_versions WHERE organization_id=$1 AND document_id=$2 ORDER BY revision', [account.organizationId, saved.document.id])).rows;
   expect(versions).toEqual([{ revision: 1, is_retired: false }, { revision: 2, is_retired: true }]);
+  expect(errors).toEqual([]);
+});
+
+test('the source rich editor captures a static SVG and rejects executable vector uploads', async ({ page }, testInfo) => {
+  const account = await createAccount(owner, { permissions: ['report_settings.manage'] });
+  const errors = []; page.on('pageerror', (error) => errors.push(error.message));
+  await login(page, account); await page.goto('/header_management');
+  await page.getByRole('button', { name: 'New Header', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'New Header Template' });
+  await modal.getByLabel('Name', { exact: true }).fill('Vector header');
+  await expect(modal.locator('.ck-editor__editable')).toBeVisible();
+  const uploaded = page.waitForResponse((response) => response.url().endsWith('/api/report-assets/images') && response.request().method() === 'POST');
+  await modal.locator('input[type=file]').setInputFiles({ name: 'Vector.svg', mimeType: 'image/svg+xml', buffer: reportSvg });
+  const response = await uploaded; expect(response.status()).toBe(201); const vector = await response.json();
+  await expect(modal.locator(`.ck-editor__editable img[src="${vector.url}"]`)).toBeVisible();
+  await expect(modal.getByRole('button', { name: 'Save Template', exact: true })).toBeEnabled();
+  await modal.getByRole('button', { name: 'Save Template', exact: true }).click();
+  await expect(modal).not.toBeVisible();
+  const image = page.locator('.hf-template-preview img');
+  await expect(image).toBeVisible(); await image.evaluate((element) => element.decode());
+  const downloaded = await page.request.get(vector.url); expect(await downloaded.body()).toEqual(reportSvg);
+  expect(downloaded.headers()['content-type']).toContain('image/svg+xml');
+  expect(downloaded.headers()['content-security-policy']).toBe("default-src 'none'; style-src 'unsafe-inline'; sandbox");
+  const csrf = (await page.context().cookies()).find((cookie) => cookie.name === 'sampleify_csrf').value;
+  const unsafe = await page.request.post('/api/report-assets/images', { headers: { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': csrf,
+    'Content-Type': 'image/svg+xml', 'X-Upload-Request-Id': randomUUID(), 'X-File-Name': 'Unsafe.svg' },
+  data: '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>' });
+  expect(unsafe.status()).toBe(422); expect((await unsafe.json()).error.code).toBe('unsafe_report_svg');
+  await page.screenshot({ path: testInfo.outputPath('captured-vector-header.png'), fullPage: true, animations: 'disabled' });
   expect(errors).toEqual([]);
 });
 

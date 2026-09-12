@@ -1,6 +1,7 @@
 import { HttpError } from '../auth/errors.js';
 import { reportContentHtml } from '../report-assets/markup.js';
 import { uuid } from '../templates/input.js';
+import { validateReportSvg } from '../report-assets/svg.js';
 
 // One batched asset read in addition to the eight core definition reads and
 // three capture reads. Images shared by multiple slots are fetched once.
@@ -27,7 +28,10 @@ export async function loadReportAssetBatch(client, organizationId, reportIds) {
   [organizationId, reportIds])).rows;
   const databaseMs = performance.now() - started;
   if (rows.some((row) => Number(row.image_bytes) > 24 * 1024 * 1024)) throw new HttpError(422, 'report_asset_size_limit', 'The selected report images exceed 24 MiB.');
-  const sources = new Map(rows.filter((row) => row.kind === 'image').map((row) => [row.id, `data:${row.media_type};base64,${row.content.toString('base64')}`]));
+  const sources = new Map(rows.filter((row) => row.kind === 'image').map((row) => {
+    if (row.media_type === 'image/svg+xml') validateReportSvg(row.content);
+    return [row.id, `data:${row.media_type};base64,${row.content.toString('base64')}`];
+  }));
   const assets = new Map(reportIds.map((id) => [id, {}])); let renderedBytes = 0;
   for (const row of rows.filter((item) => item.kind === 'document')) {
     if (!row.id) throw new HttpError(409, 'report_asset_history_unavailable', 'The captured report content is unavailable.');

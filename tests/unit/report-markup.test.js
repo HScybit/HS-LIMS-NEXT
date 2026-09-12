@@ -36,7 +36,7 @@ test('only captured images can be referenced and the renderer requires every exa
   const input = `<img src="/api/report-assets/images/${id}"><img src="/api/report-assets/images/${id}">`;
   assert.deepEqual(reportContentHtml(input).imageIds, [id]);
   assert.throws(() => reportContentHtml(input, { imageSources: new Map() }), { code: 'report_image_unavailable' });
-  assert.throws(() => reportContentHtml(input, { imageSources: new Map([[id, 'data:image/svg+xml;base64,PHN2Zz4=']]) }), { code: 'report_image_unavailable' });
+  assert.throws(() => reportContentHtml(input, { imageSources: new Map([[id, 'data:text/html;base64,PHN2Zz4=']]) }), { code: 'report_image_unavailable' });
   const result = reportContentHtml(input, { imageSources: new Map([[id, 'data:image/png;base64,AAAA']]) });
   assert.equal((result.html.match(/src="data:image\/png;base64,AAAA"/g) ?? []).length, 2);
 });

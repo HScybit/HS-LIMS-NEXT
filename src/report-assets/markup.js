@@ -72,7 +72,7 @@ export function reportContentHtml(input, { imageSources } = {}) {
       img: (tagName, attributes) => {
         const id = imageId(attributes.src);
         const source = imageSources?.get(id);
-        if (imageSources && !/^data:image\/(?:png|jpeg|webp|gif|avif);base64,[A-Za-z0-9+/]+={0,2}$/.test(source ?? '')) {
+        if (imageSources && !/^data:image\/(?:png|jpeg|webp|gif|avif|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/.test(source ?? '')) {
           throw new HttpError(409, 'report_image_unavailable', 'A captured report image is unavailable.');
         }
         return { tagName, attribs: { ...attributes, src: source ?? `/api/report-assets/images/${id}` } };

@@ -1,6 +1,6 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { ownerPool, createAccount } from '../helpers/database.js';
 import { prepareReportFlow } from '../helpers/report-flow.js';
@@ -14,6 +14,8 @@ import { loadReportRenderer } from '../../src/reports/renderer.js';
 import { enqueueReportPdf, reportPdfFile } from '../../src/reports/jobs.js';
 import { processNextReportJob, createReportWorkerPool } from '../../src/reports/worker.js';
 import { pdfPageText } from '../helpers/pdf-page-text.js';
+import { reportSvg } from '../helpers/report-svg.js';
+import { uploadReportImage } from '../../src/report-assets/images.js';
 
 const owner = ownerPool(); let account; let worker;
 const work = (callback, options) => withSession(account.token, callback, { csrfToken: account.csrfToken, ...options });
@@ -151,6 +153,33 @@ test('a report reader can load only report-linked assets without report settings
   const foreign = await createAccount(owner, { permissions: ['samples.read', 'report_settings.read'] });
   const foreignSession = await signIn({ identifier: foreign.username, password: foreign.password });
   await assert.rejects(withSession(foreignSession.token, (client, identity) => loadReport(client, identity, report.items[0].id), { readOnly: true }), { code: 'report_not_found' });
+});
+
+test('SVG assets remain frozen in real PDFs and unsafe directly stored vectors cannot enter a report', async () => {
+  const flow = await prepareReportFlow(owner, account); const assets = await work(createReportAssets);
+  const vector = await work((client, identity) => uploadReportImage(client, identity, { requestId: randomUUID(), originalName: 'Vector.svg', mediaType: 'image/svg+xml', content: reportSvg }));
+  const version = await work((client, identity) => saveReportDocument(client, identity, { ...assets.headerInput, revision: 1, requestId: randomUUID(),
+    templateHtml: `<p>FROZEN VECTOR HEADER</p><img src="${vector.url}" width="80" height="24">` }));
+  await work((client, identity) => editTemplate(client, identity, flow.template.versionId, 1, assets.command));
+  const generated = await work((client, identity) => generateReports(client, identity, flow.sample.id, flow.input)); const id = generated.items[0].id;
+  await work((client, identity) => deleteReportDocument(client, identity, assets.header.id, { requestId: randomUUID(), revision: 2 }));
+  const loaded = await work((client, identity) => loadReport(client, identity, id));
+  assert.equal(loaded.assets.header.versionId, version.document.versionId); assert.equal(loaded.metrics.assets.queryCount, 1);
+  assert.ok(loaded.assets.header.html.includes(`data:image/svg+xml;base64,${reportSvg.toString('base64')}`));
+  const renderer = await loadReportRenderer(); const queued = await work((client, identity) => enqueueReportPdf(client, identity, id));
+  assert.deepEqual(await processNextReportJob({ pool: worker, renderer, workerId: randomUUID() }), { jobId: queued.job.id, status: 'succeeded' });
+  const file = await work((client, identity) => reportPdfFile(client, identity, id));
+  await writeFile('.local/m03-static-svg.pdf', file.content); assert.equal(file.content.subarray(0, 5).toString(), '%PDF-');
+
+  const unsafe = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="24"><script>alert(1)</script></svg>');
+  const imageId = randomUUID();
+  await work((client) => client.query(`INSERT INTO report_image_assets(organization_id,id,original_name,media_type,content,byte_length,sha256,width,height,uploaded_by)
+    VALUES($1,$2,'Unsafe.svg','image/svg+xml',$3,$4,$5,80,24,$6)`, [account.organizationId, imageId, unsafe, unsafe.length, createHash('sha256').update(unsafe).digest('hex'), account.userId]));
+  const unsafeHeader = await work((client, identity) => saveReportDocument(client, identity, { ...assets.headerInput, documentId: randomUUID(), requestId: randomUUID(), revision: 0,
+    templateHtml: `<img src="/api/report-assets/images/${imageId}">` }));
+  await work((client, identity) => editTemplate(client, identity, flow.template.versionId, 2, { ...assets.command, headerDocumentId: unsafeHeader.document.id }));
+  await assert.rejects(work((client, identity) => generateReports(client, identity, flow.sample.id, { ...flow.input, requestId: randomUUID() })), { code: 'unsafe_report_svg' });
+  assert.equal((await owner.query('SELECT count(*)::integer AS count FROM sample_reports WHERE organization_id=$1 AND sample_id=$2', [account.organizationId, flow.sample.id])).rows[0].count, 1);
 });
 
 test('the restricted worker prints frozen rich headers, footers and image bytes after branding edits', async (context) => {

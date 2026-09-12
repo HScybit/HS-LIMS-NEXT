@@ -20,7 +20,7 @@ test('image validation rejects empty, disguised, truncated, oversized and excess
   const content = await pixels().png().toBuffer();
   for (const empty of [null, '', Buffer.alloc(0)]) await assert.rejects(validateReportImage(empty, 'image/png'), { code: 'empty_report_image' });
   await assert.rejects(validateReportImage(content, 'image/jpeg'), { code: 'report_image_type' });
-  await assert.rejects(validateReportImage(Buffer.from('<svg onload="alert(1)"/>'), 'image/svg+xml'), { code: 'report_image_type' });
+  await assert.rejects(validateReportImage(Buffer.from('<svg onload="alert(1)"/>'), 'image/svg+xml'), { code: 'unsafe_report_svg' });
   await assert.rejects(validateReportImage(Buffer.from('<html>Not an image</html>'), 'image/png'), { code: 'invalid_report_image' });
   await assert.rejects(validateReportImage(content.subarray(0, Math.floor(content.length / 2)), 'image/png'), { code: 'invalid_report_image' });
   await assert.rejects(validateReportImage(Buffer.alloc(reportImageByteLimit + 1), 'image/png'), { code: 'report_image_size_limit' });

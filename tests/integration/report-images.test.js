@@ -6,6 +6,7 @@ import { ownerPool, createAccount } from '../helpers/database.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { uploadReportImage, readReportImage } from '../../src/report-assets/images.js';
+import { reportSvg } from '../helpers/report-svg.js';
 
 const owner = ownerPool(); let account; let content;
 const work = (callback, options) => withSession(account.token, callback, { csrfToken: account.csrfToken, ...options });
@@ -16,6 +17,19 @@ before(async () => {
   content = await sharp({ create: { width: 32, height: 16, channels: 3, background: '#003366' } }).png().toBuffer();
 });
 after(async () => { await closePool(); await owner.end(); });
+
+test('static SVG bytes survive upload and retry, while direct stored unsafe XML is rejected on read', async () => {
+  const upload = { requestId: randomUUID(), originalName: 'Vector logo.svg', mediaType: 'image/svg+xml', content: reportSvg };
+  assert.equal((await work((client, identity) => uploadReportImage(client, identity, upload))).replayed, false);
+  assert.equal((await work((client, identity) => uploadReportImage(client, identity, upload))).replayed, true);
+  const file = await work((client, identity) => readReportImage(client, identity, upload.requestId));
+  assert.deepEqual(file.content, reportSvg); assert.equal(file.width, 80); assert.equal(file.height, 24);
+  const unsafe = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="24" onload="alert(1)"/>');
+  const id = randomUUID();
+  await work((client) => client.query(`INSERT INTO report_image_assets(organization_id,id,original_name,media_type,content,byte_length,sha256,width,height,uploaded_by)
+    VALUES($1,$2,'Unsafe.svg','image/svg+xml',$3,$4,$5,80,24,$6)`, [account.organizationId, id, unsafe, unsafe.length, createHash('sha256').update(unsafe).digest('hex'), account.userId]));
+  await assert.rejects(work((client, identity) => readReportImage(client, identity, id)), { code: 'unsafe_report_svg' });
+});
 
 test('captured images retain exact bytes and actual upload evidence across concurrent retries', async () => {
   const upload = input();

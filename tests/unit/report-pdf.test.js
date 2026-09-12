@@ -30,6 +30,7 @@ test('worker failures classify retryable rendering errors without exposing datab
   assert.equal(reportPdfFailure({ code: 'report_external_resource', message: 'Uncaptured resource.' }).retry, false);
   assert.equal(reportPdfFailure({ code: '42501', message: 'Private database details.' }).code, 'report_print_permission_revoked');
   assert.equal(reportPdfFailure({ code: 'report_history_unavailable' }).retry, false);
+  for (const code of ['unsafe_report_svg', 'report_svg_limit']) assert.equal(reportPdfFailure({ code }).retry, false);
   assert.deepEqual(reportPdfFailure(new Error('Private browser arguments and connection strings.')), {
     code: 'report_pdf_failed', message: 'The report could not be rendered. Please try again later.', retry: true,
   });

@@ -6,8 +6,8 @@ export const GET = endpoint(async (request, context) => {
   const file = await authenticated(request, (client, identity) => readReportImage(client, identity, imageId), { readOnly: true });
   return new Response(file.content, { headers: {
     'Content-Type': file.mediaType, 'Content-Length': String(file.byteLength),
-    'Content-Disposition': `inline; filename="report-image.${file.mediaType.split('/')[1]}"`,
+    'Content-Disposition': `inline; filename="report-image.${file.mediaType === 'image/svg+xml' ? 'svg' : file.mediaType.split('/')[1]}"`,
     'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-Image-SHA256': file.sha256,
-    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
   } });
 });

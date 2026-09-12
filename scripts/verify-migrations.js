@@ -21,7 +21,9 @@ import { prepareReportFlow } from '../tests/helpers/report-flow.js';
 import { prepareSubjectJob } from '../tests/helpers/job-subjects.js';
 import { createReportTemplate } from '../tests/helpers/reports.js';
 import { createReportAssets } from '../tests/helpers/report-assets.js';
-import { deleteReportDocument } from '../src/report-assets/documents.js';
+import { deleteReportDocument, saveReportDocument } from '../src/report-assets/documents.js';
+import { uploadReportImage } from '../src/report-assets/images.js';
+import { reportSvg } from '../tests/helpers/report-svg.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
@@ -94,8 +96,11 @@ try {
   const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true });
   const assets = await withSession(session.token, async (client, identity) => {
     const created = await createReportAssets(client, identity);
+    const vector = await uploadReportImage(client, identity, { requestId: randomUUID(), originalName: 'Fresh vector.svg', mediaType: 'image/svg+xml', content: reportSvg });
+    const footer = await saveReportDocument(client, identity, { ...created.footerInput, requestId: randomUUID(), revision: 1,
+      templateHtml: `${created.footerInput.templateHtml}<img src="${vector.url}" width="80" height="24">` });
     await editTemplate(client, identity, reportFlow.template.versionId, 1, created.command);
-    return created;
+    return { ...created, footer: footer.document };
   }, { csrfToken: session.csrfToken });
   const generationInput = { ...reportFlow.input, finalizeSample: true };
   const generated = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, generationInput), { csrfToken: session.csrfToken });
@@ -108,6 +113,8 @@ try {
   const captured = await withSession(session.token, (client, identity) => loadReport(client, identity, reportId), { readOnly: true });
   assert.equal(captured.assets.header.versionId, assets.header.versionId);
   assert.ok(captured.assets.header.html.includes(`data:image/png;base64,${assets.content.toString('base64')}`));
+  assert.equal(captured.assets.footer.versionId, assets.footer.versionId);
+  assert.ok(captured.assets.footer.html.includes(`data:image/svg+xml;base64,${reportSvg.toString('base64')}`));
   const queued = await withSession(session.token, (client, identity) => enqueueReportPdf(client, identity, reportId), { csrfToken: session.csrfToken });
   worker = createReportWorkerPool(workerUrl.href); await verifyReportWorkerRole(worker);
   assert.equal((await worker.query('SELECT id FROM sample_reports')).rowCount, 0);

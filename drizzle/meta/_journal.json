@@ -568,6 +568,13 @@
       "when": 1789212856099,
       "tag": "0080_consistent_report_asset_capture",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1789214067831,
+      "tag": "0081_static_svg_report_assets",
+      "breakpoints": true
     }
   ]
 }

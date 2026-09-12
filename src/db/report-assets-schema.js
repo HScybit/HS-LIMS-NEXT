@@ -11,7 +11,7 @@ export const reportImageAssets = pgTable('report_image_assets', {
   uploadedBy: uuid('uploaded_by').notNull(), uploadedAt: timestamp('uploaded_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 }, (t) => [primaryKey({ name: 'report_image_asset_pk', columns: [t.organizationId, t.id] }),
   foreignKey({ name: 'report_image_asset_actor_fk', columns: [t.organizationId, t.uploadedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
-  check('report_image_asset_shape', sql`${t.mediaType} in ('image/png','image/jpeg','image/webp')
+  check('report_image_asset_shape', sql`${t.mediaType} in ('image/png','image/jpeg','image/webp','image/svg+xml')
     and length(trim(${t.originalName})) between 1 and 255 and ${t.sha256} ~ '^[a-f0-9]{64}$'
     and ${t.byteLength} between 1 and 10485760 and ${t.byteLength}=octet_length(${t.content})
     and ${t.width} between 1 and 10000 and ${t.height} between 1 and 10000 and ${t.width}::bigint*${t.height}::bigint<=40000000`),
