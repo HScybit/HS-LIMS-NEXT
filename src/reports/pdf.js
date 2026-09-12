@@ -18,7 +18,10 @@ export function pdfViewport(config) {
 
 function pageChromeTemplate(html, stylesheet, xMargin) {
   if (!html) return '<div></div>';
-  return `<style>${stylesheet}\nhtml{font-size:16px!important}body{margin:0!important;font-size:11px!important}#header,#footer{padding:0!important}</style><div style="box-sizing:border-box;width:100%;padding-left:${xMargin}px;padding-right:${xMargin}px;background:#fff;color:#1c2126;font-family:Inter,Arial,sans-serif;font-size:11px;line-height:1.35">${html}</div>`;
+  // CSS escapes can decode to a closing style tag during resource rewriting.
+  // Preserve its CSS string value without allowing it to terminate the element.
+  const safeStylesheet = stylesheet.replace(/<\/style/gi, '<\\/style');
+  return `<style>${safeStylesheet}\nhtml{font-size:16px!important}body{margin:0!important;font-size:11px!important}#header,#footer{padding:0!important}</style><div style="box-sizing:border-box;width:100%;padding-left:${xMargin}px;padding-right:${xMargin}px;background:#fff;color:#1c2126;font-family:Inter,Arial,sans-serif;font-size:11px;line-height:1.35"><article class="coa-pdf-document coa-printable non_nabl_mode"><div class="coa-print-body" data-coa-report-body>${html}</div></article></div>`;
 }
 
 // Source PDF margins are CSS pixels, including measured page header/footer.

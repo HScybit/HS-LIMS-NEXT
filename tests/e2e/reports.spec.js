@@ -50,7 +50,7 @@ test('Finalise recovers a lost success response, completes once and preserves fi
   expect(result.replayed).toBe(true);
   expect(result.sample.revision).toBe(2);
   await expect(page.locator('.finalised-report-page-header').getByText('Finalised', { exact: true })).toBeVisible();
-  await expect(page.getByRole('article').getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
+  await expect(page.frameLocator('.finalised-report-preview__frame').getByRole('article').getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.locator('.finalised-report-page-header').getByText('Finalised', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -113,7 +113,7 @@ test('COA generation retains failed selections, zero margins, repeated final sec
   const response = await responsePromise; expect(response.status()).toBe(201);
   expect(response.request().postDataJSON().requestId).toBe(firstAttempt.requestId);
   const generated = await response.json(); const reportId = generated.items[0].id;
-  const report = page.getByRole('article', { name: generated.items[0].reportNumber });
+  const report = page.frameLocator('.finalised-report-preview__frame').getByRole('article', { name: generated.items[0].reportNumber });
   await expect(report.getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
   await expect(report.locator('[data-result-test-id] [data-field-id]')).toHaveCount(6);
   await expect(report.locator('[data-result-test-id] [data-field-id]').first()).toContainText('0.00');
@@ -136,11 +136,11 @@ test('COA generation retains failed selections, zero margins, repeated final sec
   await page.getByRole('button', { name: 'More actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Regenerate', exact: true }).click();
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
-  await expect(page.getByRole('article').getByText('New report title', { exact: true })).toBeVisible();
+  await expect(page.frameLocator('.finalised-report-preview__frame').getByRole('article').getByText('New report title', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Version 2', exact: true }).click();
   await page.getByRole('menuitemradio', { name: 'Version 1', exact: true }).click();
-  await expect(page.getByRole('article').getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
-  await expect(page.getByRole('article').getByText('New report title', { exact: true })).toHaveCount(0);
+  await expect(page.frameLocator('.finalised-report-preview__frame').getByRole('article').getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
+  await expect(page.frameLocator('.finalised-report-preview__frame').getByRole('article').getByText('New report title', { exact: true })).toHaveCount(0);
   const unauthenticatedWrite = await page.request.post(generationPath, { data: firstAttempt, headers: { Origin: 'http://127.0.0.1:3100' } });
   expect(unauthenticatedWrite.status()).toBe(403);
   expect(errors).toEqual([]);

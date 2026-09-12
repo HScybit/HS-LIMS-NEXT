@@ -28,10 +28,19 @@ test('PDF measurement uses the source paper dimensions, orientation and explicit
 test('worker failures classify retryable rendering errors without exposing database or browser diagnostics', () => {
   assert.equal(reportPdfFailure({ code: 'report_pdf_timeout', message: 'Render timeout.' }).retry, true);
   assert.equal(reportPdfFailure({ code: 'report_external_resource', message: 'Uncaptured resource.' }).retry, false);
+  assert.equal(reportPdfFailure({ code: 'report_css_not_captured', message: 'Uncaptured CSS resource.' }).retry, false);
   assert.equal(reportPdfFailure({ code: '42501', message: 'Private database details.' }).code, 'report_print_permission_revoked');
   assert.equal(reportPdfFailure({ code: 'report_history_unavailable' }).retry, false);
-  for (const code of ['unsafe_report_svg', 'report_svg_limit']) assert.equal(reportPdfFailure({ code }).retry, false);
+  for (const code of ['unsafe_report_svg', 'report_svg_limit', 'invalid_report_image', 'animated_report_image']) assert.equal(reportPdfFailure({ code }).retry, false);
   assert.deepEqual(reportPdfFailure(new Error('Private browser arguments and connection strings.')), {
     code: 'report_pdf_failed', message: 'The report could not be rendered. Please try again later.', retry: true,
   });
+});
+
+test('repeating PDF areas keep report selector ancestry and CSS text cannot escape its style element', () => {
+  const options = pdfOptions({}, { header: { html: '<div data-is-header="true">Header</div>', height: 20 } }, '.x::after{content:"</style><img src=x>"}');
+  assert.equal(options.headerTemplate.match(/<\/style>/g).length, 1);
+  assert.ok(options.headerTemplate.includes('<\\/style>'));
+  assert.match(options.headerTemplate, /class="coa-pdf-document coa-printable non_nabl_mode"/);
+  assert.match(options.headerTemplate, /data-coa-report-body/);
 });

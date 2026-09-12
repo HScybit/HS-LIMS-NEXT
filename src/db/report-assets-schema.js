@@ -78,3 +78,20 @@ export const reportWatermarkVersions = pgTable('report_watermark_versions', {
   check('report_watermark_version_shape', sql`${t.revision}>0 and length(trim(${t.name})) between 1 and 200 and ${t.opacity} between 0 and 1
     and ${t.width} between 1 and 10000 and ${t.height} between 1 and 10000 and ${t.rotation} in (0,90,180,270,360)`),
 ]);
+
+export const organizationCustomCssVersions = pgTable('organization_custom_css_versions', {
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id), id: uuid('id').notNull(),
+  revision: integer('revision').notNull(), cssContent: text('css_content').notNull(), savedBy: uuid('saved_by').notNull(),
+  savedAt: timestamp('saved_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(), transactionId: transactionId('transaction_id').notNull(),
+}, (t) => [primaryKey({ name: 'organization_custom_css_version_pk', columns: [t.organizationId, t.id] }),
+  unique('organization_custom_css_revision_key').on(t.organizationId, t.revision),
+  foreignKey({ name: 'organization_custom_css_actor_fk', columns: [t.organizationId, t.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('organization_custom_css_shape', sql`${t.revision}>0 and length(${t.cssContent})<=1000000`),
+]);
+
+export const organizationCustomCssImages = pgTable('organization_custom_css_images', {
+  organizationId: uuid('organization_id').notNull(), versionId: uuid('version_id').notNull(), imageId: uuid('image_id').notNull(),
+}, (t) => [primaryKey({ name: 'organization_custom_css_image_pk', columns: [t.organizationId, t.versionId, t.imageId] }),
+  foreignKey({ name: 'organization_custom_css_image_version_fk', columns: [t.organizationId, t.versionId], foreignColumns: [organizationCustomCssVersions.organizationId, organizationCustomCssVersions.id] }),
+  foreignKey({ name: 'organization_custom_css_image_asset_fk', columns: [t.organizationId, t.imageId], foreignColumns: [reportImageAssets.organizationId, reportImageAssets.id] }),
+]);

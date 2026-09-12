@@ -12,7 +12,7 @@ import MoreActionButton from '../ui/MoreActionButton.jsx';
 import StatusPill from '../ui/StatusPill.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
 import { AppLoader } from '../ui/AppLoader.jsx';
-import ReportContent from './ReportContent.jsx';
+import ReportFrame from './ReportFrame.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import { defaultPrintSettings } from '../../reports/input.js';
 import { ParameterSelectionModal, PrintConfigModal } from './ReportModals.jsx';
@@ -36,6 +36,7 @@ function TemplateRow({ label, value, options, disabled, onChange }) {
 export default function SampleCoa({ sampleId }) {
   const [options, setOptions] = useState(null); const [reports, setReports] = useState([]); const [reload, setReload] = useState(0);
   const [error, setError] = useState(''); const [previewError, setPreviewError] = useState('');
+  const [readyPreview, setReadyPreview] = useState(null);
   const [selectedId, setSelectedId] = useState(''); const [preview, setPreview] = useState(null); const [expandedType, setExpandedType] = useState('consolidated');
   const [selecting, setSelecting] = useState(true); const [reportType, setReportType] = useState(''); const [templates, setTemplates] = useState({});
   const [selectedTestIds, setSelectedTestIds] = useState([]); const [printConfig, setPrintConfig] = useState(defaultPrintSettings);
@@ -116,7 +117,7 @@ export default function SampleCoa({ sampleId }) {
       <VersionSelector value={selectedId} options={versions.map((report) => ({ value: report.id, label: `Version ${report.revision}` }))} disabled={versions.length < 2} onChange={selectReport} />
       {selectedReport ? <StatusPill color="blue">{selectedReport.status === 'draft' ? selectedReport.isFinalized ? 'Finalised' : 'Draft' : selectedReport.status}</StatusPill> : null}
     </div><div className="finalised-report-page-header__actions">
-      {selectedId ? <ReportPrintControl key={selectedId} reportId={selectedId} disabled={!activePreview || Boolean(previewError)} onError={setError} /> : null}
+      {selectedId ? <ReportPrintControl key={selectedId} reportId={selectedId} disabled={!activePreview || readyPreview !== activePreview || Boolean(previewError)} onError={setError} /> : null}
       {options.canGenerate ? <MoreActionButton items={[{ key: 'regenerate', label: 'Regenerate', leftIcon: 'refresh', onClick: () => { setSelecting(true); setError(''); } }]} /> : null}
     </div></section>}</PageHeader>
     {error ? <div className="alert alert-danger m-3" role="alert">{error}</div> : null}
@@ -138,9 +139,9 @@ export default function SampleCoa({ sampleId }) {
       </section>)}</aside>
       <section className="finalised-report-preview">{previewError ? <div className="alert alert-danger" role="alert">{previewError}<button type="button" className="btn btn-link" onClick={() => setReload((value) => value + 1)}>Retry</button></div>
         : !activePreview ? <div className="finalised-report-preview__placeholder">Loading selected report...</div>
-          : <div className="finalised-report-preview__scroll"><article className="finalised-report-preview__paper coa-pdf-document coa-printable non_nabl_mode" aria-label={selectedReport.reportNumber}>
-            <ReportContent report={activePreview} className="finalised-report-preview__body" />
-          </article></div>}</section>
+          : <div className="finalised-report-preview__scroll"><div className="finalised-report-preview__paper">
+            <ReportFrame key={activePreview.report.id} report={activePreview} onReady={setReadyPreview} onError={setPreviewError} />
+          </div></div>}</section>
     </main>}
     {modal === 'parameters' ? <ParameterSelectionModal products={options.products} selectedIds={selectedTestIds} onClose={() => setModal(null)} onSave={(ids) => { setSelectedTestIds(ids); setModal(null); }} /> : null}
     {modal === 'print' ? <PrintConfigModal config={printConfig} onClose={() => setModal(null)} onSave={(config) => { setPrintConfig(config); setModal(null); }} /> : null}

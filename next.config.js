@@ -25,6 +25,7 @@ const nextConfig = {
       '/api/approvals/:caseId', '/api/approval-assignments/:assignmentId/approve',
       '/api/report-assets/documents', '/api/report-assets/documents/:documentId',
       '/api/report-assets/watermarks', '/api/report-assets/watermarks/:watermarkId',
+      '/api/report-assets/custom-css', '/api/report-assets/custom-css/current',
     ].map((source) => ({ source, headers: [{ key: 'Content-Type', value: 'application/json; charset=utf-8' }] }))];
   },
 };

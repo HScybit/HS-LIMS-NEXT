@@ -21,7 +21,7 @@ test('Print retains its durable request across navigation and opens a verified P
   await page.getByLabel('Username', { exact: true }).fill(account.username); await page.getByLabel('Password', { exact: true }).fill(account.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(page).toHaveURL(/\/me$/);
   await page.goto(`/samples/${flow.sample.id}/coa`);
-  await expect(page.getByRole('article')).toBeVisible();
+  await expect(page.frameLocator('.finalised-report-preview__frame').getByRole('article')).toBeVisible();
   const refused = await page.request.post(path, { headers: { Origin: 'http://127.0.0.1:3100' } }); expect(refused.status()).toBe(403);
   expect((await page.request.get(path).then((response) => response.json())).job).toBeNull();
   await page.route(`**${path}`, (route) => route.request().method() === 'POST'
@@ -49,7 +49,7 @@ test('Print retains its durable request across navigation and opens a verified P
       return element;
     };
   });
-  await resumed.goto(`/samples/${flow.sample.id}/coa`); await expect(resumed.getByRole('article')).toBeVisible();
+  await resumed.goto(`/samples/${flow.sample.id}/coa`); await expect(resumed.frameLocator('.finalised-report-preview__frame').getByRole('article')).toBeVisible();
   expect((await resumed.request.get(path).then((response) => response.json())).job.id).toBe(jobId);
   const errors = []; resumed.on('pageerror', (error) => errors.push(error.message));
   const stopWorker = await startReportWorker();

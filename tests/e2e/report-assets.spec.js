@@ -144,7 +144,7 @@ test('source template settings bind headers and footers to a COA that retains it
   await page.getByRole('button', { name: /^Consolidated/ }).click();
   await page.getByLabel('Consolidated Report template', { exact: true }).selectOption(flow.template.templateId);
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
-  const report = page.getByRole('article');
+  const report = page.frameLocator('.finalised-report-preview__frame').getByRole('article');
   await expect(report.getByText('FROZEN LABORATORY HEADER', { exact: true })).toBeVisible();
   await expect(report.getByText('FROZEN LABORATORY FOOTER', { exact: true })).toBeVisible();
   await expect(report.locator('img[alt="Synthetic logo"]')).toBeVisible();

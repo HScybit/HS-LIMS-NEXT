@@ -24,6 +24,7 @@ import { createReportAssets } from '../tests/helpers/report-assets.js';
 import { deleteReportDocument, saveReportDocument } from '../src/report-assets/documents.js';
 import { uploadReportImage } from '../src/report-assets/images.js';
 import { saveWatermark, loadWatermark, deleteWatermark } from '../src/report-assets/watermarks.js';
+import { loadCustomCss, saveCustomCss, loadCurrentCustomCss } from '../src/report-assets/custom-css.js';
 import { reportSvg } from '../tests/helpers/report-svg.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
@@ -107,8 +108,12 @@ try {
     await assert.rejects(loadWatermark(client, identity, watermark.watermark.id), { code: 'watermark_not_found' });
     const footer = await saveReportDocument(client, identity, { ...created.footerInput, requestId: randomUUID(), revision: 1,
       templateHtml: `${created.footerInput.templateHtml}<img src="${vector.url}" width="80" height="24">` });
+    const cssInput = { requestId: randomUUID(), revision: 0, cssContent: `.coa-report-header p::after{content:" FRESH FROZEN STYLESHEET"}.coa-report-footer{background-image:url('${vector.url}');background-repeat:no-repeat}` };
+    const stylesheet = await saveCustomCss(client, identity, cssInput);
+    assert.equal((await saveCustomCss(client, identity, cssInput)).replayed, true);
+    assert.equal((await loadCurrentCustomCss(client)).versionId, stylesheet.versionId);
     await editTemplate(client, identity, reportFlow.template.versionId, 1, created.command);
-    return { ...created, footer: footer.document };
+    return { ...created, footer: footer.document, stylesheet };
   }, { csrfToken: session.csrfToken });
   const generationInput = { ...reportFlow.input, finalizeSample: true };
   const generated = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, generationInput), { csrfToken: session.csrfToken });
@@ -118,11 +123,19 @@ try {
   assert.equal(retried.replayed, true); assert.equal(retried.sample.revision, 2);
   const reportId = generated.items[0].id;
   await withSession(session.token, (client, identity) => deleteReportDocument(client, identity, assets.header.id, { requestId: randomUUID(), revision: 1 }), { csrfToken: session.csrfToken });
+  await withSession(session.token, async (client, identity) => {
+    const cleared = await saveCustomCss(client, identity, { requestId: randomUUID(), revision: 1, cssContent: '' });
+    assert.equal(cleared.revision, 2); assert.equal((await loadCurrentCustomCss(client)).cssContent, '');
+    assert.equal((await loadCustomCss(client, identity, { versionId: assets.stylesheet.versionId })).cssContent, assets.stylesheet.cssContent);
+  }, { csrfToken: session.csrfToken });
   const captured = await withSession(session.token, (client, identity) => loadReport(client, identity, reportId), { readOnly: true });
   assert.equal(captured.assets.header.versionId, assets.header.versionId);
   assert.ok(captured.assets.header.html.includes(`data:image/png;base64,${assets.content.toString('base64')}`));
   assert.equal(captured.assets.footer.versionId, assets.footer.versionId);
   assert.ok(captured.assets.footer.html.includes(`data:image/svg+xml;base64,${reportSvg.toString('base64')}`));
+  assert.equal(captured.assets.customCss.versionId, assets.stylesheet.versionId);
+  assert.ok(captured.assets.customCss.css.includes(`data:image/svg+xml;base64,${reportSvg.toString('base64')}`));
+  assert.equal(captured.metrics.assets.queryCount, 1); assert.equal(captured.metrics.assets.images, 2);
   const queued = await withSession(session.token, (client, identity) => enqueueReportPdf(client, identity, reportId), { csrfToken: session.csrfToken });
   worker = createReportWorkerPool(workerUrl.href); await verifyReportWorkerRole(worker);
   assert.equal((await worker.query('SELECT id FROM sample_reports')).rowCount, 0);
@@ -158,7 +171,7 @@ try {
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, grouped results/workflow, report finalisation/retry, watermark history and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

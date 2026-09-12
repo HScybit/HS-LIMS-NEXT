@@ -582,6 +582,20 @@
       "when": 1789216045921,
       "tag": "0082_versioned_report_watermarks",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1789218028829,
+      "tag": "0083_versioned_custom_css",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1789219621560,
+      "tag": "0084_frozen_custom_css_resources",
+      "breakpoints": true
     }
   ]
 }

@@ -206,7 +206,7 @@ test('group results survive a failed workflow request and retain their parent de
   await page.getByRole('button', { name: /^Consolidated/ }).click();
   await page.getByLabel('Consolidated Report template', { exact: true }).selectOption(template.templateId);
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
-  const report = page.getByRole('article');
+  const report = page.frameLocator('.finalised-report-preview__frame').getByRole('article');
   await expect(report.getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
   await expect(report.locator('[data-result-test-id]')).toHaveCount(2);
   await expect(report.locator('[data-result-test-id]').nth(0)).toHaveText('0');

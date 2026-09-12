@@ -17,8 +17,8 @@ export async function verifyReportWorkerRole(pool) {
 
 export function reportPdfFailure(error) {
   if (['42501', 'forbidden', 'workflow_action_denied'].includes(error.code)) return { code: 'report_print_permission_revoked', message: 'Report printing is no longer permitted for the requester.', retry: false };
-  if (['report_external_resource', 'report_pdf_size_limit', 'report_pdf_timeout', 'report_asset_size_limit'].includes(error.code)) return { code: error.code, message: error.message, retry: error.code === 'report_pdf_timeout' };
-  if (['report_not_found', 'report_history_unavailable', 'report_asset_history_unavailable', 'report_image_unavailable', 'unsafe_report_html', 'unsafe_report_svg', 'report_svg_limit', 'template_not_found', 'capture_not_found', 'template_batch_limit', 'capture_batch_limit', 'report_size_limit'].includes(error.code)) {
+  if (['report_external_resource', 'report_css_not_captured', 'custom_css_complexity_limit', 'custom_css_image_limit', 'custom_css_size_limit', 'report_pdf_size_limit', 'report_pdf_timeout', 'report_asset_size_limit'].includes(error.code)) return { code: error.code, message: error.message, retry: error.code === 'report_pdf_timeout' };
+  if (['report_not_found', 'report_history_unavailable', 'report_asset_history_unavailable', 'report_image_unavailable', 'invalid_report_image', 'empty_report_image', 'report_image_size_limit', 'report_image_type', 'report_image_dimensions', 'animated_report_image', 'unsafe_report_html', 'unsafe_report_svg', 'report_svg_limit', 'template_not_found', 'capture_not_found', 'template_batch_limit', 'capture_batch_limit', 'report_size_limit'].includes(error.code)) {
     return { code: 'report_pdf_history_unavailable', message: 'The frozen report could not be loaded for printing.', retry: false };
   }
   return { code: 'report_pdf_failed', message: 'The report could not be rendered. Please try again later.', retry: true };
@@ -35,7 +35,7 @@ export async function processNextReportJob({ pool, renderer, workerId }) {
       return loadReport(client, identity, job.report_id);
     }, { pool });
     const html = renderer.renderReportDocument(report, renderer.stylesheet);
-    const bytes = await renderer.renderReportPdf({ html, printConfig: report.printConfig, stylesheet: renderer.stylesheet });
+    const bytes = await renderer.renderReportPdf({ html, printConfig: report.printConfig, stylesheet: `${renderer.stylesheet}\n${report.assets?.customCss?.css ?? ''}` });
     await transaction((client) => client.query('SELECT report_pdf_complete($1,$2,$3,$4)', [...lease, bytes]), { pool });
     return { jobId: job.job_id, status: 'succeeded' };
   } catch (error) {

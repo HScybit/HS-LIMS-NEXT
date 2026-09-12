@@ -9,6 +9,7 @@ import { showToast } from '../ui/toast.jsx';
 import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
 import { PageHeaderContext } from './PageHeader.jsx';
 import { useNavigationGuard } from './NavigationGuard.jsx';
+import CustomCssInjector from '../report-assets/CustomCssInjector.jsx';
 
 export default function AppShell({ identity, children }) {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function AppShell({ identity, children }) {
     : pathname.startsWith('/samples') ? 'Samples' : pathname.startsWith('/master_template_management') ? 'Master Templates'
       : pathname === '/header_management' ? 'Headers' : pathname === '/footer_management' ? 'Footers'
         : pathname.startsWith('/watermark_report') ? 'Watermark Report'
+        : pathname === '/custom_css' ? 'Custom CSS'
         : pathname === '/organization_settings' || pathname.startsWith('/administration/') ? 'Organization Settings' : 'My Account';
   const [collapsed, setCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
@@ -121,6 +123,7 @@ export default function AppShell({ identity, children }) {
   }
 
   return <PageHeaderContext.Provider value={headerTarget}><div className={`lims-app ${isDesigner ? 'lims-app--template-designer' : ''} ${isCoa ? 'lims-app--coa-report' : ''}`}>
+    <CustomCssInjector enabled={!isDesigner} organizationId={identity.organizationId} />
     <div className={`sidebar-backdrop ${mobileOpen ? 'is-visible' : ''}`} onClick={() => setMobileOpen(false)} aria-hidden="true" />
     <div className={`sidebar-shell sidebar-shell-mobile ${mobileOpen ? 'is-open' : ''}`} inert={!mobileOpen}>{navigation(true)}</div>
     <div className={`sidebar-shell sidebar-shell-desktop ${collapsed ? 'is-collapsed' : ''} ${hoverExpanded ? 'is-hover-expanded' : ''}`}

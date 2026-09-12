@@ -16,14 +16,27 @@ export async function currentRendererId() {
   }
 }
 
-export async function loadReportRenderer() {
-  const rendererId = await currentRendererId();
+async function rendererFiles(rendererId) {
+  if (!/^[a-f0-9]{64}$/.test(rendererId)) throw new HttpError(404, 'report_renderer_unavailable', 'The report stylesheet is unavailable.');
   const directory = path.join(root, rendererId);
   const [code, stylesheet, dependencyLock] = await Promise.all([
     readFile(path.join(directory, 'renderer.mjs')), readFile(path.join(directory, 'stylesheet.css'), 'utf8'), readFile('package-lock.json'),
   ]);
   const actualId = createHash('sha256').update(code).update(stylesheet).update(dependencyLock).digest('hex');
   if (actualId !== rendererId) throw new Error('The report renderer does not match this release. Build and restart the worker.');
+  return { directory, stylesheet };
+}
+
+export async function loadReportStylesheet(rendererId) {
+  try { return (await rendererFiles(rendererId)).stylesheet; }
+  catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(503, 'report_renderer_unavailable', 'The report stylesheet is temporarily unavailable.');
+  }
+}
+
+export async function loadReportRenderer() {
+  const rendererId = await currentRendererId(); const { directory, stylesheet } = await rendererFiles(rendererId);
   const renderer = await import(pathToFileURL(path.join(directory, 'renderer.mjs')).href);
   return { rendererId, stylesheet, renderReportDocument: renderer.renderReportDocument, renderReportPdf: renderer.renderReportPdf };
 }
