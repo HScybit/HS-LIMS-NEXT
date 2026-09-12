@@ -60,6 +60,7 @@ export default function SampleDetails({ sampleId }) {
         <div className="d-flex flex-column"><div className="d-flex align-items-center gap-2"><h1 className="h5 mb-0 fw-semibold text-dark">{sample.sampleNumber}</h1><StatusPill color={sample.stateColor || 'blue'}>{sample.stateName || sample.status}</StatusPill></div>
           <div className="d-inline-flex gap-2 text-secondary fw-medium mt-2"><span>{created.toLocaleDateString('en-GB')}</span><span>{created.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
         </div></div><div className="d-flex align-items-center gap-2 flex-wrap">
+        {sample.canPrintCoa ? <SecondaryButton leftIcon="file-text" size="large" href={`/samples/${sampleId}/coa`}>Test Reports</SecondaryButton> : null}
         <SecondaryButton leftIcon="clipboard-text" size="large" className="btn-primary text-white border-primary" href={`/samples/${sampleId}/test_requests`}>Test Requests/Jobs</SecondaryButton>
         {actions.length ? <MoreActionButton items={actions} /> : null}
       </div>

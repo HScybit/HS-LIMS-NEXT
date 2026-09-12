@@ -56,7 +56,7 @@ function sectionOccurrences(model, occurrences, savedValues) {
     const section = model.sectionsById[sectionId];
     const instances = section.ownRepeatGroupId ? runtime.forGroup(parentId, section.ownRepeatGroupId) : [{ id: parentId }];
     for (const instance of instances) {
-      const current = { section, fields: [] }; const children = [];
+      const current = { section, parentOccurrenceId: parentId, occurrenceId: instance.id, fields: [] }; const children = [];
       sections.push(current);
       for (const rowId of section.rowIds) {
         const row = model.rowsById[rowId];
@@ -72,6 +72,11 @@ function sectionOccurrences(model, occurrences, savedValues) {
   }
   for (const id of model.rootSectionIds) visit(id, runtime.root.id);
   return sections;
+}
+
+export function finalResultSectionRoots(model, occurrences) {
+  return sectionOccurrences(model, occurrences, []).filter(({ section }) => section.isFinalResult)
+    .map(({ section, parentOccurrenceId, occurrenceId }) => ({ sectionId: section.id, parentOccurrenceId, occurrenceId }));
 }
 
 // The included Meteor screen passes its captured payload through the workflow

@@ -1,0 +1,36 @@
+.smplfy-dropdown.dropdown {
+  position: relative;
+}
+
+.smplfy-dropdown.dropdown > .smplfy-btn.dropdown-toggle {
+  flex: 0 0 auto;
+  min-width: var(--smplfy-dropdown-trigger-min-width);
+}
+
+.smplfy-dropdown.dropdown.show > .smplfy-btn.dropdown-toggle {
+  --bs-btn-color: var(--smplfy-button-outline-secondary-hover-text);
+  --bs-btn-bg: var(--smplfy-button-outline-secondary-hover-bg);
+  --bs-btn-border-color: var(--smplfy-button-outline-secondary-hover-border);
+  --bs-btn-hover-color: var(--smplfy-button-outline-secondary-hover-text);
+  --bs-btn-hover-bg: var(--smplfy-button-outline-secondary-hover-bg);
+  --bs-btn-hover-border-color: var(--smplfy-button-outline-secondary-hover-border);
+  --bs-btn-active-color: var(--smplfy-button-outline-secondary-active-text);
+  --bs-btn-active-bg: var(--smplfy-button-outline-secondary-active-bg);
+  --bs-btn-active-border-color: var(--smplfy-button-outline-secondary-active-border);
+
+  box-shadow: var(--smplfy-button-focus-ring-primary);
+}
+
+.smplfy-dropdown.dropdown > .smplfy-btn.dropdown-toggle:has(> svg)::after,
+.smplfy-dropdown.dropdown > .smplfy-btn.dropdown-toggle:has(> .smplfy-icon)::after {
+  display: none;
+}
+
+.smplfy-dropdown.dropdown > .smplfy-dropdown-menu.dropdown-menu {
+  position: absolute;
+  inset-block-start: calc(100% + var(--smplfy-dropdown-offset));
+  inset-inline-start: var(--smplfy-dropdown-menu-inset-inline-start);
+  inset-inline-end: var(--smplfy-dropdown-menu-inset-inline-end);
+  width: max-content;
+  min-width: var(--smplfy-dropdown-menu-current-min-width);
+}

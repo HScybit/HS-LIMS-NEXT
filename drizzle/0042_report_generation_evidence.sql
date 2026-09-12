@@ -1,0 +1,4 @@
+ALTER TABLE "sample_events" DROP CONSTRAINT "sample_event_type";--> statement-breakpoint
+ALTER TABLE "sample_reports" ADD COLUMN "generated_event_id" uuid NOT NULL;--> statement-breakpoint
+ALTER TABLE "sample_reports" ADD CONSTRAINT "report_generated_event_fk" FOREIGN KEY ("organization_id","generated_event_id") REFERENCES "public"."sample_events"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sample_events" ADD CONSTRAINT "sample_event_type" CHECK ("sample_events"."event_type" in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted', 'reports_generated'));

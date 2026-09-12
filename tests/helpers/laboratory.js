@@ -36,6 +36,7 @@ export async function createLaboratoryFixture(owner, account, options = {}) {
       const [finalState] = await db.insert(workflowStates).values({ organizationId, workflowVersionId: version.id, code: 'complete', name: 'Completed', stateType: 'final', isPositiveTermination: true }).returning();
       await db.insert(workflowTransitions).values({ organizationId, workflowVersionId: version.id, code: 'complete', name: 'Complete', sourceStateId: state.id, targetStateId: finalState.id });
       if (options.capabilityRoleId) await db.insert(workflowStateCapabilityRoles).values({ organizationId, workflowStateId: state.id, capability: 'allocate', roleId: options.capabilityRoleId });
+      if (appliesTo === 'sample' && options.printRoleId) await db.insert(workflowStateCapabilityRoles).values({ organizationId, workflowStateId: state.id, capability: 'download_report', roleId: options.printRoleId });
       await client.query("UPDATE workflow_versions SET status = 'published', revision = 2, published_by = $3, published_at = now() WHERE organization_id = $1 AND id = $2", [organizationId, version.id, account.userId]);
       await db.insert(sampleCategoryWorkflows).values({ organizationId, sampleCategoryId: category.id, workflowId: workflow.id, appliesTo, isDefault: true });
       workflowRecords.push({ workflow, version, state });

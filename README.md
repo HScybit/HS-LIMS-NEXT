@@ -6,7 +6,11 @@ The application provides database-backed sign-in, tenant-scoped sessions and per
 
 The template foundation supports text, input, paragraph, number, formula, checkbox, date and dropdown widgets. Definitions and captured results use typed relational tables, stable field identities and frozen versions. Samples includes an initial registration form, quick customer creation, list/detail views and a sample's test-request queue. Analysts can be allocated to requests and enter results using autosave, repeated rows, Calculate and Done. Failed saves retain input, revision conflicts require reload, and runtime versions retain their original template and scientific specifications.
 
-This is an initial working flow. Full sample editing and variants, project fields/images, jobs, allocation resources and qualification checks, scientific completion/approval, final-result selection and COA output remain under development. Remaining widgets, rich text, full access/print settings, MFA enrollment and migration adapters are also incomplete. Done saves entered results; it does not submit or approve the test request.
+Datasheet submission records the exact frozen capture, selected final result, unit and actual analyst. Sample and test-request workflows support positive any/all/sequential approval with recorded comments and checklist answers. Done saves entered results; submission and approval are separate actions.
+
+**Test Reports** opens the COA template selection and saved-revision preview. Consolidated, product-wise and parameter-wise drafts pin submitted results, scientific specifications, report templates and print choices. Report widgets include sample details, test-request data, decision-rule fields, final results and serial numbers. Final-result sections retain repeated rows from the frozen capture. Generation retries reuse their request identity; explicit regeneration creates another immutable revision. Definition and capture reads batch across the report's templates and datasheets.
+
+This is an initial working flow. Report finalisation, accreditation/ULR handling, PDF generation and durable jobs remain under development. Full sample editing and variants, project fields/images, allocation resources and qualification checks, remaining widgets, rich text, full access/print settings, MFA enrollment and migration adapters are also incomplete. Rejection timing and conflicting scientific error/numeric-prefix policies remain unresolved; affected actions do not silently choose a different interpretation.
 
 ## Run locally
 
@@ -49,7 +53,7 @@ Browser tests launch the production build at `http://127.0.0.1:3100`, using inst
 
 ## Database changes
 
-The canonical schema is in `src/db/`: identity, template, master, workflow and sample schema files. Generate reviewed SQL with `npm run db:generate`, then apply it with `npm run db:migrate`. Custom SQL migrations hold row policies, immutable-version guards and restricted functions. Applied migrations receive forward corrections, never edits. Drizzle's generated JSON files are schema-tool metadata on disk; no application database column uses JSON or JSONB.
+The canonical schema is in `src/db/`: identity, template, master, workflow, sample and report schema files. Generate reviewed SQL with `npm run db:generate`, then apply it with `npm run db:migrate`. Custom SQL migrations hold row policies, immutable-version guards and restricted functions. Applied migrations receive forward corrections, never edits. Drizzle's generated JSON files are schema-tool metadata on disk; no application database column uses JSON or JSONB.
 
 `DATABASE_URL` must use the restricted `sampleify_app` login. `MIGRATION_DATABASE_URL` uses a separate schema owner; it is only needed by migration and synthetic seed commands. The local setup provisions these roles. An independently provisioned database needs those roles before migration. Never run the web application with schema-owner or superuser credentials.
 

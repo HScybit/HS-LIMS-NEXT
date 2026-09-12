@@ -1,9 +1,9 @@
 // The runtime browser renders stored results; calculation trees and authoring
 // defaults stay on the server. All original definition/value history remains in SQL.
-const sectionKeys = ['id', 'name', 'parentColumnId', 'repeatGroupId', 'ownRepeatGroupId', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'rowIds'];
-const rowKeys = ['id', 'sectionId', 'repeatGroupId', 'ownRepeatGroupId', 'cssClass', 'columnIds'];
+const sectionKeys = ['id', 'name', 'parentColumnId', 'repeatGroupId', 'ownRepeatGroupId', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'isParameterLoop', 'isParameterLoopHeader', 'rowIds'];
+const rowKeys = ['id', 'sectionId', 'repeatGroupId', 'ownRepeatGroupId', 'cssClass', 'columnIds', 'serialNumber'];
 const columnKeys = ['id', 'rowId', 'span', 'cssClass', 'isFinalResult', 'fieldId', 'childSectionIds'];
-const fieldKeys = ['id', 'columnId', 'repeatGroupId', 'widget', 'valueType', 'alias', 'label', 'placeholder', 'required', 'editable'];
+const fieldKeys = ['id', 'columnId', 'repeatGroupId', 'widget', 'valueType', 'alias', 'label', 'placeholder', 'required', 'editable', 'sourceField', 'serialPadding'];
 const numericKeys = ['displayScale', 'padDecimals', 'minimum', 'maximum'];
 const groupKeys = ['id', 'parentGroupId', 'sectionId', 'rowId', 'source', 'minimum', 'maximum'];
 const valueKeys = ['fieldId', 'occurrenceId', 'revision', 'valueType', 'state', 'origin', 'numberValue', 'textValue', 'booleanValue', 'dateValue', 'optionId', 'lexical', 'errorCode', 'errorMessage'];

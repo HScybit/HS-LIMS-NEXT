@@ -1,5 +1,6 @@
 import { compileExpression, expressionText, formulaOrder } from './expressions.js';
 import { HttpError } from '../auth/errors.js';
+import { contextWidgetFields, isContextWidget } from './context-widgets.js';
 
 export class TemplateError extends HttpError {
   constructor(code, message) { super(400, code, message); this.name = 'TemplateError'; }
@@ -77,11 +78,14 @@ export function assembleDefinition(records, { forFreeze = false } = {}) {
     if (visited.has(id) || depth > 64) invalid('Container layout contains a cycle or excessive nesting.');
     visited.add(id);
     const section = model.sectionsById[id];
+    if (forFreeze && (section.isParameterLoop || section.isParameterLoopHeader) && version.kind !== 'report') invalid('Parameter loops currently require a report template.');
     section.ownRepeatGroupId = sectionGroups.get(id)?.id ?? null;
     section.repeatGroupId = enterGroup(sectionGroups.get(id), inheritedGroup);
     section.rowIds.sort((a, b) => byPosition(model.rowsById[a], model.rowsById[b]));
+    let serialNumber = 0;
     for (const rowId of section.rowIds) {
       const row = model.rowsById[rowId];
+      if (row.columnIds.some((columnId) => model.fieldsById[model.columnsById[columnId].fieldId]?.widget === 'sno_widget')) row.serialNumber = ++serialNumber;
       row.ownRepeatGroupId = rowGroups.get(rowId)?.id ?? null;
       row.repeatGroupId = enterGroup(rowGroups.get(rowId), section.repeatGroupId);
       row.columnIds.sort((a, b) => byPosition(model.columnsById[a], model.columnsById[b]));
@@ -120,6 +124,10 @@ export function assembleDefinition(records, { forFreeze = false } = {}) {
   const aliases = new Set();
   for (const field of Object.values(model.fieldsById)) {
     field.options.sort(byPosition);
+    if (forFreeze && isContextWidget(field.widget)) {
+      if (version.kind !== 'report') invalid('Report data widgets currently require a report template.');
+      if (contextWidgetFields[field.widget].length && !contextWidgetFields[field.widget].includes(field.sourceField)) invalid('Select a data field for every report data widget.');
+    }
     if (forFreeze && field.alias && aliases.has(field.alias)) invalid('Identifiers must be unique across the template. Rename duplicate keys before using this version.');
     if (field.alias) aliases.add(field.alias);
     if (forFreeze && field.widget === 'formula_widget' && !calculations.has(field.id)) invalid('Configure every formula before using the template.');

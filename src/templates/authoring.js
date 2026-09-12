@@ -8,6 +8,7 @@ import { assembleDefinition, referenceScope, resolveAlias } from './model.js';
 import { parseExpression } from './expressions.js';
 import { cloneLayout, layoutSelection } from './layout.js';
 import { widgetTypes, requirePermission, uuid, revision, text, integer, bool, decimal, ownRecord, fieldsOnly } from './input.js';
+import { contextWidgetFields, isContextWidget } from './context-widgets.js';
 
 const scope = (table, org, versionId) => and(eq(table.organizationId, org), eq(table.versionId, versionId));
 const identityColumns = (identity, versionId) => ({ organizationId: identity.organization_id, versionId });
@@ -67,12 +68,18 @@ async function saveExpression(db, base, model, field, purpose, formula) {
 }
 
 async function configureField(db, base, model, command) {
-  fieldsOnly(command, ['type', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options']);
+  fieldsOnly(command, ['type', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'sourceField', 'serialPadding']);
   const column = ownRecord(model.columnsById, command.columnId, 'Column');
   if (column.childSectionIds.length) throw new HttpError(400, 'column_has_children', 'Remove the nested container before adding a widget.');
   if (!Object.hasOwn(widgetTypes, command.widget)) throw new HttpError(400, 'unsupported_widget', 'This widget type is not supported.');
   const previous = model.fieldsById[column.fieldId];
   if (previous && previous.widget !== command.widget) throw new HttpError(400, 'widget_type_change', 'Remove the current widget before changing its type.');
+  const contextual = isContextWidget(command.widget);
+  const sourceField = command.sourceField === undefined ? previous?.sourceField ?? null : command.sourceField === '' ? null : command.sourceField;
+  const serialPadding = command.serialPadding === undefined ? previous?.serialPadding ?? null : command.serialPadding;
+  if (sourceField !== null && (!contextual || !contextWidgetFields[command.widget].includes(sourceField))) throw new HttpError(400, 'invalid_context_field', 'Select a supported data field for this widget.');
+  if (serialPadding !== null && (command.widget !== 'sno_widget' || !Number.isSafeInteger(serialPadding) || serialPadding < 0 || serialPadding > 100)) throw new HttpError(400, 'invalid_serial_padding', 'Serial number padding must be between 0 and 100.');
+  if (contextual && command.editable === true) throw new HttpError(400, 'readonly_context_widget', 'This widget displays its recorded source value.');
   const alias = text(command.alias, 'Identifier', 200, { optional: true }).trim();
   if (!/^[A-Za-z0-9_]*$/.test(alias)) throw new HttpError(400, 'invalid_alias', 'Identifier can contain only letters, numbers and underscores.');
   if (alias && Object.values(model.fieldsById).some((field) => field.id !== previous?.id && field.alias === alias)) throw new HttpError(400, 'duplicate_alias', 'Key already exist!');
@@ -80,6 +87,7 @@ async function configureField(db, base, model, command) {
     ...base, id: previous?.id ?? randomUUID(), columnId: column.id, repeatGroupId: model.rowsById[column.rowId].repeatGroupId,
     widget: command.widget, valueType: widgetTypes[command.widget], alias, label: text(command.label, 'Title', 16000, { optional: true }),
     placeholder: text(command.placeholder, 'Placeholder', 1000, { optional: true }), required: bool(command.required ?? false, 'Required'), editable: bool(command.editable ?? false, 'Editable'),
+    sourceField, serialPadding,
   };
   if (previous) await db.update(t.templateFields).set(field).where(and(scope(t.templateFields, base.organizationId, base.versionId), eq(t.templateFields.id, field.id)));
   else await db.insert(t.templateFields).values(field);
@@ -106,7 +114,7 @@ async function configureField(db, base, model, command) {
 }
 
 export async function editTemplate(client, identity, versionId, expectedRevision, command) {
-  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled']);
+  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader']);
   let details;
   if (command.type === 'editDetails') {
     fieldsOnly(command, ['type', 'name', 'description']);
@@ -152,10 +160,11 @@ export async function editTemplate(client, identity, versionId, expectedRevision
     await db.update(table).set({ position: other.position }).where(and(scope(table, base.organizationId, versionId), eq(table.id, item.id)));
     await db.update(table).set({ position: item.position }).where(and(scope(table, base.organizationId, versionId), eq(table.id, other.id)));
   } else if (command.type === 'configureSection') {
-    fieldsOnly(command, ['type', 'id', 'name', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult']);
+    fieldsOnly(command, ['type', 'id', 'name', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'isParameterLoop', 'isParameterLoopHeader']);
     const section = ownRecord(model.sectionsById, command.id, 'Container');
     await db.update(t.templateSections).set({ name: text(command.name, 'Container name', 200, { optional: true }), cssClass: text(command.cssClass, 'CSS class', 1000, { optional: true }),
-      visible: bool(command.visible ?? true, 'Visible'), isHeader: bool(command.isHeader ?? false, 'Header'), isFooter: bool(command.isFooter ?? false, 'Footer'), isFinalResult: bool(command.isFinalResult ?? false, 'Final result') })
+      visible: bool(command.visible ?? true, 'Visible'), isHeader: bool(command.isHeader ?? false, 'Header'), isFooter: bool(command.isFooter ?? false, 'Footer'), isFinalResult: bool(command.isFinalResult ?? false, 'Final result'),
+      isParameterLoop: bool(command.isParameterLoop ?? section.isParameterLoop ?? false, 'Parameter loop'), isParameterLoopHeader: bool(command.isParameterLoopHeader ?? section.isParameterLoopHeader ?? false, 'Parameter loop header') })
       .where(and(scope(t.templateSections, base.organizationId, versionId), eq(t.templateSections.id, section.id)));
   } else if (command.type === 'configureColumn') {
     fieldsOnly(command, ['type', 'id', 'span', 'cssClass', 'widget', 'isFinalResult']);

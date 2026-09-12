@@ -18,7 +18,7 @@ export const numberSequences = pgTable('number_sequences', {
   organizationId: tenant(), sequenceKey: text('sequence_key').notNull(), periodKey: text('period_key').notNull(), prefix: text('prefix').notNull(),
   minimumWidth: integer('minimum_width').notNull().default(6), nextValue: bigint('next_value', { mode: 'bigint' }).notNull().default(sql`1`),
 }, (t) => [primaryKey({ columns: [t.organizationId, t.sequenceKey, t.periodKey] }),
-  check('number_sequence_shape', sql`${t.sequenceKey} in ('sample', 'test_request', 'job') and ${t.periodKey} ~ '^[0-9]{4}$' and ${t.nextValue} > 0 and ${t.minimumWidth} between 1 and 20`)]);
+  check('number_sequence_shape', sql`${t.sequenceKey} in ('sample', 'test_request', 'job', 'sample_report') and ${t.periodKey} ~ '^[0-9]{4}$' and ${t.nextValue} > 0 and ${t.minimumWidth} between 1 and 20`)]);
 
 export const samples = pgTable('samples', {
   ...identity(), sampleNumber: text('sample_number').notNull(), sampleCategoryId: uuid('sample_category_id').notNull(), customerId: uuid('customer_id'), customerQuotationId: uuid('customer_quotation_id'),
@@ -198,4 +198,4 @@ export const sampleEvents = pgTable('sample_events', {
   description: text('description').notNull(), occurredAt: time('occurred_at').notNull().defaultNow(),
 }, (t) => [key(t), link(t, t.sampleId, samples), link(t, t.testRequestId, testRequests), actor(t, t.actorUserId),
   index('sample_events_time_idx').on(t.organizationId, t.sampleId, t.occurredAt),
-  check('sample_event_type', sql`${t.eventType} in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted')`)]);
+  check('sample_event_type', sql`${t.eventType} in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted', 'reports_generated')`)]);

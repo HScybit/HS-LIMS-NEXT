@@ -8,6 +8,7 @@ import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
 import { widgetTypes } from '../../templates/input.js';
+import { contextWidgetFields, isContextWidget } from '../../templates/context-widgets.js';
 
 const widgetOptions = Object.keys(widgetTypes).map((value) => ({ value, label: value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase()) })).sort((a, b) => a.label.localeCompare(b.label));
 
@@ -23,9 +24,10 @@ export function DesignerModal({ panel, model, onClose, onCommand, busy }) {
   const [form, setForm] = useState(() => {
     if (panel.type === 'widget') return { type: 'configureField', columnId: column.id, widget: field.widget, alias: field.alias, label: field.label, placeholder: field.placeholder, required: field.required, editable: field.editable,
       displayScale: field.numeric?.displayScale ?? '', padDecimals: field.numeric?.padDecimals ?? false, minimum: field.numeric?.minimum ?? '', maximum: field.numeric?.maximum ?? '',
+      sourceField: field.sourceField ?? null, serialPadding: field.serialPadding ?? null,
       ...(field.widget === 'formula_widget' ? { formula: field.formula ?? '' } : {}), options: field.options.map((option) => option.value) };
     if (panel.type === 'column') return { type: 'configureColumn', id: column.id, span: column.span, cssClass: column.cssClass || 'col', widget: field?.widget || 'text_widget', isFinalResult: column.isFinalResult };
-    if (panel.type === 'sectionSettings') return { type: 'configureSection', id: section.id, name: section.name, cssClass: section.cssClass, visible: section.visible, isHeader: section.isHeader, isFooter: section.isFooter, isFinalResult: section.isFinalResult };
+    if (panel.type === 'sectionSettings') return { type: 'configureSection', id: section.id, name: section.name, cssClass: section.cssClass, visible: section.visible, isHeader: section.isHeader, isFooter: section.isFooter, isFinalResult: section.isFinalResult, isParameterLoop: section.isParameterLoop, isParameterLoopHeader: section.isParameterLoopHeader };
     return { type: 'editDetails', name: model.version.name, description: model.version.description };
   });
   const update = (key, value) => setForm((previous) => ({ ...previous, [key]: value }));
@@ -45,17 +47,20 @@ export function DesignerModal({ panel, model, onClose, onCommand, busy }) {
         <section className="template-designer-form-section"><div className="template-designer-form-section__header"><h3>Behavior</h3><p>Configure the widget key and how this field behaves inside the template.</p></div><Toggle label="Required" checked={form.required} onChange={(value) => update('required', value)} /></section>
         <section className="template-designer-form-section"><div className="template-designer-form-section__header"><h3>Fields</h3><p>Identifiers must be unique across the template.</p></div><div className="template-designer-form-grid template-designer-form-grid--single">
           {form.widget === 'text_widget' ? input('label', 'Title') : null}{input('alias', 'Key')}
+          {isContextWidget(form.widget) && contextWidgetFields[form.widget].length ? <FormElement type="searchable-select" label={form.widget === 'sample_details_widget_v2' ? 'Sample Attribute' : 'Data Field'} inputProps={{ value: form.sourceField ?? '', options: contextWidgetFields[form.widget].map((value) => ({ value, label: value.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()) })), placeholder: 'Select field', onChange: (value) => update('sourceField', value || null) }} /> : null}
+          {form.widget === 'sno_widget' ? input('serialPadding', '0 Padding', 'text', { type: 'number', min: 0, max: 100, onChange: (event) => update('serialPadding', event.target.value === '' ? null : Number(event.target.value)) }) : null}
           {['input_widget', 'number_widget', 'paragraph_widget'].includes(form.widget) ? input('placeholder', 'Placeholder') : null}
           {form.widget === 'text_widget' ? <Toggle label="Editable" checked={form.editable} onChange={(value) => update('editable', value)} /> : null}
           {form.widget === 'formula_widget' ? <>{input('formula', 'Formula', 'textarea')}{input('displayScale', 'Decimal Points', 'text', { type: 'number', min: 0, max: 100, onChange: (event) => update('displayScale', event.target.value === '' ? '' : Number(event.target.value)) })}<Toggle label="Show Decimal Points" checked={form.padDecimals} onChange={(value) => update('padDecimals', value)} /></> : null}
           {form.widget === 'dropdown_widget' ? <FormElement type="text" label="Comma Separated Options" inputProps={{ value: form.options.join(','), onChange: (event) => update('options', event.target.value.split(',').map((value) => value.trim())) }} /> : null}
         </div></section>
       </> : panel.type === 'column' ? <><section className="template-designer-form-section"><div className="template-designer-form-section__header"><h3>Layout</h3><p>Control the widget type, display class, and column ordering.</p></div><div className="template-designer-form-grid">
-        <FormElement type="searchable-select" label="Widget" inputProps={{ value: form.widget, options: widgetOptions, placeholder: 'Select widget', onChange: (value) => update('widget', value) }} />
+        <FormElement type="searchable-select" label="Widget" inputProps={{ value: form.widget, options: widgetOptions.filter((option) => model.version.kind === 'report' || !isContextWidget(option.value)), placeholder: 'Select widget', onChange: (value) => update('widget', value) }} />
         {input('cssClass', 'Class', 'text', { placeholder: 'e.g. col-6 border border-bottom text-center' })}
       </div></section><section className="template-designer-form-section"><div className="template-designer-form-section__header"><h3>Display</h3><p>Set where this column appears in reports and templates.</p></div><div className="template-designer-toggle-grid"><Toggle label="Is Final Result?" checked={form.isFinalResult} onChange={(value) => update('isFinalResult', value)} /></div></section></> : panel.type === 'sectionSettings' ? <section className="template-designer-form-section"><div className="template-designer-form-grid">
         {[['isHeader', 'Header'], ['isFooter', 'Footer'], ['isFinalResult', 'Final Result / Print in CoA']].map(([key, label]) => <div key={key} className="form-group mb-2"><label><input className="custom-control-input" type="checkbox" checked={Boolean(form[key])} onChange={(event) => update(key, event.target.checked)} />{label}</label></div>)}
         {input('name', 'Unique Name')}
+        {model.version.kind === 'report' ? <>{[['isParameterLoop', 'Parameter Loop'], ['isParameterLoopHeader', 'Parameter Loop Header']].map(([key, label]) => <Toggle key={key} label={label} checked={form[key]} onChange={(value) => update(key, value)} />)}</> : null}
       </div></section> : <section className="template-designer-form-section">{input('name', 'Name', 'text', { required: true })}{input('description', 'Description', 'textarea')}</section>}
     </form>
   </Modal>;

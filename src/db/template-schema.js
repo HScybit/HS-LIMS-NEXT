@@ -52,6 +52,7 @@ export const templateSections = pgTable('template_sections', {
   width: numeric('width').notNull().default('100'), height: numeric('height').notNull().default('100'),
   visible: boolean('visible').notNull().default(true), isHeader: boolean('is_header').notNull().default(false),
   isFooter: boolean('is_footer').notNull().default(false), isFinalResult: boolean('is_final_result').notNull().default(false),
+  isParameterLoop: boolean('is_parameter_loop').notNull().default(false), isParameterLoopHeader: boolean('is_parameter_loop_header').notNull().default(false),
   sourceVersionId: uuid('source_version_id'), sourceSectionId: uuid('source_section_id'),
 }, (t) => [
   versionKey(t), versionLink(t), logicalLink(t, t.parentColumnId, templateColumns, 'section_parent_column_fk'),
@@ -89,13 +90,20 @@ export const templateFields = pgTable('template_fields', {
   widget: text('widget').notNull(), valueType: text('value_type').notNull(), alias: text('alias').notNull().default(''),
   label: text('label').notNull().default(''), placeholder: text('placeholder').notNull().default(''), required: boolean('required').notNull().default(false),
   editable: boolean('editable').notNull().default(false), defaultState: text('default_state').notNull().default('absent'),
+  sourceField: text('source_field'), serialPadding: integer('serial_padding'),
   defaultText: text('default_text'), defaultNumber: numeric('default_number'), defaultBoolean: boolean('default_boolean'), defaultDate: date('default_date', { mode: 'string' }),
 }, (t) => [versionKey(t), versionLink(t), logicalLink(t, t.columnId, templateColumns), logicalLink(t, t.repeatGroupId, templateRepeatGroups),
   unique('template_column_field_key').on(t.organizationId, t.versionId, t.columnId),
   unique('template_field_type_key').on(t.organizationId, t.versionId, t.id, t.valueType),
   index('template_fields_alias').on(t.organizationId, t.versionId, t.alias),
   check('template_field_alias', sql`${t.alias} ~ '^[A-Za-z0-9_]*$' and length(${t.alias}) <= 200`),
-  check('template_widget_type', sql`(${t.widget} in ('text_widget', 'input_widget', 'paragraph_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option')`),
+  check('template_widget_type', sql`(${t.widget} in ('text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option')`),
+  check('template_field_context', sql`(${t.sourceField} is null or
+    (${t.widget} = 'sample_details_widget_v2' and ${t.sourceField} in ('sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'productName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference')) or
+    (${t.widget} = 'tr_data_widget' and ${t.sourceField} in ('requestNumber', 'parameterName', 'productName', 'methodName', 'analystName', 'submittedAt', 'completedAt')) or
+    (${t.widget} = 'decision_rule_widget' and ${t.sourceField} in ('specification', 'measurementUnit', 'parameterName', 'productName', 'methodName', 'decisionOutcome')))
+    and (${t.serialPadding} is null or (${t.widget} = 'sno_widget' and ${t.serialPadding} between 0 and 100))
+    and (${t.widget} not in ('sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') or not ${t.editable})`),
   check('template_field_default', sql`(${t.defaultState} in ('absent', 'empty') and num_nonnulls(${t.defaultText}, ${t.defaultNumber}, ${t.defaultBoolean}, ${t.defaultDate}) = 0) or (${t.defaultState} = 'present' and num_nonnulls(${t.defaultText}, ${t.defaultNumber}, ${t.defaultBoolean}, ${t.defaultDate}) = 1 and ((${t.valueType} = 'text' and ${t.defaultText} is not null) or (${t.valueType} = 'numeric' and ${t.defaultNumber} is not null and ${t.defaultNumber}::text not in ('NaN', 'Infinity', '-Infinity')) or (${t.valueType} = 'boolean' and ${t.defaultBoolean} is not null) or (${t.valueType} = 'date' and ${t.defaultDate} is not null)))`),
 ]);
 

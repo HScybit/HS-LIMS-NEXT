@@ -1,0 +1,12 @@
+ALTER TABLE "template_fields" DROP CONSTRAINT "template_widget_type";--> statement-breakpoint
+ALTER TABLE "template_fields" ADD COLUMN "source_field" text;--> statement-breakpoint
+ALTER TABLE "template_fields" ADD COLUMN "serial_padding" integer;--> statement-breakpoint
+ALTER TABLE "template_sections" ADD COLUMN "is_parameter_loop" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "template_sections" ADD COLUMN "is_parameter_loop_header" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "template_fields" ADD CONSTRAINT "template_field_context" CHECK (("template_fields"."source_field" is null or
+    ("template_fields"."widget" = 'sample_details_widget_v2' and "template_fields"."source_field" in ('sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'productName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference')) or
+    ("template_fields"."widget" = 'tr_data_widget' and "template_fields"."source_field" in ('requestNumber', 'parameterName', 'productName', 'methodName', 'analystName', 'submittedAt', 'completedAt')) or
+    ("template_fields"."widget" = 'decision_rule_widget' and "template_fields"."source_field" in ('specification', 'measurementUnit', 'parameterName', 'productName', 'methodName', 'decisionOutcome')))
+    and ("template_fields"."serial_padding" is null or ("template_fields"."widget" = 'sno_widget' and "template_fields"."serial_padding" between 0 and 100))
+    and ("template_fields"."widget" not in ('sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') or not "template_fields"."editable"));--> statement-breakpoint
+ALTER TABLE "template_fields" ADD CONSTRAINT "template_widget_type" CHECK (("template_fields"."widget" in ('text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and "template_fields"."value_type" = 'text') or ("template_fields"."widget" in ('number_widget', 'formula_widget') and "template_fields"."value_type" = 'numeric') or ("template_fields"."widget" = 'checkbox_widget' and "template_fields"."value_type" = 'boolean') or ("template_fields"."widget" = 'datepicker_widget' and "template_fields"."value_type" = 'date') or ("template_fields"."widget" = 'dropdown_widget' and "template_fields"."value_type" = 'option'));

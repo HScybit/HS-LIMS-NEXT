@@ -15,6 +15,7 @@ export default function AppShell({ identity, children }) {
   const navigationGuard = useNavigationGuard();
   const pathname = usePathname();
   const isDesigner = /^\/master_template_management\/[a-f\d-]+$/i.test(pathname);
+  const isCoa = /^\/samples\/[a-f\d-]+\/coa$/i.test(pathname);
   const pageLabel = pathname.includes('/data_sheets/') ? 'Add Results' : pathname.includes('/test_requests/') ? 'Test Request'
     : pathname.startsWith('/samples') ? 'Samples' : pathname.startsWith('/master_template_management') ? 'Master Templates' : 'My Account';
   const [collapsed, setCollapsed] = useState(false);
@@ -108,7 +109,7 @@ export default function AppShell({ identity, children }) {
     </aside>;
   }
 
-  return <PageHeaderContext.Provider value={headerTarget}><div className={`lims-app ${isDesigner ? 'lims-app--template-designer' : ''}`}>
+  return <PageHeaderContext.Provider value={headerTarget}><div className={`lims-app ${isDesigner ? 'lims-app--template-designer' : ''} ${isCoa ? 'lims-app--coa-report' : ''}`}>
     <div className={`sidebar-backdrop ${mobileOpen ? 'is-visible' : ''}`} onClick={() => setMobileOpen(false)} aria-hidden="true" />
     <div className={`sidebar-shell sidebar-shell-mobile ${mobileOpen ? 'is-open' : ''}`} inert={!mobileOpen}>{navigation(true)}</div>
     <div className={`sidebar-shell sidebar-shell-desktop ${collapsed ? 'is-collapsed' : ''} ${hoverExpanded ? 'is-hover-expanded' : ''}`}
