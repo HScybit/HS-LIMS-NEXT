@@ -25,7 +25,14 @@ function requireWorkflowWrite(identity) {
 }
 async function lockRun(client, identity, runId) {
   uuid(runId, 'Workflow run'); requireWorkflowWrite(identity);
-  if (!(await client.query('SELECT workflow_lock_run($1) AS found', [runId])).rows[0].found) throw new HttpError(404, 'workflow_run_not_found', 'Workflow was not found.');
+  try {
+    if (!(await client.query('SELECT workflow_lock_run($1) AS found', [runId])).rows[0].found) throw new HttpError(404, 'workflow_run_not_found', 'Workflow was not found.');
+  } catch (error) {
+    if (error.code === '23514' && error.constraint === 'workflow_parent_job_controls') {
+      throw new HttpError(409, 'job_workflow_controls', 'Continue this review from the parent job.');
+    }
+    throw error;
+  }
   return workflowRunRecord(client, identity, runId);
 }
 async function transitionForRun(client, identity, run, transitionId) {
@@ -43,7 +50,7 @@ async function requireTransitionReady(client, identity, run, transition, target)
       EXISTS (SELECT 1 FROM test_request_assignments WHERE organization_id=request.organization_id AND test_request_id=request.id AND assignment_type='analyst' AND unassigned_at IS NULL) AS allocated
       FROM test_requests request LEFT JOIN datasheets sheet ON sheet.organization_id=request.organization_id AND sheet.test_request_id=request.id AND sheet.id=request.final_datasheet_id
       LEFT JOIN datasheet_submissions submission ON submission.organization_id=sheet.organization_id AND submission.datasheet_id=sheet.id AND submission.id=sheet.latest_submission_id
-      LEFT JOIN template_instances capture ON capture.organization_id=sheet.organization_id AND capture.id=sheet.template_instance_id
+      LEFT JOIN template_instances capture ON capture.organization_id=submission.organization_id AND capture.id=submission.instance_id
       WHERE request.organization_id=$1 AND request.id=$2`, [identity.organization_id, run.test_request_id])).rows[0];
     if (!request?.allocated || request.status === 'created') throw new HttpError(409, 'test_request_not_allocated', 'Allocate this test request before requesting a workflow transition.');
     if (!['under_review', 'approved'].includes(request.status) || !['under_review', 'approved'].includes(request.sheet_status)

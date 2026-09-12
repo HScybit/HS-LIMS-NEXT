@@ -372,6 +372,160 @@
       "when": 1789186102289,
       "tag": "0052_method_cancellation_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1789192844754,
+      "tag": "0053_test_request_job_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1789193032870,
+      "tag": "0054_test_request_job_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1789193086223,
+      "tag": "0055_test_request_job_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1789194695822,
+      "tag": "0056_complete_job_creation_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1789195636726,
+      "tag": "0057_datasheet_parameter_subjects",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1789195862865,
+      "tag": "0058_datasheet_subject_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1789197835818,
+      "tag": "0059_automatic_job_generation",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1789198581991,
+      "tag": "0060_automatic_job_registration_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789200665349,
+      "tag": "0061_job_result_entry_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1789200713895,
+      "tag": "0062_job_result_entry_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1789201411735,
+      "tag": "0063_grouped_datasheet_submissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1789201720025,
+      "tag": "0064_job_result_recording_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1789202105398,
+      "tag": "0065_group_submission_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1789202588904,
+      "tag": "0066_job_member_lock_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1789202934497,
+      "tag": "0067_group_submission_cancellation_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1789203232968,
+      "tag": "0068_job_workflow_effect_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1789203378069,
+      "tag": "0069_job_effect_action_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1789203458564,
+      "tag": "0070_job_workflow_effect_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1789205047489,
+      "tag": "0071_capture_revision_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1789205081612,
+      "tag": "0072_capture_revision_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1789205188060,
+      "tag": "0073_capture_value_actor_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1789205755980,
+      "tag": "0074_job_child_transition_boundaries",
+      "breakpoints": true
     }
   ]
 }

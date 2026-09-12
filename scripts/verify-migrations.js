@@ -9,7 +9,7 @@ import { signIn, withSession } from '../src/auth/service.js';
 import { closePool, getPool } from '../src/db/pool.js';
 import { createAnalyticalTemplate } from '../tests/helpers/templates.js';
 import { freezeTemplate } from '../src/templates/authoring.js';
-import { createCapture } from '../src/templates/capture.js';
+import { createCapture, saveCapture } from '../src/templates/capture.js';
 import { loadCapture, loadDefinition } from '../src/templates/loader.js';
 import { createLaboratoryFixture } from '../tests/helpers/laboratory.js';
 import { quickCreateCustomer } from '../src/samples/customer.js';
@@ -18,6 +18,11 @@ import { loadSample } from '../src/samples/load.js';
 import { generateTestRequests } from '../src/test-requests/generate.js';
 import { allocateTestRequest } from '../src/test-requests/allocate.js';
 import { prepareReportFlow } from '../tests/helpers/report-flow.js';
+import { prepareSubjectJob } from '../tests/helpers/job-subjects.js';
+import { createReportTemplate } from '../tests/helpers/reports.js';
+import { loadDatasheet } from '../src/datasheets/service.js';
+import { loadWorkflowRun } from '../src/workflows/load.js';
+import { submitDatasheetTransition } from '../src/workflows/requests.js';
 import { generateReports } from '../src/reports/service.js';
 import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
 import { loadReportRenderer } from '../src/reports/renderer.js';
@@ -60,7 +65,7 @@ try {
   const role = (await getPool().query('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')).rows[0];
   assert.deepEqual(role, { rolsuper: false, rolbypassrls: false });
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
-  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate'] });
+  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
   await withSession(session.token, async (client, identity) => {
     const template = await createAnalyticalTemplate(client, identity);
@@ -94,9 +99,35 @@ try {
   assert.deepEqual(printed, { jobId: queued.job.id, status: 'succeeded' });
   const pdf = await withSession(session.token, (client, identity) => reportPdfFile(client, identity, reportId), { readOnly: true });
   assert.equal(pdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdf.byteLength > 5000);
+  const signedAccount = { ...account, ...session };
+  const jobFlow = await prepareSubjectJob(owner, signedAccount, signedAccount, { resultWidget: true });
+  const work = (action, options = {}) => withSession(session.token, action, { csrfToken: session.csrfToken, ...options });
+  let jobSheet = await work((client, identity) => loadDatasheet(client, identity, jobFlow.job.datasheetId), { readOnly: true });
+  const fields = Object.values(jobSheet.model.fieldsById); const raw = fields.find((field) => field.alias === 'raw_0');
+  const result = fields.find((field) => field.widget === 'result_widget');
+  await work((client, identity) => saveCapture(client, identity, jobSheet.capture.instance.id, jobSheet.capture.revision,
+    jobSheet.capture.occurrences.filter((row) => row.subject).flatMap((row, index) => [
+      { fieldId: raw.id, occurrenceId: row.id, state: 'present', value: '0' },
+      { fieldId: result.id, occurrenceId: row.id, state: 'present', value: index === 0 ? '0' : '4.20' },
+    ])));
+  jobSheet = await work((client, identity) => loadDatasheet(client, identity, jobFlow.job.datasheetId), { readOnly: true });
+  const run = await work((client, identity) => loadWorkflowRun(client, identity, jobFlow.job.workflowRunId), { readOnly: true });
+  await work((client, identity) => submitDatasheetTransition(client, identity, run.id, { datasheetId: jobSheet.datasheet.id,
+    datasheet: { revision: jobSheet.datasheet.revision, captureRevision: jobSheet.capture.revision },
+    transition: { revision: run.revision, transitionId: run.transitions[0].id, comment: 'Synthetic fresh job completion', checklistItemIds: [] } }));
+  assert.equal((await owner.query('SELECT count(*)::integer AS count FROM laboratory_job_workflow_effects WHERE parent_request_id=$1 AND is_current', [jobFlow.job.id])).rows[0].count, 2);
+  const template = await work(createReportTemplate);
+  const selected = (await owner.query('SELECT sample_test_id FROM test_requests WHERE organization_id=$1 AND parent_test_request_id=$2', [account.organizationId, jobFlow.job.id])).rows;
+  const jobReports = await work((client, identity) => generateReports(client, identity, jobFlow.sample.id, { revision: jobFlow.sample.revision, requestId: randomUUID(),
+    reportType: 'consolidated', selectedSampleTestIds: selected.map((row) => row.sample_test_id), templateSelections: [{ key: 'consolidated', templateId: template.templateId }] }));
+  const jobReportId = jobReports.items[0].id;
+  const jobPrint = await work((client, identity) => enqueueReportPdf(client, identity, jobReportId));
+  assert.deepEqual(await processNextReportJob({ pool: worker, renderer: await loadReportRenderer(), workerId: randomUUID() }), { jobId: jobPrint.job.id, status: 'succeeded' });
+  const jobPdf = await work((client, identity) => reportPdfFile(client, identity, jobReportId), { readOnly: true });
+  assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation and a frozen PDF job passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, grouped results/workflow and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

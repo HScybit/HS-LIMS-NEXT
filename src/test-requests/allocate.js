@@ -6,6 +6,7 @@ import { createWorkflowCapture } from '../templates/capture.js';
 import { resolveCaptureVersion } from '../templates/snapshots.js';
 import { requireWorkflowAction } from '../workflows/access.js';
 import { startWorkflow } from '../workflows/start.js';
+import { insertDatasheetSubjects } from '../datasheets/subjects.js';
 
 async function ensureDatasheet(client, identity, request) {
   const existing = await client.query(`SELECT id, template_instance_id FROM datasheets
@@ -21,17 +22,39 @@ async function ensureDatasheet(client, identity, request) {
     templateId = fallback.rows[0].id;
   }
   const versionId = await resolveCaptureVersion(client, identity, templateId, { kind: 'datasheet' });
-  const capture = await createWorkflowCapture(client, identity, versionId);
+  const subjects = request.is_job ? (await client.query(`SELECT id AS "testRequestId",specification_id AS "specificationId"
+    FROM test_requests WHERE organization_id=$1 AND parent_test_request_id=$2 ORDER BY job_member_position,id`, [identity.organization_id, request.id])).rows
+    : [{ testRequestId: request.id, specificationId: request.specification_id }];
+  const capture = await createWorkflowCapture(client, identity, versionId, { subjects });
   const [sheet] = await database(client).insert(datasheets).values({ organizationId: identity.organization_id, testRequestId: request.id,
     templateInstanceId: capture.instanceId, specificationId: request.specification_id, methodId: request.method_id, attemptNumber: 1, createdBy: identity.user_id }).returning({ id: datasheets.id });
+  await insertDatasheetSubjects(client, identity, sheet.id, capture);
   return { id: sheet.id, templateId };
 }
 
 async function ensureWorkflow(client, identity, request) {
   const existing = await client.query('SELECT id FROM workflow_runs WHERE organization_id = $1 AND test_request_id = $2', [identity.organization_id, request.id]);
   if (existing.rowCount) return existing.rows[0].id;
-  const run = await startWorkflow(client, identity, { type: 'test_request', id: request.id }, request.sample_category_id);
+  const run = await startWorkflow(client, identity, { type: 'test_request', id: request.id }, request.sample_category_id, { workflowId: request.job_workflow_id });
   return run?.id ?? null;
+}
+
+// Automatic generation has its own database-verified context. It initializes
+// only a new child already assigned by laboratory_start_auto_job, and never
+// confers the allocator's reassignment or existing-capture permissions.
+export async function initializeGeneratedRequest(client, identity, requestId) {
+  uuid(requestId, 'Test request');
+  const allowed = (await client.query('SELECT laboratory_auto_job_request() AS id')).rows[0]?.id;
+  if (allowed !== requestId) throw new HttpError(403, 'automatic_job_required', 'This request is not part of the current automatic job generation.');
+  const request = (await client.query(`SELECT request.*,context.sample_id,context.sample_category_id,specification.method_id
+    FROM test_requests request JOIN laboratory_test_request_context context ON context.organization_id=request.organization_id AND context.test_request_id=request.id
+    JOIN analytical_specifications specification ON specification.organization_id=request.organization_id AND specification.id=request.specification_id
+    WHERE request.organization_id=$1 AND request.id=$2`, [identity.organization_id, requestId])).rows[0];
+  if (!request) throw new HttpError(404, 'test_request_not_found', 'Test request was not found.');
+  const sheet = await ensureDatasheet(client, identity, request);
+  const workflowRunId = await ensureWorkflow(client, identity, request);
+  const updated = (await client.query('SELECT laboratory_finish_auto_job_member() AS revision')).rows[0];
+  return { id: requestId, revision: updated.revision, status: 'allocated', datasheetId: sheet.id, workflowRunId };
 }
 
 // The caller supplies the authenticated withSession transaction. Locking the
@@ -41,11 +64,11 @@ export async function allocateTestRequest(client, identity, requestId, input) {
   fieldsOnly(input, ['revision', 'assignmentType', 'assignedUserId']); revision(input.revision); uuid(input.assignedUserId, 'Assigned user');
   if (!['analyst', 'reviewer', 'final_approver'].includes(input.assignmentType)) throw new HttpError(400, 'invalid_assignment_type', 'Select a supported assignment type.');
   await client.query('SELECT laboratory_lock_request_sample($1)', [requestId]);
-  const result = await client.query(`SELECT request.*, product.sample_id, sample.sample_category_id, specification.method_id
-    FROM test_requests request JOIN sample_tests selected ON selected.organization_id = request.organization_id AND selected.id = request.sample_test_id
-    JOIN sample_products product ON product.organization_id = selected.organization_id AND product.id = selected.sample_product_id
+  const result = await client.query(`SELECT request.*, product.sample_id, sample.sample_category_id, specification.method_id, settings.job_workflow_id
+    FROM test_requests request JOIN laboratory_test_request_context product ON product.organization_id=request.organization_id AND product.test_request_id=request.id
     JOIN samples sample ON sample.organization_id = product.organization_id AND sample.id = product.sample_id
-    JOIN analytical_specifications specification ON specification.organization_id = request.organization_id AND specification.id = request.specification_id
+    LEFT JOIN analytical_specifications specification ON specification.organization_id = request.organization_id AND specification.id = request.specification_id
+    LEFT JOIN organization_laboratory_settings settings ON settings.organization_id=request.organization_id AND request.is_job
     WHERE request.organization_id = $1 AND request.id = $2 FOR UPDATE OF request`, [identity.organization_id, requestId]);
   const request = result.rows[0];
   if (!request) throw new HttpError(404, 'test_request_not_found', 'Test request was not found.');
@@ -65,7 +88,7 @@ export async function allocateTestRequest(client, identity, requestId, input) {
   const db = database(client);
   await db.insert(testRequestAssignments).values({ organizationId: identity.organization_id, testRequestId: requestId, assignmentType: input.assignmentType,
     assignedUserId: input.assignedUserId, assignedBy: identity.user_id });
-  const prepareRuntime = input.assignmentType === 'analyst' && !request.parent_test_request_id;
+  const prepareRuntime = input.assignmentType === 'analyst';
   const sheet = prepareRuntime ? await ensureDatasheet(client, identity, request) : null;
   const workflowRunId = prepareRuntime ? await ensureWorkflow(client, identity, request) : null;
   const updated = await client.query(`UPDATE test_requests SET status = CASE WHEN status = 'created' AND $3 = 'analyst' THEN 'allocated' ELSE status END,

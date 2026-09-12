@@ -47,6 +47,10 @@ function scalar(candidate, source) {
   return { ...result, resultType: 'text', textValue: payload };
 }
 
+export function resolveRecordedResult(field, value, occurrenceId, source) {
+  return scalar({ field, value, occurrenceId }, source);
+}
+
 function sectionOccurrences(model, occurrences, savedValues) {
   assertCaptureSize(model, occurrences);
   const runtime = indexOccurrences(model, occurrences);

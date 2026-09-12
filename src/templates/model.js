@@ -78,7 +78,9 @@ export function assembleDefinition(records, { forFreeze = false } = {}) {
     if (visited.has(id) || depth > 64) invalid('Container layout contains a cycle or excessive nesting.');
     visited.add(id);
     const section = model.sectionsById[id];
-    if (forFreeze && (section.isParameterLoop || section.isParameterLoopHeader) && version.kind !== 'report') invalid('Parameter loops currently require a report template.');
+    if (forFreeze && (section.isParameterLoop || section.isParameterLoopHeader) && !['report', 'datasheet'].includes(version.kind)) invalid('Parameter loops require a report or datasheet template.');
+    if (version?.kind === 'datasheet' && Boolean(section.isParameterLoop) !== (sectionGroups.get(id)?.source === 'test_requests')) invalid('Datasheet parameter loops require a matching request repeat definition.');
+    if (sectionGroups.get(id)?.source === 'test_requests' && (version?.kind !== 'datasheet' || !section.isParameterLoop)) invalid('Request repeats belong to datasheet parameter loops.');
     section.ownRepeatGroupId = sectionGroups.get(id)?.id ?? null;
     section.repeatGroupId = enterGroup(sectionGroups.get(id), inheritedGroup);
     section.rowIds.sort((a, b) => byPosition(model.rowsById[a], model.rowsById[b]));
@@ -125,7 +127,7 @@ export function assembleDefinition(records, { forFreeze = false } = {}) {
   for (const field of Object.values(model.fieldsById)) {
     field.options.sort(byPosition);
     if (forFreeze && isContextWidget(field.widget)) {
-      if (version.kind !== 'report') invalid('Report data widgets currently require a report template.');
+      if (!['report', 'datasheet'].includes(version.kind)) invalid('Data widgets require a report or datasheet template.');
       if (contextWidgetFields[field.widget].length && !contextWidgetFields[field.widget].includes(field.sourceField)) invalid('Select a data field for every report data widget.');
     }
     if (forFreeze && field.alias && aliases.has(field.alias)) invalid('Identifiers must be unique across the template. Rename duplicate keys before using this version.');

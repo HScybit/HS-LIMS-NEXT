@@ -5,6 +5,7 @@ import { fieldsOnly, uuid, revision, requirePermission } from '../templates/inpu
 import { resolveCaptureVersion } from '../templates/snapshots.js';
 import { createWorkflowCapture } from '../templates/capture.js';
 import { requireCaptureWrite } from '../templates/access.js';
+import { insertDatasheetSubjects } from '../datasheets/subjects.js';
 
 export async function applicableMethods(client, identity, requestId) {
   return (await client.query(`SELECT method.id, method.name, method.code FROM test_requests request
@@ -23,7 +24,7 @@ async function editableRequest(client, identity, requestId, expectedRevision) {
   if (!request) throw new HttpError(404, 'test_request_not_found', 'Test request was not found.');
   if (request.revision !== expectedRevision) throw new HttpError(409, 'stale_test_request', 'This test request changed. Reload before changing methods.');
   if (!['allocated', 'in_progress', 'rejected'].includes(request.status)) throw new HttpError(409, 'test_request_closed', 'Methods can only be changed while the test request is open for testing.');
-  if (request.parent_test_request_id) throw new HttpError(409, 'child_request_method', 'Change methods on the parent test request.');
+  if (request.is_job) throw new HttpError(409, 'job_method', 'Individual methods belong to the test requests within this job.');
   const access = (await client.query('SELECT laboratory_request_can_work($1) AS allowed', [request.id])).rows[0];
   if (!access.allowed) throw new HttpError(403, 'method_change_denied', 'Only the assigned analyst can change methods when the sample workflow allows testing and no approval is pending.');
   return request;
@@ -44,11 +45,12 @@ export async function addTestRequestMethod(client, identity, requestId, input) {
   // precision. Only the selected method receives a new master snapshot.
   const specificationId = (await client.query('SELECT laboratory_snapshot_method($1,$2) AS id', [request.id, methodId])).rows[0].id;
   const versionId = await resolveCaptureVersion(client, identity, request.datasheet_template_id, { kind: 'datasheet' });
-  const capture = await createWorkflowCapture(client, identity, versionId);
+  const capture = await createWorkflowCapture(client, identity, versionId, { subjects: [{ testRequestId: request.id, specificationId }] });
   const attempt = (await client.query('SELECT coalesce(max(attempt_number),0)+1 AS number FROM datasheets WHERE organization_id=$1 AND test_request_id=$2',
     [identity.organization_id, request.id])).rows[0].number;
   const [sheet] = await database(client).insert(datasheets).values({ organizationId: identity.organization_id, testRequestId: request.id,
     templateInstanceId: capture.instanceId, specificationId, methodId, attemptNumber: attempt, createdBy: identity.user_id }).returning({ id: datasheets.id });
+  await insertDatasheetSubjects(client, identity, sheet.id, capture);
   const updated = (await client.query('UPDATE test_requests SET revision=revision+1 WHERE organization_id=$1 AND id=$2 RETURNING revision',
     [identity.organization_id, request.id])).rows[0];
   return { id: request.id, revision: updated.revision, datasheetId: sheet.id };

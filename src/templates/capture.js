@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { initialOccurrences } from './occurrences.js';
+import { isContextWidget } from './context-widgets.js';
 import { database } from '../db/pool.js';
 import { HttpError } from '../auth/errors.js';
 import { templateInstances, templateOccurrences, templateValues } from '../db/template-schema.js';
@@ -8,6 +10,7 @@ import { calculateCapture, valueKey } from './calculations.js';
 import { requirePermission, uuid, revision, fieldsOnly, decimal, bool, dateOnly, text } from './input.js';
 import { setCaptureContext, requireCaptureWrite } from './access.js';
 import { assertCaptureSize } from './runtime-limits.js';
+import { agreedResultNumber, recordJobResultEntries } from '../datasheets/job-results.js';
 
 function storedValues(identity, instance, versionId, nextRevision, values) {
   return values.map((value) => ({ ...value, organizationId: identity.organization_id, instanceId: instance.id, versionId,
@@ -28,44 +31,24 @@ function defaults(model, occurrences) {
   })));
 }
 
-function initialOccurrences(model, rootId, revisionNumber) {
-  const occurrences = [{ id: rootId, groupId: null, parentId: null, position: 0, createdRevision: revisionNumber }];
-  const groupsByParent = new Map();
-  for (const group of Object.values(model.groupsById)) {
-    const parent = group.parentGroupId ?? null;
-    if (!groupsByParent.has(parent)) groupsByParent.set(parent, []);
-    groupsByParent.get(parent).push(group);
-  }
-  for (let index = 0; index < occurrences.length; index += 1) {
-    const parent = occurrences[index];
-    for (const group of groupsByParent.get(parent.groupId) ?? []) {
-      for (let position = 0; position < group.minimum; position += 1) {
-        if (occurrences.length >= 5000) throw new HttpError(400, 'repeat_limit', 'Initial repeats exceed 5,000 occurrences.');
-        occurrences.push({ id: randomUUID(), groupId: group.id, parentId: parent.id, position, createdRevision: revisionNumber });
-      }
-    }
-  }
-  return occurrences;
-}
-
 export async function createCapture(client, identity, versionId) {
   requirePermission(identity, 'datasheets.execute');
   return initializeCapture(client, identity, versionId);
 }
 
-export async function createWorkflowCapture(client, identity, versionId) {
+export async function createWorkflowCapture(client, identity, versionId, options = {}) {
   if (!['samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute'].some((permission) => identity.permission_codes?.includes(permission))) {
-    throw new HttpError(403, 'forbidden', 'You cannot initialize this capture.');
+    if (!(await client.query('SELECT laboratory_auto_job_request() AS id')).rows[0]?.id) throw new HttpError(403, 'forbidden', 'You cannot initialize this capture.');
   }
-  return initializeCapture(client, identity, versionId);
+  return initializeCapture(client, identity, versionId, options);
 }
 
-async function initializeCapture(client, identity, versionId) {
+async function initializeCapture(client, identity, versionId, { subjects = [] } = {}) {
   uuid(versionId);
   const { model } = await loadDefinition(client, identity.organization_id, versionId, { forFreeze: true });
   if (model.version.status !== 'frozen') throw new HttpError(400, 'unfrozen_template', 'Capture must use a frozen template version.');
   const instance = { organizationId: identity.organization_id, id: randomUUID(), versionId, createdBy: identity.user_id };
-  const occurrences = initialOccurrences(model, randomUUID(), 1);
+  const { occurrences, bindings } = initialOccurrences(model, { rootId: randomUUID(), newId: randomUUID, revision: 1, subjects });
   assertCaptureSize(model, occurrences);
   const initialValues = defaults(model, occurrences);
   const calculation = calculateCapture(model, occurrences, initialValues);
@@ -75,7 +58,7 @@ async function initializeCapture(client, identity, versionId) {
   // Breadth-first order ensures the parent exists before the repeat ancestry trigger runs.
   await insertBatch(db, templateOccurrences, occurrences.map((row) => ({ ...row, organizationId: identity.organization_id, instanceId: instance.id, versionId })));
   await insertBatch(db, templateValues, storedValues(identity, instance, versionId, 1, [...initialValues, ...calculation.calculated]));
-  return { instanceId: instance.id, versionId, revision: 1 };
+  return { instanceId: instance.id, versionId, revision: 1, subjectBindings: bindings };
 }
 
 function enteredValue(model, occurrences, input) {
@@ -84,14 +67,14 @@ function enteredValue(model, occurrences, input) {
   const field = model.fieldsById[input.fieldId];
   const occurrence = occurrences.get(input.occurrenceId);
   if (!field || !occurrence || (field.repeatGroupId ?? null) !== (occurrence.groupId ?? null)) throw new HttpError(400, 'invalid_capture_field', 'Field does not belong to this capture occurrence.');
-  if (field.widget === 'formula_widget' || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
+  if (field.widget === 'formula_widget' || isContextWidget(field.widget) || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
   if (!['present', 'empty', 'absent'].includes(input.state)) throw new HttpError(400, 'invalid_value_state', 'Select a supported value state.');
   const result = { fieldId: field.id, occurrenceId: occurrence.id, valueType: field.valueType, state: input.state, origin: 'entered' };
   if (input.state !== 'present') {
     if (input.value !== undefined && input.value !== null && input.value !== '') throw new HttpError(400, 'unexpected_value', 'An empty or absent value cannot include a payload.');
     return result;
   }
-  if (field.valueType === 'numeric') { result.numberValue = decimal(input.value, 'Value'); result.lexical = String(input.value); }
+  if (field.valueType === 'numeric') { result.numberValue = field.widget === 'result_widget' ? agreedResultNumber(field, input.value) : decimal(input.value, 'Value'); result.lexical = String(input.value); }
   if (field.valueType === 'text') {
     if (typeof input.value !== 'string') throw new HttpError(400, 'invalid_input', 'A present text value must be text.');
     result.textValue = text(input.value, 'Value', 16000, { optional: true });
@@ -136,6 +119,7 @@ async function updateCapture(client, identity, instanceId, expectedRevision, inp
     return !old || ['state', 'numberValue', 'errorCode', 'errorMessage'].some((key) => (value[key] ?? null) !== (old[key] ?? null));
   });
   await insertBatch(database(client), templateValues, storedValues(identity, { id: instanceId }, versionId, expectedRevision + 1, [...entered, ...calculated]));
+  await recordJobResultEntries(client, instanceId, model, entered);
   return { instanceId, versionId, revision: expectedRevision + 1, values: calculation.values, validation: calculation.validation, calculationMs: calculation.durationMs };
 }
 
@@ -155,6 +139,7 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
   const source = capture.occurrences.find((row) => row.id === command.occurrenceId);
   if (!source?.groupId) throw new HttpError(400, 'invalid_repeat', 'Select an active repeated row.');
   const group = model.groupsById[source.groupId];
+  if (group.source === 'test_requests') throw new HttpError(409, 'fixed_parameter_subject', 'Parameter rows belong to their test requests and cannot be cloned or removed individually.');
   const siblings = capture.occurrences.filter((row) => row.parentId === source.parentId && row.groupId === source.groupId);
   const children = new Map();
   for (const row of capture.occurrences) {
@@ -179,6 +164,17 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
       position: row.id === source.id ? positionResult.rows[0].position : row.position, createdRevision: nextRevision }));
     assertCaptureSize(model, [...capture.occurrences, ...copies]);
     await insertBatch(db, templateOccurrences, copies.map((row) => ({ ...row, organizationId: identity.organization_id, instanceId, versionId })));
+    if (subtree.some((row) => row.subject)) {
+      const inserted = await client.query(`INSERT INTO datasheet_subjects(organization_id,datasheet_id,instance_id,version_id,occurrence_id,test_request_id,specification_id,created_revision,created_by)
+        SELECT source.organization_id,source.datasheet_id,source.instance_id,source.version_id,mapping.new_id,source.test_request_id,source.specification_id,$3,$4
+        FROM datasheet_subjects source JOIN unnest($5::uuid[],$6::uuid[]) mapping(old_id,new_id) ON mapping.old_id=source.occurrence_id
+        WHERE source.organization_id=$1 AND source.instance_id=$2 RETURNING id,occurrence_id`,
+      [identity.organization_id, instanceId, nextRevision, identity.user_id, [...mapping.keys()], [...mapping.values()]]);
+      const copiesById = new Map(copies.map((row) => [row.id, row])); const subjectsByOccurrence = new Map(inserted.rows.map((row) => [row.occurrence_id, row.id]));
+      for (const original of subtree) if (original.subject) {
+        const copy = copiesById.get(mapping.get(original.id)); copy.subject = { ...original.subject, id: subjectsByOccurrence.get(copy.id) };
+      }
+    }
     occurrences = [...capture.occurrences, ...copies];
     additions = command.withData ? capture.values.filter((value) => mapping.has(value.occurrenceId) && value.origin !== 'calculated')
       .map(({ revision: _revision, savedAt: _savedAt, savedBy: _savedBy, ...value }) => ({ ...value, occurrenceId: mapping.get(value.occurrenceId), origin: 'entered' })) : defaults(model, copies);

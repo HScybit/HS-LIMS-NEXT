@@ -17,7 +17,8 @@ export default function AppShell({ identity, children }) {
   const isDesigner = /^\/master_template_management\/[a-f\d-]+$/i.test(pathname);
   const isCoa = /^\/samples\/[a-f\d-]+\/coa$/i.test(pathname);
   const pageLabel = pathname.includes('/data_sheets/') ? 'Add Results' : pathname.includes('/test_requests/') ? 'Test Request'
-    : pathname.startsWith('/samples') ? 'Samples' : pathname.startsWith('/master_template_management') ? 'Master Templates' : 'My Account';
+    : pathname.startsWith('/samples') ? 'Samples' : pathname.startsWith('/master_template_management') ? 'Master Templates'
+      : pathname === '/organization_settings' || pathname.startsWith('/administration/') ? 'Organization Settings' : 'My Account';
   const [collapsed, setCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -104,6 +105,7 @@ export default function AppShell({ identity, children }) {
       <div className="sidebar-nav flex-grow-1">
         {identity.permissions.some((permission) => ['samples.read', 'samples.create'].includes(permission)) ? <section className="sidebar-section"><div className="sidebar-label"><span>Samples</span></div><div className="d-grid gap-1"><Link href={identity.permissions.includes('samples.read') ? '/samples' : '/samples/new'} className={`sidebar-link btn text-start ${pathname.startsWith('/samples') ? 'is-active' : ''}`} aria-label="Samples" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="fa-flask" size={20} /></span><span className="hide-menu">Samples</span></Link></div></section> : null}
         {identity.permissions.includes('templates.read') ? <section className="sidebar-section"><div className="sidebar-label"><span>Templates</span></div><div className="d-grid gap-1"><Link href="/master_template_management" className={`sidebar-link btn text-start ${pathname.startsWith('/master_template_management') ? 'is-active' : ''}`} aria-label="Master Templates" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="file-text" size={20} /></span><span className="hide-menu">Master Templates</span></Link></div></section> : null}
+        {identity.permissions.some((permission) => ['settings.read', 'settings.manage'].includes(permission)) ? <section className="sidebar-section"><div className="sidebar-label"><span>Administration</span></div><div className="d-grid gap-1"><Link href="/organization_settings" className={`sidebar-link btn text-start ${pathname === '/organization_settings' || pathname.startsWith('/administration/') ? 'is-active' : ''}`} aria-label="Organization Settings" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="settings" size={20} /></span><span className="hide-menu">Organization Settings</span></Link></div></section> : null}
         <section className="sidebar-section"><div className="sidebar-label"><span>Account</span></div>
           <div className="d-grid gap-1"><Link href="/me" className={`sidebar-link btn text-start ${pathname === '/me' ? 'is-active' : ''}`} aria-label="My Profile" onClick={() => setMobileOpen(false)}>
             <span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="user" size={20} /></span><span className="hide-menu">My Profile</span>

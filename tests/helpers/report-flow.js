@@ -11,13 +11,22 @@ import { saveCapture } from '../../src/templates/capture.js';
 import { loadWorkflowRun } from '../../src/workflows/load.js';
 import { submitDatasheetTransition } from '../../src/workflows/requests.js';
 
-export async function prepareReportFlow(owner, account, { complete = true, printRoleId, finalSection = false, productLines = 1, sampleCanWork = true, cancelTestRequest = false } = {}) {
+export async function prepareReportFlow(owner, account, { complete = true, printRoleId, finalSection = false, finalContext = false, productLines = 1, sampleCanWork = true, cancelTestRequest = false } = {}) {
   const work = (callback, options) => withSession(account.token, callback, { csrfToken: account.csrfToken, ...options });
   const fixture = await createLaboratoryFixture(owner, account, { repeated: finalSection, printRoleId, sampleCanWork, cancelTestRequest });
-  await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 1,
+  let draft = await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 1,
     { type: 'configureColumn', id: fixture.template.records.columns.at(-1).id, span: 6, isFinalResult: true }));
-  if (finalSection) await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 2,
+  if (finalSection) draft = await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 2,
     { type: 'configureSection', id: fixture.template.records.sections[0].id, name: 'Final results', isFinalResult: true }));
+  if (finalContext) {
+    const edit = async (command) => { draft = await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, draft.model.version.revision, command)); };
+    const sectionId = fixture.template.records.sections[0].id;
+    await edit({ type: 'addRow', sectionId });
+    const rowId = draft.model.sectionsById[sectionId].rowIds.at(-1);
+    await edit({ type: 'configureField', columnId: draft.model.rowsById[rowId].columnIds[0], widget: 'tr_data_widget', alias: 'frozen_parameter', sourceField: 'parameterName' });
+    await edit({ type: 'addColumn', rowId });
+    await edit({ type: 'configureField', columnId: draft.model.rowsById[rowId].columnIds.at(-1), widget: 'tr_result_widget', alias: 'frozen_result' });
+  }
   const template = await work(createReportTemplate);
   const sample = await work((client, identity) => registerSample(client, identity, { ...fixture.registration,
     products: Array.from({ length: productLines }, () => structuredClone(fixture.registration.products[0])) }));

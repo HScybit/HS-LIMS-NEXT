@@ -267,7 +267,7 @@ test('a fresh 1000-field definition and its capture use eight plus three actual 
       assert.equal(statements.length, 8);
       await loadCapture(client, identity.organization_id, capture.instanceId);
       assert.equal(statements.length, 11);
-      assert.equal(statements.every((statement) => /^select\b/i.test(statement)), true);
+      assert.equal(statements.every((statement) => /^(select|with)\b/i.test(statement) && !/\b(insert|update|delete)\b/i.test(statement)), true);
     } finally { client.query = query; }
   }, { readOnly: true });
 });

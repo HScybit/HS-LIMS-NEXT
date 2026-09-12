@@ -35,7 +35,7 @@ async function reportSample(client, identity, sampleId, { lock = false } = {}) {
 export async function reportCandidates(client, identity, sampleId) {
   const result = await client.query(`SELECT test.id AS "sampleTestId", product.id AS "sampleProductId", product.product_code AS "productCode", product.product_name AS "productName",
       test.status AS "testStatus", test.is_accredited AS "isAccredited", request.id AS "testRequestId", request.request_number AS "requestNumber", request.status AS "requestStatus", request.completed_at AS "completedAt",
-      sheet.status AS "datasheetStatus", sheet.specification_id AS "specificationId", submission.id AS "submissionId", submission.submitted_by AS "submittedBy",
+      sheet.status AS "datasheetStatus", submission.specification_id AS "specificationId", submission.id AS "submissionId", submission.submitted_by AS "submittedBy",
       submission.source, submission.instance_id AS "instanceId", submission.version_id AS "versionId", submission.capture_revision AS "captureRevision",
       specification.parameter_name AS "parameterName", specification.method_name AS "methodName", specification.rule_name AS specification, submission.unit_symbol AS "measurementUnit",
       submission.result_type AS "resultType", submission.number_value AS "numberValue", submission.text_value AS "textValue", submission.boolean_value AS "booleanValue",
@@ -44,7 +44,7 @@ export async function reportCandidates(client, identity, sampleId) {
     LEFT JOIN LATERAL (SELECT * FROM test_requests request WHERE request.organization_id=test.organization_id AND request.sample_test_id=test.id ORDER BY request.attempt_number DESC LIMIT 1) request ON true
     LEFT JOIN datasheets sheet ON sheet.organization_id=request.organization_id AND sheet.id=request.final_datasheet_id AND sheet.test_request_id=request.id
     LEFT JOIN datasheet_submissions submission ON submission.organization_id=sheet.organization_id AND submission.id=sheet.latest_submission_id
-    LEFT JOIN analytical_specifications specification ON specification.organization_id=sheet.organization_id AND specification.id=sheet.specification_id
+    LEFT JOIN analytical_specifications specification ON specification.organization_id=sheet.organization_id AND specification.id=coalesce(submission.specification_id,sheet.specification_id)
     LEFT JOIN LATERAL (SELECT boundary.id, boundary.outcome FROM analytical_specification_limits boundary
       WHERE boundary.organization_id=specification.organization_id AND boundary.specification_id=specification.id AND submission.result_type='numeric'
         AND (boundary.lower_limit IS NULL OR CASE WHEN boundary.lower_inclusive THEN submission.number_value>=boundary.lower_limit ELSE submission.number_value>boundary.lower_limit END)

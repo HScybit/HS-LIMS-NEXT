@@ -1,8 +1,9 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 
 const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
+const transactionId = customType({ dataType: () => 'xid8' });
 const tenant = () => uuid('organization_id').notNull();
 const logicalId = () => uuid('id').notNull().defaultRandom();
 const version = () => uuid('version_id').notNull();
@@ -83,7 +84,7 @@ export const templateRepeatGroups = pgTable('template_repeat_groups', {
   minimum: integer('minimum').notNull().default(1), maximum: integer('maximum').notNull().default(1000),
 }, (t) => [versionKey(t), versionLink(t), logicalLink(t, t.sectionId, templateSections), logicalLink(t, t.rowId, templateRows), logicalLink(t, t.parentGroupId, t),
   unique('repeat_section_key').on(t.organizationId, t.versionId, t.sectionId), unique('repeat_row_key').on(t.organizationId, t.versionId, t.rowId),
-  check('repeat_definition_shape', sql`num_nonnulls(${t.sectionId}, ${t.rowId}) = 1 and ${t.source} = 'manual' and ${t.minimum} between 0 and 1000 and ${t.maximum} between greatest(1, ${t.minimum}) and 1000 and ${t.parentGroupId} is distinct from ${t.id}`)]);
+  check('repeat_definition_shape', sql`num_nonnulls(${t.sectionId}, ${t.rowId}) = 1 and (${t.source} = 'manual' or (${t.source} = 'test_requests' and ${t.sectionId} is not null)) and ${t.minimum} between 0 and 1000 and ${t.maximum} between greatest(1, ${t.minimum}) and 1000 and ${t.parentGroupId} is distinct from ${t.id}`)]);
 
 export const templateFields = pgTable('template_fields', {
   organizationId: tenant(), versionId: version(), id: logicalId(), columnId: uuid('column_id').notNull(), repeatGroupId: uuid('repeat_group_id'),
@@ -97,7 +98,7 @@ export const templateFields = pgTable('template_fields', {
   unique('template_field_type_key').on(t.organizationId, t.versionId, t.id, t.valueType),
   index('template_fields_alias').on(t.organizationId, t.versionId, t.alias),
   check('template_field_alias', sql`${t.alias} ~ '^[A-Za-z0-9_]*$' and length(${t.alias}) <= 200`),
-  check('template_widget_type', sql`(${t.widget} in ('text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option')`),
+  check('template_widget_type', sql`(${t.widget} in ('text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget', 'result_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option')`),
   check('template_field_context', sql`(${t.sourceField} is null or
     (${t.widget} = 'sample_details_widget_v2' and ${t.sourceField} in ('sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'productName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference')) or
     (${t.widget} = 'tr_data_widget' and ${t.sourceField} in ('requestNumber', 'parameterName', 'productName', 'methodName', 'analystName', 'submittedAt', 'completedAt')) or
@@ -157,6 +158,19 @@ export const templateInstances = pgTable('template_instances', {
   unique('template_instance_version_key').on(t.organizationId, t.id, t.versionId),
   foreignKey({ columns: [t.organizationId, t.createdBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
   check('template_instance_state', sql`${t.revision} > 0 and ${t.status} in ('editing', 'frozen')`)]);
+
+// Recorded by the database when a capture revision is created. Earlier captures
+// retain their existing evidence; no historical actors or transactions are inferred.
+export const templateCaptureRevisions = pgTable('template_capture_revisions', {
+  organizationId: tenant(), instanceId: uuid('instance_id').notNull(), revision: integer('revision').notNull(),
+  status: text('status').notNull(), transactionId: transactionId('transaction_id').notNull(),
+  recordedBy: uuid('recorded_by'), databaseRole: text('database_role').notNull(), recordedAt: time('recorded_at').notNull(),
+}, (t) => [primaryKey({ columns: [t.organizationId, t.instanceId, t.revision] }),
+  foreignKey({ columns: [t.organizationId, t.instanceId], foreignColumns: [templateInstances.organizationId, templateInstances.id] }),
+  foreignKey({ columns: [t.organizationId, t.recordedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('capture_revision_state', sql`${t.revision}>0 and ${t.status} in ('editing','frozen')`),
+  check('capture_revision_actor', sql`length(${t.databaseRole})>0 and (${t.databaseRole}<>'sampleify_app' or ${t.recordedBy} is not null)`),
+]);
 
 export const templateOccurrences = pgTable('template_occurrences', {
   organizationId: tenant(), instanceId: uuid('instance_id').notNull(), versionId: version(), id: logicalId(),

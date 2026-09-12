@@ -10,7 +10,10 @@ export async function resolveCaptureVersion(client, identity, templateId, { kind
 export async function resolveCaptureVersions(client, identity, templateIds, { kind, additionalVersionIds = [] } = {}) {
   for (const templateId of templateIds) uuid(templateId, 'Template');
   if (!['templates.manage', 'samples.manage', 'test_requests.allocate', 'datasheets.execute'].some((permission) => identity.permission_codes?.includes(permission))) {
-    throw new HttpError(403, 'forbidden', 'You do not have permission to prepare this template.');
+    const allowed = (await client.query('SELECT laboratory_auto_job_template() AS id')).rows[0]?.id;
+    if (!allowed || templateIds.some((id) => id.toLowerCase() !== allowed) || additionalVersionIds.length) {
+      throw new HttpError(403, 'forbidden', 'You do not have permission to prepare this template.');
+    }
   }
   const requested = new Set(templateIds.map((templateId) => templateId.toLowerCase()));
   const loaded = await loadDefinitions(client, identity.organization_id, [...new Set(additionalVersionIds)], { templateIds: [...requested], forFreeze: true });

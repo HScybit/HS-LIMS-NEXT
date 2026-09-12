@@ -89,7 +89,7 @@ export default function TestRequestDetails({ requestId, sampleId, initialDatashe
       {methods.length > 1 ? <MethodSwitcher methods={methods} selectedMethodId={selectedMethod?.id} canDeleteMethod={canDelete}
         onSelectMethod={setSelectedId} onDeleteMethod={() => { setMethodToDelete(selectedMethod); setMethodError(''); setMethodModal('delete'); }} /> : null}
       <section className="tr-details-page__content"><div className={`smplfy-card card smplfy-tr-details-content flex-fill ${runtime ? 'smplfy-tr-details-content--template' : 'align-items-center justify-content-center text-center text-secondary'}`}>
-        {loading ? <AppLoader message="Loading method..." /> : runtime ? <div className="tr-details-template"><TemplateCanvas model={runtime.model} mode="view" occurrences={runtime.capture.occurrences}
+        {loading ? <AppLoader message="Loading method..." /> : runtime ? <div className="tr-details-template"><TemplateCanvas model={runtime.model} mode="view" occurrences={runtime.capture.occurrences} dataContext={runtime.dataContext}
           values={Object.fromEntries(runtime.capture.values.map((value) => [valueKey(value.fieldId, value.occurrenceId), value]))} validation={runtime.validation} /></div>
           : <div className="tr-details-page__placeholder">No methods have been added for this test request yet.</div>}
       </div></section>

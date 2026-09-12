@@ -185,7 +185,7 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
           <button type="button" className="btn btn-link" disabled={busy} onClick={refresh}>Reload</button>
         </div> : null}
         <div className="tr-details-template"><Profiler id="datasheet-canvas" onRender={(_id, phase, duration, _base, start) => performance.measure(`datasheet:react-${phase}`, { start, duration })}>
-          <TemplateCanvas model={data.model} mode={data.canExecute ? 'edit' : 'view'} values={values} validation={data.validation}
+          <TemplateCanvas model={data.model} mode={data.canExecute ? 'edit' : 'view'} values={values} validation={data.validation} dataContext={data.dataContext}
             occurrences={data.capture.occurrences} onChange={change} onCommit={commit} onRepeat={repeat} busy={busy} />
         </Profiler></div>
       </div></section>

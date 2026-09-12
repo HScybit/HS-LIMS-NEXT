@@ -15,7 +15,7 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
   const edit = mode === 'edit';
   const shown = displayValue(field, value);
   const label = field.alias || field.label || field.widget;
-  if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} />;
+  if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} serialNumber={serialNumber} />;
   if (isContextWidget(field.widget)) return <div className={plan ? 'text-muted small' : 'text-break'}>{plan ? contextWidgetPreview[field.widget] : contextWidgetValue(field, report, parameter, serialNumber)}</div>;
   if (field.widget === 'text_widget') return <div>{value?.state === 'present' ? value.textValue : field.label}</div>;
   if (field.widget === 'formula_widget') return plan ? <p className="text-break mb-0">{field.formula}</p> : <><div className={edit ? 'formulaWidgetInput' : undefined} aria-label={label}>{shown}</div>{value?.state === 'invalid' ? <div className="text-danger small" role="status">{value.errorMessage}</div> : null}</>;
@@ -28,6 +28,7 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
   let type = 'text';
   if (field.widget === 'paragraph_widget') type = 'textarea';
   if (field.widget === 'number_widget') { inputProps.type = 'number'; inputProps.step = 'any'; }
+  if (field.widget === 'result_widget') inputProps.className = 'result_widget form-control-solid task-input';
   if (field.widget === 'datepicker_widget') inputProps.type = 'date';
   if (field.widget === 'dropdown_widget') {
     type = 'dropdown'; inputProps.value = value?.optionId ?? '';
@@ -45,23 +46,31 @@ function MoveButton({ kind, id, direction, icon, label, onCommand, disabled }) {
 
 const empty = Object.freeze({});
 
-function FrozenResultSections({ report, parameter }) {
+function FrozenResultSections({ report, parameter, serialNumber }) {
   const capture = report.finalCaptures[parameter.instanceId];
   const model = report.datasheetModels[capture.versionId];
   const values = useMemo(() => Object.fromEntries(capture.values.map((value) => [valueKey(value.fieldId, value.occurrenceId), value])), [capture.values]);
-  return <TemplateCanvas model={model} mode="view" occurrences={capture.occurrences} values={values} sectionRoots={capture.sectionRoots} canvasId={null} idPrefix={`${report.report.id}-${parameter.id}-`} />;
+  // Context comes from this frozen report revision. A nested result widget
+  // displays its scalar; it must not recursively expand the same sections.
+  const dataContext = useMemo(() => {
+    const result = { ...parameter, serialNumber };
+    return { sample: report.sample, results: [result], parametersByRequestId: { [parameter.testRequestId]: result } };
+  }, [report.sample, parameter, serialNumber]);
+  return <TemplateCanvas model={model} mode="view" occurrences={capture.occurrences} values={values} dataContext={dataContext} sectionRoots={capture.sectionRoots} canvasId={null} idPrefix={`${report.report.id}-${parameter.id}-`} />;
 }
 
-function ReportResult({ report, parameter }) {
-  return <div className="flex-grow-1 text-break">{(parameter ? [parameter] : report.results).map((result) => <div key={result.id} data-result-test-id={result.id}>
+function ReportResult({ report, parameter, serialNumber }) {
+  return <div className="flex-grow-1 text-break">{(parameter ? [parameter] : report.results).map((result, index) => <div key={result.id} data-result-test-id={result.id}>
     {result.source === 'section' && report.finalCaptures?.[result.instanceId]
-      ? <FrozenResultSections report={report} parameter={result} /> : String(result.finalResult ?? '')}
+      ? <FrozenResultSections report={report} parameter={result} serialNumber={parameter ? serialNumber : index + 1} /> : String(result.finalResult ?? '')}
   </div>)}</div>;
 }
 
 // The markup/classes follow the source TemplateSectionNode, TemplateRowNode and TemplateColNode.
 function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId, values }) {
   const { model, plan, mode, selected, onSelect, onCommand, onPanel, busy, validation, onChange, onCommit } = context;
+  const subject = context.runtime?.subjectFor(activeOccurrenceId);
+  const parameter = subject ? { ...context.dataContext?.parametersByRequestId?.[subject.testRequestId], ...subject } : context.reportParameter;
   const column = model.columnsById[id];
   const field = model.fieldsById[column.fieldId];
   const hasChildren = column.childSectionIds.length > 0;
@@ -83,7 +92,7 @@ function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId,
     </div> : null}
     {isEditing && field?.widget !== 'text_widget' && !field?.alias ? <div className="template-column-warning">Missing key</div> : null}
     <div className="row1">{field ? <TemplateWidget field={field} mode={widgetMode} value={values[key]} validation={validation[key]} onChange={onChange} onCommit={onCommit} occurrenceId={activeOccurrenceId} disabled={busy}
-      report={context.report} parameter={context.reportParameter} serialNumber={context.reportSerialNumber ?? model.rowsById[column.rowId].serialNumber ?? 0} /> : null}
+      report={context.report ?? context.dataContext} parameter={parameter} serialNumber={parameter?.serialNumber ?? context.reportSerialNumber ?? model.rowsById[column.rowId].serialNumber ?? 0} /> : null}
       {column.childSectionIds.map((childId) => renderSection(context, childId, activeOccurrenceId, values))}
     </div>
   </div>;
@@ -140,7 +149,7 @@ function renderSection(context, id, parentOccurrenceId, values, onlyOccurrenceId
   const isEditing = plan && Boolean(editing[id]);
   if (!plan && section.visible === false) return null;
   const sections = runtime && section.ownRepeatGroupId ? runtime.forGroup(parentOccurrenceId, section.ownRepeatGroupId) : [{ id: parentOccurrenceId }];
-  const reportContexts = !plan && context.report && section.isParameterLoop && !context.reportParameter
+  const reportContexts = !plan && !runtime && context.report && section.isParameterLoop && !context.reportParameter
     ? context.report.results.map((parameter, index) => ({ ...context, reportParameter: parameter, reportSerialNumber: index + 1 })) : [context];
   return sections.filter((instance) => !onlyOccurrenceId || instance.id === onlyOccurrenceId).map(({ id: activeOccurrenceId }) => <div key={`${id}:${activeOccurrenceId ?? ''}`} id={`${context.idPrefix}${runtime || context.report && activeOccurrenceId ? `${id}-${activeOccurrenceId}` : id}`} data-section-id={id} data-occurrence-id={activeOccurrenceId} data-is-header={section.isHeader || undefined} data-is-footer={section.isFooter || undefined}
     data-is-param-loop={section.isParameterLoop || undefined} data-is-param-loop-header={section.isParameterLoopHeader || undefined}
@@ -157,15 +166,15 @@ function renderSection(context, id, parentOccurrenceId, values, onlyOccurrenceId
   </div>);
 }
 
-export default function TemplateCanvas({ model, mode = 'plan', editing = empty, onToggleEdit, onCommand, onPanel, selected, onSelect, busy = false, values = empty, occurrences, occurrenceId, validation = empty, onChange, onCommit, onRepeat, report, sectionRoots, canvasId = 'template-designer', idPrefix = '' }) {
+export default function TemplateCanvas({ model, mode = 'plan', editing = empty, onToggleEdit, onCommand, onPanel, selected, onSelect, busy = false, values = empty, occurrences, occurrenceId, validation = empty, onChange, onCommit, onRepeat, report, dataContext, sectionRoots, canvasId = 'template-designer', idPrefix = '' }) {
   const plan = mode === 'plan';
   const runtime = useMemo(() => {
     if (occurrences === undefined) return null;
     assertCaptureSize(model, occurrences);
     return indexOccurrences(model, occurrences);
   }, [model, occurrences]);
-  const context = useMemo(() => ({ model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onRepeat, runtime, report, idPrefix }),
-    [model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onRepeat, runtime, report, idPrefix]);
+  const context = useMemo(() => ({ model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onRepeat, runtime, report, dataContext, idPrefix }),
+    [model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onRepeat, runtime, report, dataContext, idPrefix]);
   return <div id={canvasId ?? undefined} className="template-render-canvas">{sectionRoots
     ? sectionRoots.map((root) => renderSection(context, root.sectionId, root.parentOccurrenceId, values, root.occurrenceId))
     : model.rootSectionIds.map((id) => renderSection(context, id, runtime?.root.id ?? occurrenceId, values))}</div>;

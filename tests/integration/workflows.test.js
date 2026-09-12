@@ -99,7 +99,7 @@ async function registeredWorkflow(options) {
   const laboratory = await createLaboratoryFixture(owner, manager, { workflow: false });
   await owner.query("INSERT INTO sample_category_workflows(organization_id,sample_category_id,workflow_id,applies_to,is_default) VALUES($1,$2,$3,'sample',true)", [manager.organizationId, laboratory.category.id, fixture.workflowId]);
   const sample = await work(manager, (client, identity) => registerSample(client, identity, laboratory.registration));
-  return { ...fixture, sample };
+  return { ...fixture, sample, laboratory };
 }
 async function pendingRequest({ omitRecipient = false, omitStage = false } = {}) {
   const fixture = await registeredWorkflow({ mode: 'sequential', stages: [{ stageNumber: 1, roleIds: [first.roleId, second.roleId] }, { stageNumber: 2, roleIds: [second.roleId] }] });
@@ -250,4 +250,36 @@ test('automatic test generation uses the actual approving actor and rolls the wh
     JOIN sample_products product ON product.organization_id=selected.organization_id AND product.id=selected.sample_product_id WHERE request.organization_id=$1 AND product.sample_id=$2`, [manager.organizationId, fixture.sample.id])).rows;
   assert.equal(generated.length, 1); assert.equal(generated[0].created_by, second.userId);
   await assert.rejects(work(second, (client, identity) => generateTestRequests(client, identity, fixture.sample.id, {}, { automatic: true, workflowRunId: fixture.sample.workflowRunId })), { code: 'workflow_generation_required' });
+});
+
+test('a generating approval can initialize automatic job children without granting its responder allocation permission', async () => {
+  const fixture = await registeredWorkflow({ mode: 'all', targetFlags: { generateTestRequests: true } });
+  await owner.query(`INSERT INTO organization_laboratory_settings(organization_id,auto_create_jobs,result_summary_template_id,updated_by)
+    VALUES($1,true,$2,$3)`, [manager.organizationId, fixture.laboratory.template.templateId, manager.userId]);
+  await command(fixture, await commandInput(fixture));
+  assert.equal((await approve(fixture, first)).status, 'approval_pending');
+  const failChildCapture = (client) => ({ query(...args) {
+    const statement = typeof args[0] === 'string' ? args[0] : args[0].text;
+    if (/insert into "datasheets"/i.test(statement)) throw new Error('Synthetic automatic approval capture interruption');
+    return client.query(...args);
+  } });
+  await assert.rejects(approve(fixture, second, failChildCapture), (error) => /Synthetic automatic approval capture interruption/.test((error.cause ?? error).message));
+  const pending = await readRun(fixture, second);
+  assert.equal(pending.status, 'active'); assert.equal(pending.approvalRequest.canRespond, true);
+  assert.equal(pending.approvalRequest.approvalRows.filter((row) => row.status === 'approved').length, 1);
+  assert.equal((await owner.query(`SELECT request.id FROM test_requests request JOIN laboratory_test_request_context context
+    ON context.organization_id=request.organization_id AND context.test_request_id=request.id WHERE request.organization_id=$1 AND context.sample_id=$2`, [manager.organizationId, fixture.sample.id])).rowCount, 0);
+  assert.equal((await approve(fixture, second)).status, 'completed');
+  const rows = (await owner.query(`SELECT request.id,request.is_job,request.is_auto_created,request.status,request.created_by,
+    assignment.assigned_user_id,sheet.id AS datasheet_id,capture.created_by AS capture_creator
+    FROM test_requests request JOIN laboratory_test_request_context context ON context.organization_id=request.organization_id AND context.test_request_id=request.id
+    LEFT JOIN test_request_assignments assignment ON assignment.organization_id=request.organization_id AND assignment.test_request_id=request.id AND assignment.assignment_type='analyst' AND assignment.unassigned_at IS NULL
+    LEFT JOIN datasheets sheet ON sheet.organization_id=request.organization_id AND sheet.test_request_id=request.id
+    LEFT JOIN template_instances capture ON capture.organization_id=sheet.organization_id AND capture.id=sheet.template_instance_id
+    WHERE request.organization_id=$1 AND context.sample_id=$2`, [manager.organizationId, fixture.sample.id])).rows;
+  assert.equal(rows.length, 2);
+  const child = rows.find((row) => !row.is_job); const job = rows.find((row) => row.is_job);
+  assert.equal(child.status, 'allocated'); assert.equal(child.assigned_user_id, second.userId); assert.equal(child.capture_creator, second.userId); assert.ok(child.datasheet_id);
+  assert.equal(job.status, 'created'); assert.equal(job.is_auto_created, true); assert.equal(job.created_by, second.userId); assert.equal(job.assigned_user_id, null); assert.equal(job.datasheet_id, null);
+  await assert.rejects(work(second, (client) => client.query('SELECT * FROM laboratory_start_auto_job($1::uuid[])', [[child.id]])), sqlError('42501'));
 });

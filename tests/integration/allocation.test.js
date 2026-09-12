@@ -140,7 +140,7 @@ test('datasheet reads use one metadata plus eight definition and three capture q
     client.query = function (...args) { statements.push(typeof args[0] === 'string' ? args[0] : args[0].text); return query.apply(this, args); };
     try {
       const result = await loadDatasheet(client, identity, allocated.datasheetId, { sampleId: fixture.sample.id });
-      assert.equal(statements.length, 12); assert.ok(statements.every((statement) => /^select\b/i.test(statement)));
+      assert.equal(statements.length, 12); assert.ok(statements.every((statement) => /^(select|with)\b/i.test(statement) && !/\b(insert|update|delete)\b/i.test(statement)));
       assert.equal(result.canExecute, true); assert.equal(result.metrics.definition.queryCount, 8); assert.equal(result.metrics.capture.queryCount, 3);
       assert.equal(result.datasheet.methodName, fixture.method.name);
     } finally { client.query = query; }

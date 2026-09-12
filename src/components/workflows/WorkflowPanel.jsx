@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { WorkflowDetailsRail, WorkflowTransitionRequestModal } from '../ui/WorkflowRail.jsx';
 import RequestDetailsModal, { ApprovalChecklist } from './RequestDetailsModal.jsx';
 import { apiRequest } from '../../lib/api-client.js';
@@ -36,9 +37,15 @@ export default function WorkflowPanel({ workflow, runtime, activity = [], curren
   const approval = approvalView(workflow?.approvalRequest);
   const selected = workflow?.transitions.find((transition) => transition.id === selectedId);
   const transitions = workflow?.transitions ?? [];
-  const activities = [...activity, ...(workflow?.activity ?? []).map((item) => ({ key: item.id, date: item.occurredAt,
-    title: `${item.action === 'started' ? 'Workflow started' : item.action}: ${item.toStateName}`,
-    detail: item.comment, user: item.actorName, tone: item.action === 'completed' ? 'success' : 'info' }))]
+  const stateName = workflow?.jobState?.toStateName || workflow?.state.name || currentState || '-';
+  const activities = [...activity, ...(workflow?.activity ?? []).map((item) => {
+    const title = `${item.action === 'started' ? 'Workflow started' : item.action}: ${item.toStateName}`;
+    return { key: item.id, date: item.occurredAt,
+      title: item.parentJobNumber && runtime?.datasheet.sampleId
+        ? <><Link href={`/samples/${runtime.datasheet.sampleId}/test_requests/${item.parentRequestId}`}>Job {item.parentJobNumber}</Link> — {title}</>
+        : `${item.parentJobNumber ? `Job ${item.parentJobNumber} — ` : ''}${title}`,
+      detail: item.comment, user: item.actorName, tone: item.action === 'completed' ? 'success' : 'info' };
+  })]
     .sort((left, right) => new Date(right.date) - new Date(left.date));
   async function perform(action) {
     if (running.current) return;
@@ -84,9 +91,9 @@ export default function WorkflowPanel({ workflow, runtime, activity = [], curren
     <WorkflowDetailsRail ariaLabel={ariaLabel} approvalRequest={approval} canRespond={approval?.canRespond}
       activityItems={activities} submitting={busy} emptyActionLabel={transitions.length && maySubmit ? 'Request Approval' : undefined}
       emptyActionIcon="send" emptyActionDisabled={busy} onEmptyAction={openTransition}
-      emptyActionMessage={`Current state: ${workflow?.state.name || currentState || '-'}`}
+      emptyActionMessage={`Current state: ${stateName}`}
       onOpenDetails={approval ? () => { setError(''); setDetailsOpen(true); } : undefined} />
-    <WorkflowTransitionRequestModal open={transitionOpen} comments={comments} commentsRequired={selected?.requireComment} currentState={workflow?.state.name || currentState || '-'}
+    <WorkflowTransitionRequestModal open={transitionOpen} comments={comments} commentsRequired={selected?.requireComment} currentState={stateName}
       selectedState={selectedId} stateOptions={transitions.map((item) => ({ value: item.id, label: item.targetStateName }))} submitting={busy}
       onCancel={() => { if (!busy) setTransitionOpen(false); }} onCommentsChange={setComments}
       onStateChange={(id) => { setSelectedId(id); setChecks({}); setError(''); }} onSubmit={sendTransition}>

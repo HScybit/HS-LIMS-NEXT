@@ -87,12 +87,12 @@ export async function loadDefinitions(client, organizationId, versionIds, option
   return { definitions, metrics, versions: versionRows.map(({ version: { id, number, status, revision } }) => ({ id, number, status, revision })) };
 }
 
-export async function loadCapture(client, organizationId, instanceId, revision) {
-  const { captures, metrics } = await loadCaptures(client, organizationId, [{ instanceId, revision }]);
-  return { ...captures.get(instanceId.toLowerCase()), metrics };
+export async function loadCapture(client, organizationId, instanceId, revision, options) {
+  const { captures, metrics, pinnedValues } = await loadCaptures(client, organizationId, [{ instanceId, revision }], options);
+  return { ...captures.get(instanceId.toLowerCase()), metrics, pinnedValues };
 }
 
-export async function loadCaptures(client, organizationId, requests) {
+export async function loadCaptures(client, organizationId, requests, { pinnedValues = [] } = {}) {
   requests = requests.map((request) => ({ ...request, instanceId: uuid(request.instanceId, 'Capture').toLowerCase() }));
   if (!requests.length || requests.length > 1000 || new Set(requests.map((request) => request.instanceId)).size !== requests.length) throw new HttpError(400, 'invalid_capture_batch', 'Select between one and 1,000 distinct captures.');
   const started = performance.now();
@@ -107,23 +107,53 @@ export async function loadCaptures(client, organizationId, requests) {
     if (!Number.isSafeInteger(atRevision) || atRevision < 1 || atRevision > instance.revision) throw new HttpError(400, 'invalid_revision', 'Capture revision is invalid.');
     captures.set(instance.id, { instance, revision: atRevision, occurrences: [], values: [] });
   }
+  if (!Array.isArray(pinnedValues) || pinnedValues.length > 1000) throw new HttpError(400, 'invalid_pinned_values', 'Select at most 1,000 recorded values.');
+  pinnedValues = pinnedValues.map((value) => {
+    const normalized = { instanceId: uuid(value.instanceId).toLowerCase(), fieldId: uuid(value.fieldId).toLowerCase(), occurrenceId: uuid(value.occurrenceId).toLowerCase(), revision: value.revision };
+    if (!Number.isSafeInteger(normalized.revision) || normalized.revision < 1 || !captures.has(normalized.instanceId)
+      || normalized.revision > captures.get(normalized.instanceId).revision) throw new HttpError(400, 'invalid_pinned_values', 'The recorded value is outside the requested capture history.');
+    return normalized;
+  });
   const parameters = [organizationId, instanceIds, [...captures.values()].map((capture) => capture.revision)];
-  const occurrences = await client.query(`SELECT occurrence.instance_id AS "instanceId", occurrence.id, group_id AS "groupId", parent_id AS "parentId", position,
-    created_revision AS "createdRevision", removed_revision AS "removedRevision" FROM template_occurrences occurrence
+  const occurrences = await client.query(`SELECT occurrence.instance_id AS "instanceId", occurrence.id, occurrence.group_id AS "groupId", occurrence.parent_id AS "parentId", occurrence.position,
+    occurrence.created_revision AS "createdRevision", occurrence.removed_revision AS "removedRevision", subject.id AS "subjectId",
+    subject.test_request_id AS "subjectTestRequestId",subject.specification_id AS "subjectSpecificationId",
+    specification.parameter_name AS "subjectParameterName",specification.method_name AS "subjectMethodName",specification.unit_symbol AS "subjectMeasurementUnit",
+    specification.rule_name AS "subjectSpecification"
+    FROM template_occurrences occurrence
     JOIN unnest($2::uuid[], $3::integer[]) requested(instance_id, revision) ON requested.instance_id=occurrence.instance_id
-    WHERE organization_id = $1 AND created_revision <= requested.revision AND (removed_revision IS NULL OR removed_revision > requested.revision)
-    ORDER BY occurrence.instance_id, position, occurrence.id LIMIT 200001`, parameters);
-  const values = await client.query(`SELECT DISTINCT ON (value.instance_id, field_id, occurrence_id) value.instance_id AS "instanceId", field_id AS "fieldId", occurrence_id AS "occurrenceId",
-    value.revision, value_type AS "valueType", state, origin, number_value AS "numberValue", text_value AS "textValue", boolean_value AS "booleanValue",
-    date_value::text AS "dateValue", option_id AS "optionId", lexical, error_code AS "errorCode", error_message AS "errorMessage", saved_at AS "savedAt", saved_by AS "savedBy"
-    FROM template_values value JOIN unnest($2::uuid[], $3::integer[]) requested(instance_id, revision) ON requested.instance_id=value.instance_id
-    WHERE organization_id = $1 AND value.revision <= requested.revision ORDER BY value.instance_id, field_id, occurrence_id, value.revision DESC LIMIT 200001`, parameters);
+    LEFT JOIN datasheet_subjects subject ON subject.organization_id=occurrence.organization_id AND subject.instance_id=occurrence.instance_id AND subject.occurrence_id=occurrence.id
+    LEFT JOIN analytical_specifications specification ON specification.organization_id=subject.organization_id AND specification.id=subject.specification_id
+    WHERE occurrence.organization_id = $1 AND occurrence.created_revision <= requested.revision AND (occurrence.removed_revision IS NULL OR occurrence.removed_revision > requested.revision)
+    ORDER BY occurrence.instance_id, occurrence.position, occurrence.id LIMIT 200001`, parameters);
+  const valueColumns = `value.instance_id AS "instanceId", value.field_id AS "fieldId", value.occurrence_id AS "occurrenceId",
+    value.revision, value.value_type AS "valueType", value.state, value.origin, value.number_value AS "numberValue", value.text_value AS "textValue", value.boolean_value AS "booleanValue",
+    value.date_value::text AS "dateValue", value.option_id AS "optionId", value.lexical, value.error_code AS "errorCode", value.error_message AS "errorMessage", value.saved_at AS "savedAt", value.saved_by AS "savedBy"`;
+  // Explicit historical result selections share the third capture statement.
+  // They remain separate from the active values rendered in the current rows.
+  const values = await client.query(`WITH current_values AS (
+    SELECT DISTINCT ON (value.instance_id,field_id,occurrence_id) value.*
+    FROM template_values value JOIN unnest($2::uuid[],$3::integer[]) requested(instance_id,revision) ON requested.instance_id=value.instance_id
+    WHERE organization_id=$1 AND value.revision<=requested.revision ORDER BY value.instance_id,field_id,occurrence_id,value.revision DESC LIMIT 200001
+  ) SELECT ${valueColumns},false AS pinned FROM current_values value
+    UNION ALL SELECT ${valueColumns},true AS pinned FROM template_values value
+      JOIN unnest($4::uuid[],$5::uuid[],$6::uuid[],$7::integer[]) selected(instance_id,field_id,occurrence_id,revision)
+        ON selected.instance_id=value.instance_id AND selected.field_id=value.field_id AND selected.occurrence_id=value.occurrence_id AND selected.revision=value.revision
+      WHERE value.organization_id=$1 LIMIT 200001`, [...parameters, pinnedValues.map((value) => value.instanceId), pinnedValues.map((value) => value.fieldId),
+    pinnedValues.map((value) => value.occurrenceId), pinnedValues.map((value) => value.revision)]);
   if (occurrences.rows.length > 200_000 || values.rows.length > 200_000) throw new HttpError(422, 'capture_batch_limit', 'The combined captures exceed the supported report size.');
   const activeOccurrenceIds = new Set();
-  for (const { instanceId, ...occurrence } of occurrences.rows) {
+  for (const { instanceId, subjectId, subjectTestRequestId, subjectSpecificationId, subjectParameterName, subjectMethodName,
+    subjectMeasurementUnit, subjectSpecification, ...occurrence } of occurrences.rows) {
+    if (subjectId) occurrence.subject = { id: subjectId, testRequestId: subjectTestRequestId, specificationId: subjectSpecificationId,
+      parameterName: subjectParameterName, methodName: subjectMethodName, measurementUnit: subjectMeasurementUnit, specification: subjectSpecification };
     captures.get(instanceId).occurrences.push(occurrence);
     activeOccurrenceIds.add(`${instanceId}:${occurrence.id}`);
   }
-  for (const { instanceId, ...value } of values.rows) if (activeOccurrenceIds.has(`${instanceId}:${value.occurrenceId}`)) captures.get(instanceId).values.push(value);
-  return { captures, metrics: { queryCount: 3, databaseMs: performance.now() - started } };
+  const recordedValues = new Map();
+  for (const { instanceId, pinned, ...value } of values.rows) {
+    if (pinned) recordedValues.set(`${instanceId}:${value.fieldId}:${value.occurrenceId}:${value.revision}`, value);
+    else if (activeOccurrenceIds.has(`${instanceId}:${value.occurrenceId}`)) captures.get(instanceId).values.push(value);
+  }
+  return { captures, pinnedValues: recordedValues, metrics: { queryCount: 3, databaseMs: performance.now() - started } };
 }

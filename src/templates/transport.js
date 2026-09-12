@@ -23,5 +23,6 @@ export function templateView(model) {
 }
 
 export function captureView(capture) {
-  return { ...capture, values: capture.values.map((value) => Object.fromEntries(Object.entries(value).filter(([, payload]) => payload !== null))) };
+  const { pinnedValues: _pinnedValues, ...runtime } = capture;
+  return { ...runtime, values: capture.values.map((value) => Object.fromEntries(Object.entries(value).filter(([, payload]) => payload !== null))) };
 }

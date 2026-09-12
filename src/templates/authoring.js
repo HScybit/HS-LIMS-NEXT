@@ -113,6 +113,48 @@ async function configureField(db, base, model, command) {
   }
 }
 
+async function changeRepeatGroup(client, db, base, records, model, { kind, id, enabled, source = 'manual' }) {
+  const versionId = base.versionId;
+  const target = kind === 'row' ? model.rowsById[id] : model.sectionsById[id];
+  const existing = records.groups.find((group) => kind === 'row' ? group.rowId === id : group.sectionId === id);
+  if (Boolean(existing) === enabled) {
+    if (existing && existing.source !== source) {
+      await db.update(t.templateRepeatGroups).set({ source }).where(and(scope(t.templateRepeatGroups, base.organizationId, versionId), eq(t.templateRepeatGroups.id, existing.id)));
+    }
+    return;
+  }
+  const selected = layoutSelection(model, kind, target.id);
+  const previousGroup = target.repeatGroupId;
+  const nextGroup = enabled ? randomUUID() : existing.parentGroupId;
+  if (enabled) {
+    const group = { ...base, id: nextGroup, [kind === 'row' ? 'rowId' : 'sectionId']: target.id, source, parentGroupId: previousGroup, minimum: 1, maximum: 1000 };
+    await db.insert(t.templateRepeatGroups).values(group);
+    records.groups.push(group);
+  }
+  const affectedFields = records.fields.filter((field) => selected.fields.has(field.id) && (field.repeatGroupId ?? null) === previousGroup);
+  if (affectedFields.length) await db.update(t.templateFields).set({ repeatGroupId: nextGroup }).where(and(scope(t.templateFields, base.organizationId, versionId), inArray(t.templateFields.id, affectedFields.map((field) => field.id))));
+  for (const field of affectedFields) field.repeatGroupId = nextGroup;
+  const childGroups = records.groups.filter((group) => group.id !== existing?.id && selected.groups.has(group.id) && (group.parentGroupId ?? null) === previousGroup);
+  if (childGroups.length) await db.update(t.templateRepeatGroups).set({ parentGroupId: nextGroup }).where(and(scope(t.templateRepeatGroups, base.organizationId, versionId), inArray(t.templateRepeatGroups.id, childGroups.map((group) => group.id))));
+  for (const group of childGroups) group.parentGroupId = nextGroup;
+  if (existing) {
+    records.groups = records.groups.filter((group) => group.id !== existing.id);
+    await db.delete(t.templateRepeatGroups).where(and(scope(t.templateRepeatGroups, base.organizationId, versionId), eq(t.templateRepeatGroups.id, existing.id)));
+  }
+  const context = { fieldsById: Object.fromEntries(records.fields.map((field) => [field.id, field])), groupsById: Object.fromEntries(records.groups.map((group) => [group.id, group])) };
+  const updates = [];
+  for (const expression of records.expressions) for (const node of expression.nodes) {
+    if (node.kind !== 'field') continue;
+    const reference = referenceScope(context, context.fieldsById[expression.fieldId], context.fieldsById[node.fieldId]);
+    if (!reference) throw new HttpError(400, 'incompatible_repeat', 'This repeat would make a formula reference inaccessible.');
+    if (reference !== node.scope) updates.push({ expressionId: expression.id, index: node.index, scope: reference });
+  }
+  if (updates.length) await client.query(`UPDATE template_expression_nodes n SET reference_scope = u.scope
+    FROM unnest($3::uuid[], $4::integer[], $5::text[]) AS u(expression_id, node_index, scope)
+    WHERE n.organization_id = $1 AND n.version_id = $2 AND n.expression_id = u.expression_id AND n.node_index = u.node_index`,
+  [base.organizationId, versionId, updates.map((value) => value.expressionId), updates.map((value) => value.index), updates.map((value) => value.scope)]);
+}
+
 export async function editTemplate(client, identity, versionId, expectedRevision, command) {
   fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader']);
   let details;
@@ -162,6 +204,10 @@ export async function editTemplate(client, identity, versionId, expectedRevision
   } else if (command.type === 'configureSection') {
     fieldsOnly(command, ['type', 'id', 'name', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'isParameterLoop', 'isParameterLoopHeader']);
     const section = ownRecord(model.sectionsById, command.id, 'Container');
+    const parameterLoop = bool(command.isParameterLoop ?? section.isParameterLoop ?? false, 'Parameter loop');
+    if (model.version.kind === 'datasheet' && Boolean(section.isParameterLoop) !== parameterLoop) {
+      await changeRepeatGroup(client, db, base, records, model, { kind: 'section', id: section.id, enabled: parameterLoop, source: 'test_requests' });
+    }
     await db.update(t.templateSections).set({ name: text(command.name, 'Container name', 200, { optional: true }), cssClass: text(command.cssClass, 'CSS class', 1000, { optional: true }),
       visible: bool(command.visible ?? true, 'Visible'), isHeader: bool(command.isHeader ?? false, 'Header'), isFooter: bool(command.isFooter ?? false, 'Footer'), isFinalResult: bool(command.isFinalResult ?? false, 'Final result'),
       isParameterLoop: bool(command.isParameterLoop ?? section.isParameterLoop ?? false, 'Parameter loop'), isParameterLoopHeader: bool(command.isParameterLoopHeader ?? section.isParameterLoopHeader ?? false, 'Parameter loop header') })
@@ -188,36 +234,7 @@ export async function editTemplate(client, identity, versionId, expectedRevision
     bool(command.enabled, 'Cloneable');
     const existing = records.groups.find((group) => group.rowId === row.id);
     if (Boolean(existing) === command.enabled) throw new HttpError(400, 'unchanged_repeat', 'This row already has the requested clone setting.');
-    const selected = layoutSelection(model, 'row', row.id);
-    const previousGroup = row.repeatGroupId;
-    const nextGroup = command.enabled ? randomUUID() : existing.parentGroupId;
-    if (command.enabled) {
-      const group = { ...base, id: nextGroup, rowId: row.id, parentGroupId: previousGroup, minimum: 1, maximum: 1000 };
-      await db.insert(t.templateRepeatGroups).values(group);
-      records.groups.push(group);
-    }
-    const affectedFields = records.fields.filter((field) => selected.fields.has(field.id) && (field.repeatGroupId ?? null) === previousGroup);
-    if (affectedFields.length) await db.update(t.templateFields).set({ repeatGroupId: nextGroup }).where(and(scope(t.templateFields, base.organizationId, versionId), inArray(t.templateFields.id, affectedFields.map((field) => field.id))));
-    for (const field of affectedFields) field.repeatGroupId = nextGroup;
-    const childGroups = records.groups.filter((group) => group.id !== existing?.id && selected.groups.has(group.id) && (group.parentGroupId ?? null) === previousGroup);
-    if (childGroups.length) await db.update(t.templateRepeatGroups).set({ parentGroupId: nextGroup }).where(and(scope(t.templateRepeatGroups, base.organizationId, versionId), inArray(t.templateRepeatGroups.id, childGroups.map((group) => group.id))));
-    for (const group of childGroups) group.parentGroupId = nextGroup;
-    if (existing) {
-      records.groups = records.groups.filter((group) => group.id !== existing.id);
-      await db.delete(t.templateRepeatGroups).where(and(scope(t.templateRepeatGroups, base.organizationId, versionId), eq(t.templateRepeatGroups.id, existing.id)));
-    }
-    const context = { fieldsById: Object.fromEntries(records.fields.map((field) => [field.id, field])), groupsById: Object.fromEntries(records.groups.map((group) => [group.id, group])) };
-    const updates = [];
-    for (const expression of records.expressions) for (const node of expression.nodes) {
-      if (node.kind !== 'field') continue;
-      const reference = referenceScope(context, context.fieldsById[expression.fieldId], context.fieldsById[node.fieldId]);
-      if (!reference) throw new HttpError(400, 'incompatible_repeat', 'This repeat would make a formula reference inaccessible.');
-      if (reference !== node.scope) updates.push({ expressionId: expression.id, index: node.index, scope: reference });
-    }
-    if (updates.length) await client.query(`UPDATE template_expression_nodes n SET reference_scope = u.scope
-      FROM unnest($3::uuid[], $4::integer[], $5::text[]) AS u(expression_id, node_index, scope)
-      WHERE n.organization_id = $1 AND n.version_id = $2 AND n.expression_id = u.expression_id AND n.node_index = u.node_index`,
-    [base.organizationId, versionId, updates.map((value) => value.expressionId), updates.map((value) => value.index), updates.map((value) => value.scope)]);
+    await changeRepeatGroup(client, db, base, records, model, { kind: 'row', id: row.id, enabled: command.enabled });
   } else if (command.type === 'delete') {
     fieldsOnly(command, ['type', 'kind', 'id']); uuid(command.id);
     const selection = layoutSelection(model, command.kind, command.id);

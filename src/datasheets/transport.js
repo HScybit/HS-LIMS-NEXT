@@ -28,5 +28,6 @@ export function datasheetTemplateView(model) {
 }
 
 export function datasheetCaptureView(capture) {
-  return { ...capture, values: capture.values.map((value) => select(value, valueKeys)) };
+  const { pinnedValues: _pinnedValues, ...runtime } = capture;
+  return { ...runtime, values: capture.values.map((value) => select(value, valueKeys)) };
 }

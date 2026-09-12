@@ -2,6 +2,7 @@ import { HttpError } from '../auth/errors.js';
 import { uuid } from '../templates/input.js';
 import { loadWorkflowDefinition } from './definition.js';
 import { workflowConditionsMatch } from './conditions.js';
+import { loadJobWorkflowEffects } from './job-effects.js';
 
 export function requireWorkflowRead(identity) {
   if (!['samples.read', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'approvals.respond'].some((permission) => identity.permission_codes?.includes(permission))) {
@@ -25,8 +26,7 @@ export async function workflowConditionSource(client, identity, run) {
   }
   const request = (await client.query(`SELECT request.*, sample.sample_number, sample.status AS sample_status, sheet.status AS datasheet_status,
     coalesce(submission.text_value, submission.number_value::text, submission.boolean_value::text) AS final_result
-    FROM test_requests request JOIN sample_tests selected ON selected.organization_id=request.organization_id AND selected.id=request.sample_test_id
-    JOIN sample_products product ON product.organization_id=selected.organization_id AND product.id=selected.sample_product_id
+    FROM test_requests request JOIN laboratory_test_request_context product ON product.organization_id=request.organization_id AND product.test_request_id=request.id
     JOIN samples sample ON sample.organization_id=product.organization_id AND sample.id=product.sample_id
     LEFT JOIN LATERAL (SELECT status, latest_submission_id FROM datasheets WHERE organization_id=request.organization_id AND test_request_id=request.id AND status<>'void'
       ORDER BY (id=request.final_datasheet_id) DESC NULLS LAST, attempt_number DESC LIMIT 1) sheet ON true
@@ -104,18 +104,21 @@ export async function loadWorkflowRun(client, identity, runId) {
   const states = new Map(definition.states.map((state) => [state.id, state]));
   const source = await workflowConditionSource(client, identity, run); const roles = await currentWorkflowRoles(client, identity);
   const approvalRequest = await readApprovalCase(client, identity, { runId });
+  const jobEffects = await loadJobWorkflowEffects(client, identity, run.test_request_id);
+  const jobState = jobEffects.find((effect) => effect.isCurrent) ?? null;
   const history = (await client.query(`SELECT history.id, history.action, history.actor_user_id AS "actorUserId", history.comment, history.occurred_at AS "occurredAt",
     target.name AS "toStateName", source.name AS "fromStateName", history.transition_id AS "transitionId"
     FROM workflow_run_history history JOIN workflow_states target ON target.organization_id=history.organization_id AND target.id=history.to_state_id
     LEFT JOIN workflow_states source ON source.organization_id=history.organization_id AND source.id=history.from_state_id
     WHERE history.organization_id=$1 AND history.workflow_run_id=$2 ORDER BY history.occurred_at DESC, history.id DESC LIMIT 100`, [identity.organization_id, runId])).rows;
-  const labels = new Map((await client.query('SELECT * FROM laboratory_actor_labels($1::uuid[])', [[...new Set(history.map((event) => event.actorUserId))]])).rows.map((user) => [user.user_id, user.display_name]));
+  const activity = [...history, ...jobEffects];
+  const labels = new Map((await client.query('SELECT * FROM laboratory_actor_labels($1::uuid[])', [[...new Set(activity.map((event) => event.actorUserId))]])).rows.map((user) => [user.user_id, user.display_name]));
   return { id: run.id, versionId: run.workflow_version_id, sampleId: run.sample_id, testRequestId: run.test_request_id, revision: run.revision, status: run.status,
-    state: states.get(run.current_state_id), startedAt: run.started_at, completedAt: run.completed_at,
-    transitions: run.status !== 'active' || approvalRequest?.status === 'pending' ? [] : definition.transitions
+    state: states.get(run.current_state_id), jobState, startedAt: run.started_at, completedAt: run.completed_at,
+    transitions: run.status !== 'active' || approvalRequest?.status === 'pending' || jobState ? [] : definition.transitions
       .filter((transition) => transition.sourceStateId === run.current_state_id && canRequestTransition(identity, transition, roles) && workflowConditionsMatch(source, transition.conditions))
       .map((transition) => ({ id: transition.id, name: transition.name, targetStateId: transition.targetStateId,
         targetStateName: states.get(transition.targetStateId)?.name, approvalMode: transition.approvalMode, requireComment: transition.requireComment,
         checklistItems: transition.checklist.map((item) => ({ id: item.id, label: item.prompt, isRequired: item.isRequired })) })),
-    approvalRequest, activity: history.map((event) => ({ ...event, actorName: labels.get(event.actorUserId) ?? event.actorUserId })) };
+    approvalRequest, activity: activity.map((event) => ({ ...event, actorName: labels.get(event.actorUserId) ?? event.actorUserId })) };
 }
