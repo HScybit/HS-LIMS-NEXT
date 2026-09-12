@@ -2,7 +2,7 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { ownerPool, createAccount } from '../helpers/database.js';
-import { createAnalyticalTemplate } from '../helpers/templates.js';
+import { analyticalRecords, createAnalyticalTemplate } from '../helpers/templates.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool, getPool, database } from '../../src/db/pool.js';
 import { createTemplate, editTemplate, freezeTemplate, createDraft, copyDefinition } from '../../src/templates/authoring.js';
@@ -21,6 +21,13 @@ const work = (action, options) => withSession(session.token, action, { csrfToken
 const fixture = (options) => work((client, identity) => createAnalyticalTemplate(client, identity, options));
 const definition = (id) => work((client, identity) => loadDefinition(client, identity.organization_id, id), { readOnly: true });
 const freeze = (versionId, revision = 1) => work((client, identity) => freezeTemplate(client, identity, versionId, revision));
+
+function maximumPlanRowVisits(plan) {
+  const rows = (plan['Actual Rows'] ?? 0) + (plan['Rows Removed by Filter'] ?? 0) + (plan['Rows Removed by Join Filter'] ?? 0);
+  let maximum = rows * (plan['Actual Loops'] ?? 0);
+  for (const child of plan.Plans ?? []) maximum = Math.max(maximum, maximumPlanRowVisits(child));
+  return maximum;
+}
 
 test('relational definition loads in eight queries with explicit repeat dependencies and no JSON columns', async () => {
   const template = await fixture();
@@ -258,7 +265,8 @@ test('a fresh 1000-field definition and its capture use eight plus three actual 
     const query = client.query;
     const statements = [];
     client.query = function (...args) {
-      statements.push(typeof args[0] === 'string' ? args[0] : args[0].text);
+      statements.push({ sql: typeof args[0] === 'string' ? args[0] : args[0].text,
+        parameters: (typeof args[0] === 'object' ? args[0].values : undefined) ?? args[1] });
       return query.apply(this, args);
     };
     try {
@@ -267,7 +275,49 @@ test('a fresh 1000-field definition and its capture use eight plus three actual 
       assert.equal(statements.length, 8);
       await loadCapture(client, identity.organization_id, capture.instanceId);
       assert.equal(statements.length, 11);
-      assert.equal(statements.every((statement) => /^(select|with)\b/i.test(statement) && !/\b(insert|update|delete)\b/i.test(statement)), true);
+      assert.equal(statements.every(({ sql }) => /^(select|with)\b/i.test(sql) && !/\b(insert|update|delete)\b/i.test(sql)), true);
+      const nodeCount = definition.records.expressions.reduce((count, expression) => count + expression.nodes.length, 0);
+      const bounds = [
+        { table: 'template_columns', label: 'Column', records: definition.records.columns.length },
+        { table: 'template_fields', label: 'Field/numeric configuration', records: definition.records.fields.length },
+        { table: 'template_expressions', label: 'Expression', records: nodeCount },
+      ];
+      for (const bound of bounds) {
+        const statement = statements.find(({ sql }) => sql.includes(`from "${bound.table}"`));
+        assert.ok(statement);
+        const result = await query.call(client, `EXPLAIN (ANALYZE, FORMAT JSON) ${statement.sql}`, statement.parameters);
+        const visits = maximumPlanRowVisits(result.rows[0]['QUERY PLAN'][0].Plan);
+        // Allow linear scan/join overhead, but not a whole-version scan per parent.
+        assert.ok(visits <= bound.records * 10, `${bound.label} loading visited ${visits} rows for ${bound.records} records.`);
+      }
     } finally { client.query = query; }
+  }, { readOnly: true });
+});
+
+test('a fresh repeated capture avoids comparing every value against every occurrence', async () => {
+  const template = await work(async (client, identity) => {
+    const created = await createTemplate(client, identity, { name: 'Synthetic occurrence lookup', kind: 'datasheet' });
+    const records = analyticalRecords();
+    records.groups[0].minimum = 200;
+    await copyDefinition(database(client), records, identity.organization_id, created.versionId);
+    return { ...created, records };
+  });
+  await freeze(template.versionId);
+  const capture = await work((client, identity) => createCapture(client, identity, template.versionId));
+  const initial = await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId), { readOnly: true });
+  const inputs = initial.occurrences.filter((row) => row.groupId === template.records.groups[0].id)
+    .map((row) => ({ fieldId: template.records.fields[0].id, occurrenceId: row.id, state: 'present', value: '0' }));
+  await work((client, identity) => saveCapture(client, identity, capture.instanceId, 1, inputs));
+  await work(async (client, identity) => {
+    const statements = [];
+    const observed = { query: (sql, parameters) => { statements.push({ sql, parameters }); return client.query(sql, parameters); } };
+    const loaded = await loadCapture(observed, identity.organization_id, capture.instanceId);
+    assert.equal(statements.length, 3); assert.equal(loaded.occurrences.length, 201);
+    assert.ok(loaded.values.length >= 400);
+    const statement = statements[2];
+    const result = await client.query(`EXPLAIN (ANALYZE, FORMAT JSON) ${statement.sql}`, statement.parameters);
+    const visits = maximumPlanRowVisits(result.rows[0]['QUERY PLAN'][0].Plan);
+    const records = loaded.values.length + loaded.occurrences.length;
+    assert.ok(visits <= records * 10, `Capture loading visited ${visits} rows for ${records} active records.`);
   }, { readOnly: true });
 });

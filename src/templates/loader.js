@@ -6,7 +6,7 @@ import { assembleDefinition } from './model.js';
 import { uuid } from './input.js';
 
 // Eight definition SELECTs, including optional version selection, independent of template size.
-// Numeric configuration is batched separately to avoid a three-way join explosion with fresh-data estimates.
+// Load columns separately; each field can have at most one numeric configuration.
 export async function loadDefinition(client, organizationId, versionId, options = {}) {
   const result = await loadDefinitions(client, organizationId, versionId ? [versionId] : [], options);
   const definition = result.definitions.values().next().value;
@@ -49,13 +49,22 @@ export async function loadDefinitions(client, organizationId, versionIds, option
   versionIds = selectedVersions.map(({ version }) => version.id);
   const sectionRows = await query('sections', () => db.select().from(sections).where(where(sections)).orderBy(asc(sections.position), asc(sections.id)).limit(200_001));
   const layoutRows = await query('rows', () => db.select().from(rows).where(where(rows)).orderBy(asc(rows.position), asc(rows.id)).limit(200_001));
-  const columnRows = await query('columns_fields', () => db.select({ column: columns, field: fields }).from(columns)
-    .leftJoin(fields, and(eq(columns.organizationId, fields.organizationId), eq(columns.versionId, fields.versionId), eq(columns.id, fields.columnId)))
+  const columnRows = await query('columns', () => db.select().from(columns)
     .where(where(columns)).orderBy(asc(columns.position), asc(columns.id)).limit(200_001));
-  const numericRows = await query('numeric_configuration', () => db.select().from(numeric).where(where(numeric)).limit(200_001));
+  // The full numeric primary key bounds each lookup even with fresh-data estimates.
+  const fieldNumeric = db.select().from(numeric)
+    .where(and(eq(numeric.organizationId, fields.organizationId), eq(numeric.versionId, fields.versionId), eq(numeric.fieldId, fields.id)))
+    .limit(1).as('template_numeric_config');
+  const fieldRows = await query('fields_numeric_configuration', () => db.select({ field: fields, numeric }).from(fields)
+    .leftJoinLateral(fieldNumeric, sql`true`).where(where(fields)).limit(200_001));
   const optionRows = await query('options', () => db.select().from(choices).where(where(choices)).orderBy(asc(choices.position), asc(choices.id)).limit(200_001));
+  // The bounded lateral lookup keeps fresh-data estimates from scanning every
+  // node in the version for each expression. Retain the existing node projection.
+  const expressionNodes = db.select().from(nodes)
+    .where(and(eq(nodes.organizationId, expressions.organizationId), eq(nodes.versionId, expressions.versionId), eq(nodes.expressionId, expressions.id)))
+    .orderBy(asc(nodes.nodeIndex)).limit(200_001).as('template_expression_nodes');
   const expressionRows = await query('expressions_dependencies', () => db.select({ expression: expressions, node: nodes }).from(expressions)
-    .leftJoin(nodes, and(eq(expressions.organizationId, nodes.organizationId), eq(expressions.versionId, nodes.versionId), eq(expressions.id, nodes.expressionId)))
+    .leftJoinLateral(expressionNodes, sql`true`)
     .where(where(expressions)).orderBy(asc(expressions.id), asc(nodes.nodeIndex)).limit(200_001));
   const groupRows = await query('repeat_definitions', () => db.select().from(groups).where(where(groups)).limit(200_001));
   const assemblyStart = performance.now();
@@ -63,7 +72,7 @@ export async function loadDefinitions(client, organizationId, versionIds, option
     records: { version: { ...selectedVersion.version, code: selectedVersion.code, active: selectedVersion.active },
       sections: [], rows: [], columns: [], fields: [], options: [], expressions: [], groups: [] },
   }]));
-  const numericByField = new Map(numericRows.map((row) => [`${row.versionId}:${row.fieldId}`, row]));
+  const fieldByColumn = new Map(fieldRows.map(({ field, numeric }) => [`${field.versionId}:${field.columnId}`, { ...field, numeric }]));
   const expressionMap = new Map();
   for (const { expression, node } of expressionRows) {
     const key = `${expression.versionId}:${expression.id}`;
@@ -77,10 +86,11 @@ export async function loadDefinitions(client, organizationId, versionIds, option
   for (const [key, records] of [['sections', sectionRows], ['rows', layoutRows], ['options', optionRows], ['expressions', expressionMap.values()], ['groups', groupRows]]) {
     for (const record of records) definitions.get(record.versionId).records[key].push(record);
   }
-  for (const { column, field } of columnRows) {
+  for (const column of columnRows) {
     const { records } = definitions.get(column.versionId);
     records.columns.push(column);
-    if (field) records.fields.push({ ...field, numeric: numericByField.get(`${field.versionId}:${field.id}`) ?? null });
+    const field = fieldByColumn.get(`${column.versionId}:${column.id}`);
+    if (field) records.fields.push(field);
   }
   for (const definition of definitions.values()) definition.model = assembleDefinition(definition.records, options);
   metrics.assemblyMs = performance.now() - assemblyStart;
@@ -126,22 +136,43 @@ export async function loadCaptures(client, organizationId, requests, { pinnedVal
     LEFT JOIN analytical_specifications specification ON specification.organization_id=subject.organization_id AND specification.id=subject.specification_id
     WHERE occurrence.organization_id = $1 AND occurrence.created_revision <= requested.revision AND (occurrence.removed_revision IS NULL OR occurrence.removed_revision > requested.revision)
     ORDER BY occurrence.instance_id, occurrence.position, occurrence.id LIMIT 200001`, parameters);
+  if (occurrences.rows.length > 200_000) throw new HttpError(422, 'capture_batch_limit', 'The combined captures exceed the supported report size.');
   const valueColumns = `value.instance_id AS "instanceId", value.field_id AS "fieldId", value.occurrence_id AS "occurrenceId",
     value.revision, value.value_type AS "valueType", value.state, value.origin, value.number_value AS "numberValue", value.text_value AS "textValue", value.boolean_value AS "booleanValue",
     value.date_value::text AS "dateValue", value.option_id AS "optionId", value.lexical, value.error_code AS "errorCode", value.error_message AS "errorMessage", value.saved_at AS "savedAt", value.saved_by AS "savedBy"`;
   // Explicit historical result selections share the third capture statement.
   // They remain separate from the active values rendered in the current rows.
-  const values = await client.query(`WITH current_values AS (
-    SELECT DISTINCT ON (value.instance_id,field_id,occurrence_id) value.*
-    FROM template_values value JOIN unnest($2::uuid[],$3::integer[]) requested(instance_id,revision) ON requested.instance_id=value.instance_id
-    WHERE organization_id=$1 AND value.revision<=requested.revision ORDER BY value.instance_id,field_id,occurrence_id,value.revision DESC LIMIT 200001
-  ) SELECT ${valueColumns},false AS pinned FROM current_values value
+  // Materialize each key set once: joining occurrences into the history scan
+  // otherwise repeats that scan per occurrence under the application RLS plan.
+  // Project membership once to avoid rechecking every occurrence for each value.
+  // NULLS LAST matches template_value_latest; revision itself is NOT NULL.
+  const values = await client.query(`WITH active_occurrences AS MATERIALIZED (
+    SELECT occurrence.instance_id,occurrence.id FROM template_occurrences occurrence
+    JOIN unnest($2::uuid[],$3::integer[]) requested(instance_id,revision) ON requested.instance_id=occurrence.instance_id
+    WHERE occurrence.organization_id=$1 AND occurrence.created_revision<=requested.revision
+      AND (occurrence.removed_revision IS NULL OR occurrence.removed_revision>requested.revision) LIMIT 200001
+  ), latest_keys AS MATERIALIZED (
+    SELECT requested.instance_id,latest.field_id,latest.occurrence_id,latest.revision,
+      (requested.instance_id,latest.occurrence_id) IN (SELECT instance_id,id FROM active_occurrences) AS is_active
+    FROM unnest($2::uuid[],$3::integer[]) requested(instance_id,revision)
+    CROSS JOIN LATERAL (
+      SELECT DISTINCT ON (field_id,occurrence_id) field_id,occurrence_id,revision
+      FROM template_values WHERE organization_id=$1 AND instance_id=requested.instance_id AND revision<=requested.revision
+      ORDER BY field_id,occurrence_id,revision DESC NULLS LAST
+    ) latest
+  ), current_keys AS MATERIALIZED (
+    SELECT latest.instance_id,latest.field_id,latest.occurrence_id,latest.revision FROM latest_keys latest WHERE latest.is_active
+    ORDER BY latest.instance_id,latest.field_id,latest.occurrence_id LIMIT 200001
+  ) (SELECT ${valueColumns},false AS pinned FROM current_keys selected JOIN template_values value
+    ON value.organization_id=$1 AND value.instance_id=selected.instance_id AND value.field_id=selected.field_id
+      AND value.occurrence_id=selected.occurrence_id AND value.revision=selected.revision
+    ORDER BY value.instance_id,value.field_id,value.occurrence_id)
     UNION ALL SELECT ${valueColumns},true AS pinned FROM template_values value
       JOIN unnest($4::uuid[],$5::uuid[],$6::uuid[],$7::integer[]) selected(instance_id,field_id,occurrence_id,revision)
         ON selected.instance_id=value.instance_id AND selected.field_id=value.field_id AND selected.occurrence_id=value.occurrence_id AND selected.revision=value.revision
       WHERE value.organization_id=$1 LIMIT 200001`, [...parameters, pinnedValues.map((value) => value.instanceId), pinnedValues.map((value) => value.fieldId),
     pinnedValues.map((value) => value.occurrenceId), pinnedValues.map((value) => value.revision)]);
-  if (occurrences.rows.length > 200_000 || values.rows.length > 200_000) throw new HttpError(422, 'capture_batch_limit', 'The combined captures exceed the supported report size.');
+  if (values.rows.length > 200_000) throw new HttpError(422, 'capture_batch_limit', 'The combined captures exceed the supported report size.');
   const activeOccurrenceIds = new Set();
   for (const { instanceId, subjectId, subjectTestRequestId, subjectSpecificationId, subjectParameterName, subjectMethodName,
     subjectMeasurementUnit, subjectSpecification, ...occurrence } of occurrences.rows) {

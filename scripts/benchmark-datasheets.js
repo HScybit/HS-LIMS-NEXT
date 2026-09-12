@@ -24,11 +24,13 @@ const stats = (values) => {
   const sorted = [...values].sort((a, b) => a - b);
   return { p50: sorted[Math.ceil(sorted.length * 0.5) - 1], p95: sorted[Math.ceil(sorted.length * 0.95) - 1], max: sorted.at(-1) };
 };
-const report = { generatedAt: new Date().toISOString(), synthetic: true, status: 'running', runs, fixtures: [],
+const report = { generatedAt: new Date().toISOString(), synthetic: true, status: 'running', runs, fixtures: [], readPlans: [],
   environment: { node: process.version, platform: os.platform(), release: os.release(), architecture: os.arch(), cpu: os.cpus()[0].model, logicalCpus: os.cpus().length,
     memoryGiB: Math.round(os.totalmem() / 2 ** 30), poolSize: 10, statementTimeoutMs: 30_000 },
   conditions: { database: 'Dedicated local synthetic PostgreSQL with RLS; ANALYZE after population.', firstLoad: 'First measured load; database buffers are not cold.',
     transactions: 'Session authentication and BEGIN/COMMIT included in all end-to-end timings.', sourceLatency: 'Not measured.',
+    queryTimings: 'Individual data statements include client and transfer overhead; EXPLAIN execution times are recorded separately.',
+    queryPlans: 'Read-only app-role EXPLAIN ANALYZE after warm reads and after concurrent reads, outside timed samples and before creating the next fixture.',
     concurrentUsers: 'One assigned analyst plus independent readers in the same synthetic organization.',
     scope: 'Allocated datasheet route service, repeated captures and immutable runtime snapshot creation. Full scientific submission and output remain pending.' } };
 async function saveReport() { await writeFile(path, JSON.stringify(report, null, 2), { mode: 0o600 }); }
@@ -84,22 +86,51 @@ try {
     async function measureRead(active = session) {
       const start = performance.now();
       let dataQueries = 0;
+      const dataQueryMs = [];
       const result = await withSession(active.token, async (client, identity) => {
         const query = client.query;
-        client.query = function (...args) { dataQueries += 1; return query.apply(this, args); };
+        client.query = async function (...args) {
+          const index = dataQueries++; const started = performance.now();
+          try { return await query.apply(this, args); }
+          finally { dataQueryMs[index] = performance.now() - started; }
+        };
         try { return await loadDatasheet(client, identity, allocation.datasheetId); }
         finally { client.query = query; }
       }, { readOnly: true });
       const serializationStart = performance.now(); const payload = JSON.stringify(result); const serializationMs = performance.now() - serializationStart;
       const serviceMs = performance.now() - start; const metrics = result.metrics;
       assert.equal(dataQueries, 12);
-      return { serviceMs, serializationMs, dataQueries, databaseMs: metrics.metadataMs + metrics.definition.databaseMs + metrics.capture.databaseMs,
+      return { serviceMs, serializationMs, dataQueries, dataQueryMs, databaseMs: metrics.metadataMs + metrics.definition.databaseMs + metrics.capture.databaseMs,
         assemblyMs: metrics.definition.assemblyMs, projectionMs: metrics.projectionMs, calculationMs: metrics.calculationMs,
         bytes: Buffer.byteLength(payload), gzipBytes: gzipSync(payload).length };
+    }
+    async function explainRead(stage) {
+      const explained = await work(async (client, identity) => {
+        const statements = []; const query = client.query;
+        client.query = function (...args) {
+          statements.push({ sql: typeof args[0] === 'string' ? args[0] : args[0].text,
+            parameters: (typeof args[0] === 'object' ? args[0].values : undefined) ?? args[1] });
+          return query.apply(this, args);
+        };
+        let captureRevision;
+        try { captureRevision = (await loadDatasheet(client, identity, allocation.datasheetId)).capture.revision; }
+        finally { client.query = query; }
+        assert.equal(statements.length, 12);
+        const queries = [];
+        for (const statement of statements) {
+          assert.match(statement.sql, /^(SELECT|WITH)\b/i);
+          const result = await client.query(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement.sql}`, statement.parameters);
+          queries.push({ ...statement, plan: result.rows[0]['QUERY PLAN'][0] });
+        }
+        return { captureRevision, queries };
+      }, true);
+      report.readPlans.push({ name: fixture.name, stage, organizationId: account.organizationId, datasheetId: allocation.datasheetId, ...explained });
+      await saveReport();
     }
     const firstLoad = await measureRead();
     for (let index = 0; index < 3; index += 1) await measureRead();
     const measurements = []; for (let index = 0; index < runs; index += 1) measurements.push(await measureRead());
+    await explainRead('after-warm-reads');
     const saves = []; const calculations = []; const clones = []; const removals = []; const snapshots = [];
     report.phase = `${fixture.name}: mutate`; await saveReport();
     const input = inputs.find((input) => loaded.model.fieldsById[input.fieldId].valueType === 'numeric');
@@ -127,6 +158,7 @@ try {
       for (let index = 0; index < runs; index += 1) reads.push(...await Promise.all(sessions.slice(0, count).map(measureRead)));
       concurrency.push({ sessions: count, measurements: reads, serviceMs: stats(reads.map((value) => value.serviceMs)) });
     }
+    await explainRead('after-concurrent-reads');
     const sizes = assertCaptureSize(loaded.model, loaded.capture.occurrences);
     report.fixtures.push({ name: fixture.name, organizationId: account.organizationId, templateId: template.templateId, versionId: loaded.model.version.id, instanceId: captureId,
       sampleId: sample.id, requestId, datasheetId: allocation.datasheetId, fixtureSha256: createHash('sha256').update(JSON.stringify(records)).digest('hex'),

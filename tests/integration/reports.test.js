@@ -141,7 +141,7 @@ test('report sections reload repeated frozen values with eight definition and th
   assert.equal(capture.values.filter((value) => value.state === 'present' && value.numberValue === '0').length, 6);
   assert.equal(report.datasheetModels[capture.versionId].sectionsById[capture.sectionRoots[0].sectionId].name, 'Final results');
   assert.equal(report.metrics.definition.queryCount, 8); assert.equal(report.metrics.capture.queryCount, 3);
-  assert.equal(statements.filter((statement) => /\bfrom "?template_(?:versions|sections|rows|columns|numeric_config|options|expressions|repeat_groups)"?\b/i.test(statement)).length, 8);
+  assert.equal(statements.filter((statement) => /\bfrom "?template_(?:versions|sections|rows|columns|fields|options|expressions|repeat_groups)"?\b/i.test(statement)).length, 8);
   assert.equal(statements.filter((statement) => /\bfrom template_(?:instances|occurrences|values)\b/i.test(statement)).length, 3);
   await work((client, identity) => editTemplate(client, identity, flow.fixture.template.versionId, 3,
     { type: 'configureSection', id: flow.fixture.template.records.sections[0].id, name: 'Future section', isFinalResult: false }));
@@ -184,7 +184,7 @@ test('product and parameter reports preserve duplicate product-line identity and
     return client.query(statement, values);
   } }, identity, flow.sample.id, { ...flow.input, reportType: 'product_wise', templateSelections }));
   assert.equal(grouped.items.length, 2); assert.equal(new Set(grouped.items.map((report) => report.reportNumber)).size, 2);
-  assert.equal(statements.filter((statement) => /^select .*\bfrom "template_(?:versions|sections|rows|columns|numeric_config|options|expressions|repeat_groups)"/i.test(statement)).length, 8);
+  assert.equal(statements.filter((statement) => /^select .*\bfrom "template_(?:versions|sections|rows|columns|fields|options|expressions|repeat_groups)"/i.test(statement)).length, 8);
   assert.equal(statements.filter((statement) => /\bfrom template_(?:instances|occurrences|values)\b/i.test(statement)).length, 3);
   const contents = await Promise.all(grouped.items.map((item) => work((client, identity) => loadReport(client, identity, item.id), { readOnly: true })));
   assert.equal(new Set(contents.map((report) => report.results[0].id)).size, 2);

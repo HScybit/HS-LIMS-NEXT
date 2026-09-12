@@ -7,7 +7,7 @@ import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { freezeTemplate } from '../../src/templates/authoring.js';
 import { createCapture, saveCapture, changeRepeat } from '../../src/templates/capture.js';
-import { loadCapture } from '../../src/templates/loader.js';
+import { loadCapture, loadCaptures } from '../../src/templates/loader.js';
 import { requireCaptureWrite } from '../../src/templates/access.js';
 
 const owner = ownerPool(); let account;
@@ -92,4 +92,63 @@ test('even a newly created revision cannot accept a forged value actor or time',
       [identity.organization_id, capture.instanceId, template.versionId, template.records.fields[0].id, row.id, actor, time]);
     }), { code: '23514' });
   }
+});
+
+test('batch reads bound active values before transfer while retaining exact pinned and historical revisions', async () => {
+  const first = await fixture();
+  const fieldId = first.template.records.fields[0].id;
+  const second = await work((client, identity) => createCapture(client, identity, first.template.versionId));
+  const secondInitial = await work((client, identity) => loadCapture(client, identity.organization_id, second.instanceId), { readOnly: true });
+  const secondRow = secondInitial.occurrences.find((row) => row.groupId);
+  await work((client, identity) => saveCapture(client, identity, first.capture.instanceId, 1,
+    [{ fieldId, occurrenceId: first.row.id, state: 'present', value: '0' }]));
+  const cloned = await work((client, identity) => changeRepeat(client, identity, first.capture.instanceId, 2,
+    { type: 'clone', occurrenceId: first.row.id, withData: true }));
+  const copy = cloned.occurrences.find((row) => !first.loaded.occurrences.some((original) => original.id === row.id));
+  await work((client, identity) => saveCapture(client, identity, first.capture.instanceId, 3,
+    [{ fieldId, occurrenceId: first.row.id, state: 'present', value: '9' }]));
+  await work((client, identity) => changeRepeat(client, identity, first.capture.instanceId, 4, { type: 'remove', occurrenceId: copy.id }));
+  await work((client, identity) => saveCapture(client, identity, second.instanceId, 1,
+    [{ fieldId, occurrenceId: secondRow.id, state: 'present', value: '7' }]));
+  await work((client, identity) => saveCapture(client, identity, second.instanceId, 2,
+    [{ fieldId, occurrenceId: secondRow.id, state: 'empty' }]));
+  const pins = [
+    { instanceId: first.capture.instanceId, fieldId, occurrenceId: first.row.id, revision: 2 },
+    { instanceId: first.capture.instanceId, fieldId, occurrenceId: copy.id, revision: 3 },
+  ];
+  await work(async (client, identity) => {
+    const reads = [];
+    const observed = { query: async (...args) => {
+      const result = await client.query(...args);
+      reads.push(result.rows);
+      return result;
+    } };
+    const batch = await loadCaptures(observed, identity.organization_id,
+      [{ instanceId: second.instanceId, revision: 2 }, { instanceId: first.capture.instanceId, revision: 5 }], { pinnedValues: pins });
+    assert.equal(reads.length, 3); assert.equal(batch.metrics.queryCount, 3);
+    assert.equal(batch.captures.size, 2);
+    const current = batch.captures.get(first.capture.instanceId);
+    const prior = batch.captures.get(second.instanceId);
+    assert.equal(current.values.find((value) => value.fieldId === fieldId && value.occurrenceId === first.row.id).numberValue, '9');
+    assert.equal(prior.values.find((value) => value.fieldId === fieldId && value.occurrenceId === secondRow.id).numberValue, '7');
+    assert.equal(current.occurrences.some((row) => row.id === copy.id), false);
+    assert.equal(current.values.some((value) => value.occurrenceId === copy.id), false);
+    for (const pin of pins) {
+      const value = batch.pinnedValues.get(`${pin.instanceId}:${pin.fieldId}:${pin.occurrenceId}:${pin.revision}`);
+      assert.equal(value.numberValue, '0'); assert.equal(value.revision, pin.revision);
+    }
+    // Removed rows must not consume the SQL result limit before the loader discards them.
+    assert.equal(reads[2].length, current.values.length + prior.values.length + pins.length);
+    assert.equal(reads[2].some((value) => !value.pinned && value.instanceId === first.capture.instanceId && value.occurrenceId === copy.id), false);
+  }, { readOnly: true });
+  const beforeRemoval = await work((client, identity) => loadCapture(client, identity.organization_id, first.capture.instanceId, 3), { readOnly: true });
+  assert.equal(beforeRemoval.occurrences.some((row) => row.id === copy.id), true);
+  assert.equal(beforeRemoval.values.find((value) => value.fieldId === fieldId && value.occurrenceId === copy.id).numberValue, '0');
+  assert.equal(beforeRemoval.values.find((value) => value.fieldId === fieldId && value.occurrenceId === first.row.id).numberValue, '0');
+  const secondCurrent = await work((client, identity) => loadCapture(client, identity.organization_id, second.instanceId), { readOnly: true });
+  assert.equal(secondCurrent.values.find((value) => value.fieldId === fieldId && value.occurrenceId === secondRow.id).state, 'empty');
+  await assert.rejects(work((client, identity) => loadCaptures(client, identity.organization_id,
+    [{ instanceId: first.capture.instanceId, revision: 2 }], { pinnedValues: [pins[1]] }), { readOnly: true }), { code: 'invalid_pinned_values' });
+  await assert.rejects(work((client, identity) => loadCaptures(client, identity.organization_id,
+    [{ instanceId: second.instanceId }], { pinnedValues: pins }), { readOnly: true }), { code: 'invalid_pinned_values' });
 });
