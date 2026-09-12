@@ -14,6 +14,7 @@ import { reportGenerationInput, reportGroups } from './input.js';
 import { datasheetTemplateView, datasheetCaptureView } from '../datasheets/transport.js';
 import { finalResultSectionRoots } from '../datasheets/final-result.js';
 import { assertReportSize } from './render-model.js';
+import { loadReportAssets, loadReportAssetBatch } from './assets.js';
 
 const scope = (table, organizationId) => eq(table.organizationId, organizationId);
 const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, isFinalized: report.isFinalized, generatedAt: report.generatedAt });
@@ -107,6 +108,14 @@ async function checkReplay(client, identity, sampleId, input) {
 }
 
 export async function generateReports(client, identity, sampleId, rawInput) {
+  try { return await generateReportRevisions(client, identity, sampleId, rawInput); }
+  catch (error) {
+    if (error.constraint === 'report_asset_unavailable') throw new HttpError(409, 'report_asset_unavailable', 'A selected report header or footer was deleted. Choose an available template asset before generating.');
+    throw error;
+  }
+}
+
+async function generateReportRevisions(client, identity, sampleId, rawInput) {
   requirePermission(identity, 'samples.manage');
   const input = reportGenerationInput(rawInput);
   const { sample, access } = await reportSample(client, identity, sampleId, { lock: true });
@@ -156,6 +165,9 @@ export async function generateReports(client, identity, sampleId, rawInput) {
     await db.insert(sampleReportPrintSettings).values({ organizationId: identity.organization_id, reportId: id, ...input.printConfig });
     reports.push(report);
   }
+  // Validate the actual captured assets for all groups before this transaction
+  // can complete. No per-report/field content query or partial finalisation.
+  await loadReportAssetBatch(client, identity.organization_id, reports.map((report) => report.id));
   const sampleRevision = input.finalizeSample
     ? (await client.query('SELECT report_finalize_sample($1) AS revision', [input.requestId])).rows[0].revision : sample.revision;
   return { items: reports, replayed: false, sample: { id: sample.id, revision: sampleRevision, status: input.finalizeSample ? 'completed' : sample.status } };
@@ -202,7 +214,9 @@ export async function loadReport(client, identity, reportId) {
   const { finalCaptures, datasheetModels, metrics: captureMetrics } = await reportFinalSections(client, identity, results, loaded.definitions);
   const definition = loaded.definitions.get(report.templateVersionId);
   const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels);
+  const branding = await loadReportAssets(client, identity.organization_id, reportId);
   return { report, sample: { sampleNumber: report.sampleNumber, sampleCategoryName: report.sampleCategoryName, customerName: report.customerName, customerAddress: report.customerAddress,
     customerReference: report.customerReference, receivedAt: report.receivedAt, registeredAt: report.registeredAt, dueAt: report.dueAt, description: report.description },
-    results, printConfig, model: templateView(definition.model), finalCaptures, datasheetModels, metrics: { definition: loaded.metrics, capture: captureMetrics, ...size } };
+    results, printConfig, model: templateView(definition.model), finalCaptures, datasheetModels, assets: branding.assets,
+    metrics: { definition: loaded.metrics, capture: captureMetrics, assets: branding.metrics, ...size } };
 }

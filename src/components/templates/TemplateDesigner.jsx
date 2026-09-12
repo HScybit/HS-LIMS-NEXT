@@ -10,6 +10,7 @@ import { apiRequest } from '../../lib/api-client.js';
 import TemplateCanvas from './TemplateCanvas.jsx';
 import PageHeader from '../layout/PageHeader.jsx';
 import { DesignerDrawer, DesignerModal } from './DesignerDialogs.jsx';
+import TemplateSettingsPanel from './TemplateSettingsPanel.jsx';
 import '../../styles/template-designer.scss';
 
 function StatPill({ label, value }) { return <span className="template-designer-stat-pill"><strong>{value}</strong><small>{label}</small></span>; }
@@ -86,6 +87,7 @@ export default function TemplateDesigner({ templateId, canManage }) {
         <div className="template-designer-toolbar__stats" aria-label="Template structure summary"><StatPill label="Sections" value={Object.keys(model.sectionsById).length} /><StatPill label="Rows" value={Object.keys(model.rowsById).length} /><StatPill label="Columns" value={Object.keys(model.columnsById).length} /></div>
         <div className="template-designer-toolbar__actions">
           <div className="template-designer-zoom" aria-label="Canvas zoom controls"><button type="button" aria-label="Zoom out" title="Zoom out" disabled={zoom <= 0.25} onClick={() => setZoom((value) => Math.max(0.25, value - 0.05))}>-</button><button type="button" className="template-designer-zoom__value" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button type="button" aria-label="Zoom in" title="Zoom in" disabled={zoom >= 1} onClick={() => setZoom((value) => Math.min(1, value + 0.05))}>+</button></div>
+          {canManage ? <button type="button" className="template-designer-action template-designer-action--secondary" disabled={busy} onClick={() => setPanel({ type: 'settings' })}><AppIcon name="settings" size={17} /><span>Settings</span></button> : null}
           <a href={`/master_template_management/${templateId}/preview?version=${model.version.id}`} target="_blank" rel="noopener noreferrer" className="template-designer-action template-designer-action--secondary view-preview"><AppIcon name="eye" size={17} /><span>Preview</span></a>
           {canManage ? <><button type="button" className="template-designer-action template-designer-action--primary add-container" disabled={busy} onClick={() => command({ type: 'addSection' })}><AppIcon name="plus" size={17} /><span>Add Container</span></button><MoreActionButton className="template-designer-more-actions" items={[{ key: 'edit-details', label: 'Edit Details', leftIcon: 'edit', onClick: () => setPanel({ type: 'details' }) }]} /></> : null}
         </div>
@@ -100,6 +102,7 @@ export default function TemplateDesigner({ templateId, canManage }) {
       </div></div>
     </div>
     {panel && ['row', 'section'].includes(panel.type) ? <DesignerDrawer key={`${panel.type}:${panel.id}`} panel={panel} model={model} onClose={() => setPanel(null)} onPanel={setPanel} onCommand={command} busy={busy} /> : null}
-    {panel && !['row', 'section'].includes(panel.type) ? <DesignerModal key={`${panel.type}:${panel.id}`} panel={panel} model={model} onClose={() => setPanel(null)} onCommand={command} busy={busy} /> : null}
+    {panel?.type === 'settings' ? <TemplateSettingsPanel model={model} onClose={() => setPanel(null)} onCommand={command} busy={busy} /> : null}
+    {panel && !['row', 'section', 'settings'].includes(panel.type) ? <DesignerModal key={`${panel.type}:${panel.id}`} panel={panel} model={model} onClose={() => setPanel(null)} onCommand={command} busy={busy} /> : null}
   </>;
 }

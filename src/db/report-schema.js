@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, boolean, timestamp, integer, numeric, primaryKey, unique, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 import { templateVersions } from './template-schema.js';
+import { reportDocumentVersions } from './report-assets-schema.js';
 import { samples, sampleProducts, sampleTests, testRequests, datasheetSubmissions, analyticalSpecifications, analyticalSpecificationLimits, sampleEvents } from './sample-schema.js';
 
 const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -75,4 +76,13 @@ export const sampleReportPrintSettings = pgTable('sample_report_print_settings',
 }, (t) => [primaryKey({ name: 'report_print_settings_pk', columns: [t.organizationId, t.reportId] }), link(t, t.reportId, sampleReports, 'report_print_settings_report_fk'),
   check('report_print_settings_shape', sql`${t.pageSize} in ('A3', 'A4', 'A5', 'Letter', 'Legal') and ${t.scale} between 0.1 and 1
     and ${t.xMargin} between 0 and 500 and ${t.topMargin} between 0 and 500 and ${t.bottomMargin} between 0 and 500`),
+]);
+
+export const sampleReportAssets = pgTable('sample_report_assets', {
+  organizationId: tenant(), reportId: uuid('report_id').notNull(),
+  headerVersionId: uuid('header_version_id'), footerVersionId: uuid('footer_version_id'),
+  nablHeaderVersionId: uuid('nabl_header_version_id'), nablFooterVersionId: uuid('nabl_footer_version_id'),
+}, (t) => [primaryKey({ name: 'report_asset_pk', columns: [t.organizationId, t.reportId] }),
+  link(t, t.reportId, sampleReports, 'report_asset_report_fk'),
+  ...[t.headerVersionId, t.footerVersionId, t.nablHeaderVersionId, t.nablFooterVersionId].map((column) => link(t, column, reportDocumentVersions)),
 ]);

@@ -15,6 +15,10 @@ const html = `<!doctype html><html><head><style>${stylesheet}</style></head><bod
   <div data-is-footer="true">Laboratory footer</div>
   </div></article></body></html>`;
 
+test('printing rejects corrupted inline images instead of retaining a PDF with a broken report image', async () => {
+  await assert.rejects(renderReportPdf({ html: '<html><body><img src="data:image/png;base64,AA=="></body></html>', printConfig: {}, stylesheet: '' }), { code: 'report_image_unavailable' });
+});
+
 test('paper width and orientation determine the actual wrapped header height used by a multipage PDF', async (context) => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   try {

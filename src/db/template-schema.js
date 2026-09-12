@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
+import { reportDocuments } from './report-assets-schema.js';
 
 const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
 const transactionId = customType({ dataType: () => 'xid8' });
@@ -30,6 +31,8 @@ export const templateVersions = pgTable('template_versions', {
   sourceVersionId: uuid('source_version_id'), createdAt: time('created_at').notNull().defaultNow(), createdBy: uuid('created_by').notNull(),
   snapshotSourceId: uuid('snapshot_source_id'), snapshotSourceRevision: integer('snapshot_source_revision'),
   frozenAt: time('frozen_at'), frozenBy: uuid('frozen_by'),
+  headerDocumentId: uuid('header_document_id'), footerDocumentId: uuid('footer_document_id'),
+  nablHeaderDocumentId: uuid('nabl_header_document_id'), nablFooterDocumentId: uuid('nabl_footer_document_id'),
 }, (t) => [
   primaryKey({ columns: [t.organizationId, t.id] }),
   unique('template_version_number_key').on(t.organizationId, t.templateId, t.number),
@@ -40,6 +43,7 @@ export const templateVersions = pgTable('template_versions', {
   uniqueIndex('template_runtime_snapshot_key').on(t.organizationId, t.snapshotSourceId, t.snapshotSourceRevision).where(sql`${t.snapshotSourceId} is not null`),
   foreignKey({ columns: [t.organizationId, t.createdBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
   foreignKey({ columns: [t.organizationId, t.frozenBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  ...[t.headerDocumentId, t.footerDocumentId, t.nablHeaderDocumentId, t.nablFooterDocumentId].map((column) => foreignKey({ columns: [t.organizationId, column], foreignColumns: [reportDocuments.organizationId, reportDocuments.id] })),
   check('template_version_state', sql`(${t.status} in ('draft', 'building') and ${t.frozenAt} is null and ${t.frozenBy} is null) or (${t.status} = 'frozen' and ${t.frozenAt} is not null and ${t.frozenBy} is not null)`),
   check('template_snapshot_source', sql`(${t.snapshotSourceId} is null and ${t.snapshotSourceRevision} is null and ${t.status} <> 'building') or (${t.snapshotSourceId} is not null and ${t.snapshotSourceRevision} is not null and ${t.snapshotSourceRevision} > 0 and ${t.snapshotSourceId} <> ${t.id} and ${t.status} in ('building', 'frozen'))`),
   check('template_version_metadata', sql`${t.number} > 0 and ${t.revision} > 0 and length(trim(${t.name})) between 1 and 200 and length(${t.description}) <= 10000 and ${t.kind} in ('sample', 'datasheet', 'report', 'label', 'equipment_service_log') and ${t.semantics} = 'meteor-number-v1'`),

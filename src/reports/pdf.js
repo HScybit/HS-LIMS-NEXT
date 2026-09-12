@@ -47,9 +47,15 @@ export async function renderReportPdf({ html, printConfig, stylesheet }, { brows
     await page.setContent(html, { waitUntil: 'load', timeout: timeoutMs });
     await page.emulateMedia({ media: 'print' });
     await page.evaluate(async () => { await document.fonts.ready; });
+    if (blockedRequests) throw new HttpError(422, 'report_external_resource', 'The report contains a resource that has not been captured for printing.');
+    const decodedImages = await page.evaluate(async () => {
+      const decoded = await Promise.all([...document.images].map((image) => image.decode().then(() => true, () => false)));
+      return decoded.every(Boolean);
+    });
+    if (!decodedImages) throw new HttpError(409, 'report_image_unavailable', 'A captured report image could not be decoded for printing.');
     const chrome = await page.evaluate(() => {
       function extract(attribute) {
-        const elements = [...document.querySelectorAll(`[data-coa-report-body] > .template-render-canvas > [${attribute}="true"]`)];
+        const elements = [...document.querySelectorAll(`[data-coa-report-body] > [${attribute}="true"], [data-coa-report-body] > .template-render-canvas > [${attribute}="true"]`)];
         const html = elements.map((element) => element.outerHTML).join('');
         const height = elements.reduce((sum, element) => sum + Math.ceil(element.getBoundingClientRect().height), 0);
         elements.forEach((element) => element.remove());

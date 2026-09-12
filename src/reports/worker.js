@@ -17,8 +17,8 @@ export async function verifyReportWorkerRole(pool) {
 
 export function reportPdfFailure(error) {
   if (['42501', 'forbidden', 'workflow_action_denied'].includes(error.code)) return { code: 'report_print_permission_revoked', message: 'Report printing is no longer permitted for the requester.', retry: false };
-  if (['report_external_resource', 'report_pdf_size_limit', 'report_pdf_timeout'].includes(error.code)) return { code: error.code, message: error.message, retry: error.code === 'report_pdf_timeout' };
-  if (['report_not_found', 'report_history_unavailable', 'template_not_found', 'capture_not_found', 'template_batch_limit', 'capture_batch_limit', 'report_size_limit'].includes(error.code)) {
+  if (['report_external_resource', 'report_pdf_size_limit', 'report_pdf_timeout', 'report_asset_size_limit'].includes(error.code)) return { code: error.code, message: error.message, retry: error.code === 'report_pdf_timeout' };
+  if (['report_not_found', 'report_history_unavailable', 'report_asset_history_unavailable', 'report_image_unavailable', 'unsafe_report_html', 'template_not_found', 'capture_not_found', 'template_batch_limit', 'capture_batch_limit', 'report_size_limit'].includes(error.code)) {
     return { code: 'report_pdf_history_unavailable', message: 'The frozen report could not be loaded for printing.', retry: false };
   }
   return { code: 'report_pdf_failed', message: 'The report could not be rendered. Please try again later.', retry: true };

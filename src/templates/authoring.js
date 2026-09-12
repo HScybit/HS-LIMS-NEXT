@@ -156,7 +156,22 @@ async function changeRepeatGroup(client, db, base, records, model, { kind, id, e
 }
 
 export async function editTemplate(client, identity, versionId, expectedRevision, command) {
-  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader']);
+  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader', 'headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId']);
+  if (command.type === 'setReportAssets') {
+    requirePermission(identity, 'templates.manage'); uuid(versionId, 'Template version'); revision(expectedRevision);
+    const keys = ['headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId'];
+    fieldsOnly(command, ['type', ...keys]);
+    const values = Object.fromEntries(keys.map((key) => [key, command[key] == null ? null : uuid(command[key], 'Report asset').toLowerCase()]));
+    const options = (await client.query('SELECT * FROM report_document_options()')).rows;
+    for (const key of keys) if (values[key] && !options.some((option) => option.id === values[key] && option.type === (key.toLowerCase().includes('header') ? 'header' : 'footer'))) {
+      throw new HttpError(422, 'report_asset_unavailable', 'Select an available header or footer from this organization.');
+    }
+    const updated = await client.query(`UPDATE template_versions SET revision=revision+1,header_document_id=$4,footer_document_id=$5,nabl_header_document_id=$6,nabl_footer_document_id=$7
+      WHERE organization_id=$1 AND id=$2 AND revision=$3 AND status='draft' RETURNING id`,
+    [identity.organization_id, versionId, expectedRevision, ...keys.map((key) => values[key])]);
+    if (!updated.rowCount) throw new HttpError(409, 'stale_template', 'This template changed or was frozen. Reload before saving.');
+    return loadDefinition(client, identity.organization_id, versionId);
+  }
   let details;
   if (command.type === 'editDetails') {
     fieldsOnly(command, ['type', 'name', 'description']);
@@ -294,7 +309,9 @@ export async function createDraft(client, identity, sourceVersionId) {
   const versionId = randomUUID();
   const db = database(client);
   await db.insert(t.templateVersions).values({ organizationId: identity.organization_id, id: versionId, templateId: records.version.templateId, number: existing.rows[0].number + 1,
-    name: records.version.name, description: records.version.description, kind: records.version.kind, templateType: records.version.templateType, sourceVersionId, createdBy: identity.user_id });
+    name: records.version.name, description: records.version.description, kind: records.version.kind, templateType: records.version.templateType, sourceVersionId, createdBy: identity.user_id,
+    headerDocumentId: records.version.headerDocumentId, footerDocumentId: records.version.footerDocumentId,
+    nablHeaderDocumentId: records.version.nablHeaderDocumentId, nablFooterDocumentId: records.version.nablFooterDocumentId });
   await copyDefinition(db, records, identity.organization_id, versionId);
   return { templateId: records.version.templateId, versionId, revision: 1 };
 }

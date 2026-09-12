@@ -3,6 +3,6 @@ import nextVitals from 'eslint-config-next/core-web-vitals';
 
 export default defineConfig([
   ...nextVitals,
-  globalIgnores(['.next/**', 'node_modules/**', '.local-migration/**', '.local/**', 'test-results/**', 'playwright-report/**', 'drizzle/meta/**']),
+  globalIgnores(['.next/**', 'node_modules/**', '.local-migration/**', '.local/**', 'test-results/**', 'playwright-report/**', 'drizzle/meta/**', 'public/ckeditor/**']),
   { rules: { '@next/next/no-img-element': 'off' } },
 ]);

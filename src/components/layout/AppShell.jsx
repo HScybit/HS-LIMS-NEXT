@@ -18,7 +18,8 @@ export default function AppShell({ identity, children }) {
   const isCoa = /^\/samples\/[a-f\d-]+\/coa$/i.test(pathname);
   const pageLabel = pathname.includes('/data_sheets/') ? 'Add Results' : pathname.includes('/test_requests/') ? 'Test Request'
     : pathname.startsWith('/samples') ? 'Samples' : pathname.startsWith('/master_template_management') ? 'Master Templates'
-      : pathname === '/organization_settings' || pathname.startsWith('/administration/') ? 'Organization Settings' : 'My Account';
+      : pathname === '/header_management' ? 'Headers' : pathname === '/footer_management' ? 'Footers'
+        : pathname === '/organization_settings' || pathname.startsWith('/administration/') ? 'Organization Settings' : 'My Account';
   const [collapsed, setCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);

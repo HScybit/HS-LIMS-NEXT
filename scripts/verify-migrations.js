@@ -8,7 +8,7 @@ import { createAccount } from '../tests/helpers/database.js';
 import { signIn, withSession } from '../src/auth/service.js';
 import { closePool, getPool } from '../src/db/pool.js';
 import { createAnalyticalTemplate } from '../tests/helpers/templates.js';
-import { freezeTemplate } from '../src/templates/authoring.js';
+import { freezeTemplate, editTemplate } from '../src/templates/authoring.js';
 import { createCapture, saveCapture } from '../src/templates/capture.js';
 import { loadCapture, loadDefinition } from '../src/templates/loader.js';
 import { createLaboratoryFixture } from '../tests/helpers/laboratory.js';
@@ -20,10 +20,12 @@ import { allocateTestRequest } from '../src/test-requests/allocate.js';
 import { prepareReportFlow } from '../tests/helpers/report-flow.js';
 import { prepareSubjectJob } from '../tests/helpers/job-subjects.js';
 import { createReportTemplate } from '../tests/helpers/reports.js';
+import { createReportAssets } from '../tests/helpers/report-assets.js';
+import { deleteReportDocument } from '../src/report-assets/documents.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
-import { generateReports } from '../src/reports/service.js';
+import { generateReports, loadReport } from '../src/reports/service.js';
 import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
 import { loadReportRenderer } from '../src/reports/renderer.js';
 import { createReportWorkerPool, verifyReportWorkerRole, processNextReportJob } from '../src/reports/worker.js';
@@ -65,7 +67,7 @@ try {
   const role = (await getPool().query('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')).rows[0];
   assert.deepEqual(role, { rolsuper: false, rolbypassrls: false });
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
-  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage'] });
+  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
   await withSession(session.token, async (client, identity) => {
     const template = await createAnalyticalTemplate(client, identity);
@@ -90,6 +92,11 @@ try {
     assert.equal(loaded.customerName, customer.name); assert.equal(loaded.products[0].tests[0].requestStatus, 'allocated');
   }, { csrfToken: session.csrfToken });
   const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true });
+  const assets = await withSession(session.token, async (client, identity) => {
+    const created = await createReportAssets(client, identity);
+    await editTemplate(client, identity, reportFlow.template.versionId, 1, created.command);
+    return created;
+  }, { csrfToken: session.csrfToken });
   const generationInput = { ...reportFlow.input, finalizeSample: true };
   const generated = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, generationInput), { csrfToken: session.csrfToken });
   assert.equal(generated.items[0].isFinalized, true);
@@ -97,6 +104,10 @@ try {
   const retried = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, generationInput), { csrfToken: session.csrfToken });
   assert.equal(retried.replayed, true); assert.equal(retried.sample.revision, 2);
   const reportId = generated.items[0].id;
+  await withSession(session.token, (client, identity) => deleteReportDocument(client, identity, assets.header.id, { requestId: randomUUID(), revision: 1 }), { csrfToken: session.csrfToken });
+  const captured = await withSession(session.token, (client, identity) => loadReport(client, identity, reportId), { readOnly: true });
+  assert.equal(captured.assets.header.versionId, assets.header.versionId);
+  assert.ok(captured.assets.header.html.includes(`data:image/png;base64,${assets.content.toString('base64')}`));
   const queued = await withSession(session.token, (client, identity) => enqueueReportPdf(client, identity, reportId), { csrfToken: session.csrfToken });
   worker = createReportWorkerPool(workerUrl.href); await verifyReportWorkerRole(worker);
   assert.equal((await worker.query('SELECT id FROM sample_reports')).rowCount, 0);

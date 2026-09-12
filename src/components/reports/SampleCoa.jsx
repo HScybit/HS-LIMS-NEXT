@@ -12,7 +12,7 @@ import MoreActionButton from '../ui/MoreActionButton.jsx';
 import StatusPill from '../ui/StatusPill.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
 import { AppLoader } from '../ui/AppLoader.jsx';
-import TemplateCanvas from '../templates/TemplateCanvas.jsx';
+import ReportContent from './ReportContent.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import { defaultPrintSettings } from '../../reports/input.js';
 import { ParameterSelectionModal, PrintConfigModal } from './ReportModals.jsx';
@@ -139,7 +139,7 @@ export default function SampleCoa({ sampleId }) {
       <section className="finalised-report-preview">{previewError ? <div className="alert alert-danger" role="alert">{previewError}<button type="button" className="btn btn-link" onClick={() => setReload((value) => value + 1)}>Retry</button></div>
         : !activePreview ? <div className="finalised-report-preview__placeholder">Loading selected report...</div>
           : <div className="finalised-report-preview__scroll"><article className="finalised-report-preview__paper coa-pdf-document coa-printable non_nabl_mode" aria-label={selectedReport.reportNumber}>
-            <div className="finalised-report-preview__body coa-print-body" data-coa-report-body><TemplateCanvas model={activePreview.model} mode="view" report={activePreview} /></div>
+            <ReportContent report={activePreview} className="finalised-report-preview__body" />
           </article></div>}</section>
     </main>}
     {modal === 'parameters' ? <ParameterSelectionModal products={options.products} selectedIds={selectedTestIds} onClose={() => setModal(null)} onSave={(ids) => { setSelectedTestIds(ids); setModal(null); }} /> : null}

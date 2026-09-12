@@ -533,6 +533,41 @@
       "when": 1789206757476,
       "tag": "0075_report_finalisation_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1789209752547,
+      "tag": "0076_immutable_report_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1789210115688,
+      "tag": "0077_versioned_report_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1789210508439,
+      "tag": "0078_report_document_image_validation",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1789211350646,
+      "tag": "0079_frozen_report_asset_bindings",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1789212856099,
+      "tag": "0080_consistent_report_asset_capture",
+      "breakpoints": true
     }
   ]
 }

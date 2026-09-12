@@ -14,6 +14,7 @@ const bundled = await build({ entryPoints: ['src/reports/renderer-entry.js'], bu
 });
 const sources = ['src/styles/design-system.scss', 'src/styles/custom.scss', 'src/styles/form-controls.scss', 'src/styles/checkbox.scss', 'src/styles/template-designer.scss'];
 const styles = [await readFile('node_modules/bootstrap/dist/css/bootstrap.min.css', 'utf8')];
+styles.push(await readFile('public/ckeditor/ckeditor5-content.css', 'utf8'));
 for (const source of sources) styles.push(compile(source, { style: 'compressed', quietDeps: true }).css);
 for (const weight of [400, 500, 600]) {
   const font = await readFile(`node_modules/@fontsource/inter/files/inter-latin-${weight}-normal.woff2`);
