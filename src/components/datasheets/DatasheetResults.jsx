@@ -10,7 +10,8 @@ import { AppLoader } from '../ui/AppLoader.jsx';
 import TemplateCanvas from '../templates/TemplateCanvas.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import { createCaptureAutosave } from '../../datasheets/autosave.js';
-import { valueKey, valuePayload } from '../../templates/calculations.js';
+import { valueKey, capturedInputValue } from '../../templates/calculations.js';
+import { resolveResultInput } from '../../templates/defaults.js';
 import '../../styles/template-designer.scss';
 import '../../styles/tr-details-page.scss';
 
@@ -40,7 +41,7 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
     const nextValues = indexedValues(result.values);
     for (const [key, input] of drafts.current) {
       const saved = nextValues[key];
-      if (saved?.state === input.state && (valuePayload(saved) ?? null) === (input.value ?? null)) drafts.current.delete(key);
+      if (saved?.state === input.state && (capturedInputValue(saved) ?? null) === (input.value ?? null)) drafts.current.delete(key);
       else nextValues[key] = draftValue(current.current.model.fieldsById[input.fieldId], input);
     }
     const next = { ...current.current, validation: result.validation, capture: { ...current.current.capture, revision: result.revision, values: result.values } };
@@ -74,17 +75,22 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
     if (ready) performance.measure('datasheet:data-to-commit', { start: ready.startTime, end: performance.now() });
   }, [data]);
 
-  const persistInput = useCallback(async (input) => {
-    const result = await autosave.commit(input);
+  const persistInput = useCallback(async (input, { force = false } = {}) => {
+    const field = current.current?.model.fieldsById[input.fieldId];
+    input = resolveResultInput(field, input);
+    const key = valueKey(input.fieldId, input.occurrenceId);
+    drafts.current.set(key, input);
+    setValues((previous) => ({ ...previous, [key]: draftValue(field, input) }));
+    const result = await autosave.commit(input, { force });
     if (result === false) {
-      const key = valueKey(input.fieldId, input.occurrenceId); const pending = drafts.current.get(key);
+      const pending = drafts.current.get(key);
       if (pending?.state === input.state && (pending.value ?? null) === (input.value ?? null)) drafts.current.delete(key);
     }
     return result;
   }, [autosave]);
 
   const flushPending = useCallback(async () => {
-    await Promise.allSettled([...drafts.current.values()].map(persistInput));
+    await Promise.allSettled([...drafts.current.values()].map((input) => persistInput(input)));
     await autosave.flush();
   }, [autosave, persistInput]);
 
@@ -129,7 +135,7 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
   const commit = useCallback((fieldId, occurrenceId, value) => {
     if (operation.current || !current.current?.canExecute) return;
     const input = inputFor(fieldId, occurrenceId, value);
-    void persistInput(input).catch((failure) => { if (active.current) setError(failure.message); });
+    void persistInput(input, { force: current.current.model.fieldsById[fieldId].widget === 'result_widget' }).catch((failure) => { if (active.current) setError(failure.message); });
   }, [persistInput]);
 
   function done() {

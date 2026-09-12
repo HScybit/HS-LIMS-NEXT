@@ -11,6 +11,7 @@ import { requirePermission, uuid, revision, fieldsOnly, decimal, bool, dateOnly,
 import { setCaptureContext, requireCaptureWrite } from './access.js';
 import { assertCaptureSize } from './runtime-limits.js';
 import { agreedResultNumber, agreedResultValue, recordJobResultEntries } from '../datasheets/job-results.js';
+import { resolveResultInput } from './defaults.js';
 
 function storedValues(identity, instance, versionId, nextRevision, values) {
   return values.map((value) => ({ ...value, organizationId: identity.organization_id, instanceId: instance.id, versionId,
@@ -27,7 +28,7 @@ function defaults(model, occurrences) {
   }
   return occurrences.flatMap((occurrence) => (fieldsByGroup.get(occurrence.groupId ?? null) ?? []).map((field) => ({
     fieldId: field.id, occurrenceId: occurrence.id, valueType: field.valueType, state: field.defaultState, origin: 'default',
-    numberValue: field.defaultNumber, textValue: field.defaultText, booleanValue: field.defaultBoolean, dateValue: field.defaultDate,
+    numberValue: field.defaultNumber, textValue: field.defaultText, booleanValue: field.defaultBoolean, dateValue: field.defaultDate, lexical: field.defaultLexical,
   })));
 }
 
@@ -69,11 +70,10 @@ function enteredValue(model, occurrences, input) {
   if (!field || !occurrence || (field.repeatGroupId ?? null) !== (occurrence.groupId ?? null)) throw new HttpError(400, 'invalid_capture_field', 'Field does not belong to this capture occurrence.');
   if (field.widget === 'formula_widget' || isContextWidget(field.widget) || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
   if (!['present', 'empty', 'absent'].includes(input.state)) throw new HttpError(400, 'invalid_value_state', 'Select a supported value state.');
+  if (input.state !== 'present' && input.value !== undefined && input.value !== null && input.value !== '') throw new HttpError(400, 'unexpected_value', 'An empty or absent value cannot include a payload.');
+  input = resolveResultInput(field, input);
   const result = { fieldId: field.id, occurrenceId: occurrence.id, valueType: field.valueType, state: input.state, origin: 'entered' };
-  if (input.state !== 'present') {
-    if (input.value !== undefined && input.value !== null && input.value !== '') throw new HttpError(400, 'unexpected_value', 'An empty or absent value cannot include a payload.');
-    return result;
-  }
+  if (input.state !== 'present') return result;
   if (field.valueType === 'numeric') { result.numberValue = field.widget === 'result_widget' ? agreedResultNumber(field, input.value) : decimal(input.value, 'Value'); result.lexical = String(input.value); }
   if (field.valueType === 'result') Object.assign(result, agreedResultValue(field, input.value));
   if (field.valueType === 'text') {

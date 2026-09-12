@@ -9,6 +9,7 @@ import { parseExpression } from './expressions.js';
 import { cloneLayout, layoutSelection } from './layout.js';
 import { widgetTypes, requirePermission, uuid, revision, text, integer, bool, decimal, ownRecord, fieldsOnly } from './input.js';
 import { contextWidgetFields, isContextWidget } from './context-widgets.js';
+import { fieldDefaultValue, resultDefaultFields } from './defaults.js';
 
 const scope = (table, org, versionId) => and(eq(table.organizationId, org), eq(table.versionId, versionId));
 const identityColumns = (identity, versionId) => ({ organizationId: identity.organization_id, versionId });
@@ -68,7 +69,7 @@ async function saveExpression(db, base, model, field, purpose, formula) {
 }
 
 async function configureField(db, base, model, command) {
-  fieldsOnly(command, ['type', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'sourceField', 'serialPadding']);
+  fieldsOnly(command, ['type', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'sourceField', 'serialPadding', 'defaultValue']);
   const column = ownRecord(model.columnsById, command.columnId, 'Column');
   if (column.childSectionIds.length) throw new HttpError(400, 'column_has_children', 'Remove the nested container before adding a widget.');
   if (!Object.hasOwn(widgetTypes, command.widget)) throw new HttpError(400, 'unsupported_widget', 'This widget type is not supported.');
@@ -89,13 +90,23 @@ async function configureField(db, base, model, command) {
     placeholder: text(command.placeholder, 'Placeholder', 1000, { optional: true }), required: bool(command.required ?? false, 'Required'), editable: bool(command.editable ?? false, 'Editable'),
     sourceField, serialPadding,
   };
+  let config;
+  if (['numeric', 'result'].includes(field.valueType)) {
+    config = { ...base, fieldId: field.id, valueType: field.valueType, displayScale: command.displayScale == null || command.displayScale === '' ? null : integer(command.displayScale, 'Decimal points', 0, 100),
+      padDecimals: bool(command.padDecimals ?? false, 'Show decimal points'), minimum: decimal(command.minimum, 'Minimum', { optional: true }), maximum: decimal(command.maximum, 'Maximum', { optional: true }) };
+    if (config.minimum !== null && config.maximum !== null && Number(config.minimum) > Number(config.maximum)) throw new HttpError(400, 'invalid_bounds', 'Minimum cannot exceed maximum.');
+  }
+  if (command.defaultValue !== undefined) {
+    if (field.widget !== 'result_widget') throw new HttpError(400, 'unsupported_default', 'Default configuration is not available for this widget.');
+    Object.assign(field, resultDefaultFields({ ...field, numeric: config }, command.defaultValue));
+  } else if (field.widget === 'result_widget' && previous?.defaultState === 'present') {
+    // A bounds/precision edit cannot publish a default that the new field rejects.
+    resultDefaultFields({ ...field, numeric: config }, fieldDefaultValue(previous));
+  }
   if (previous) await db.update(t.templateFields).set(field).where(and(scope(t.templateFields, base.organizationId, base.versionId), eq(t.templateFields.id, field.id)));
   else await db.insert(t.templateFields).values(field);
   model.fieldsById[field.id] = { ...previous, ...field };
-  if (['numeric', 'result'].includes(field.valueType)) {
-    const config = { ...base, fieldId: field.id, valueType: field.valueType, displayScale: command.displayScale == null || command.displayScale === '' ? null : integer(command.displayScale, 'Decimal points', 0, 100),
-      padDecimals: bool(command.padDecimals ?? false, 'Show decimal points'), minimum: decimal(command.minimum, 'Minimum', { optional: true }), maximum: decimal(command.maximum, 'Maximum', { optional: true }) };
-    if (config.minimum !== null && config.maximum !== null && Number(config.minimum) > Number(config.maximum)) throw new HttpError(400, 'invalid_bounds', 'Minimum cannot exceed maximum.');
+  if (config) {
     await db.insert(t.templateNumericConfig).values(config).onConflictDoUpdate({ target: [t.templateNumericConfig.organizationId, t.templateNumericConfig.versionId, t.templateNumericConfig.fieldId], set: config });
   }
   if (field.valueType === 'option') {
@@ -156,7 +167,7 @@ async function changeRepeatGroup(client, db, base, records, model, { kind, id, e
 }
 
 export async function editTemplate(client, identity, versionId, expectedRevision, command) {
-  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader', 'headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId']);
+  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader', 'headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId', 'defaultValue']);
   if (command.type === 'setReportAssets') {
     requirePermission(identity, 'templates.manage'); uuid(versionId, 'Template version'); revision(expectedRevision);
     const keys = ['headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId'];

@@ -105,3 +105,54 @@ test('retry cannot transfer pending values into another capture while waiting fo
   assert.deepEqual(requests, ['old']);
   assert.deepEqual(autosave.snapshot().pending, []);
 });
+
+test('an explicit unchanged result records one entry while its simultaneous flush shares the same write', async () => {
+  const pending = deferred(); const requests = [];
+  const autosave = createCaptureAutosave(async (_instanceId, payload) => {
+    requests.push(payload); await pending.promise;
+    return response(payload.revision + 1, payload.values[0]);
+  });
+  autosave.reset('capture', 1, response(1, input('result', 'Not detected')).values);
+  const entry = autosave.commit(input('result', 'Not detected'), { force: true });
+  const flushEntry = autosave.commit(input('result', 'Not detected'));
+  assert.equal(entry, flushEntry);
+  pending.resolve(); await entry; await autosave.flush();
+  assert.equal(requests.length, 1); assert.equal(autosave.snapshot().revision, 2);
+  assert.equal(await autosave.commit(input('result', 'Not detected')), false);
+  await autosave.commit(input('result', 'Not detected'), { force: true });
+  assert.equal(requests.length, 2);
+});
+
+test('retry preserves a failed explicit entry even when its value equals the stored default', async () => {
+  let fail = true; let writes = 0;
+  const autosave = createCaptureAutosave(async (_instanceId, payload) => {
+    writes += 1; if (fail) throw new Error('Offline');
+    return response(payload.revision + 1, payload.values[0]);
+  });
+  autosave.reset('capture', 1, response(1, input('result', '0')).values);
+  const entry = autosave.commit(input('result', '0'), { force: true });
+  const flushEntry = autosave.commit(input('result', '0'));
+  assert.equal(entry, flushEntry);
+  await assert.rejects(entry, /Offline/);
+  await assert.rejects(autosave.flush(), /Offline/);
+  await assert.rejects(autosave.commit(input('result', '0')), /Offline/);
+  fail = false; await autosave.retry();
+  assert.equal(writes, 3); assert.equal(autosave.snapshot().revision, 2);
+  assert.deepEqual(autosave.snapshot().pending, []);
+});
+
+test('numeric result spelling remains stable through save and reset without another automatic entry', async () => {
+  let writes = 0;
+  const stored = { fieldId: 'result', occurrenceId: 'root', state: 'present', valueType: 'result', numberValue: '0.00', lexical: '000.00' };
+  const autosave = createCaptureAutosave(async (_instanceId, payload) => {
+    writes += 1;
+    return { revision: payload.revision + 1, values: [stored] };
+  });
+  autosave.reset('capture', 1, [stored]);
+  assert.equal(await autosave.commit(input('result', '000.00')), false);
+  await autosave.commit(input('result', '000.00'), { force: true });
+  assert.equal(await autosave.commit(input('result', '000.00')), false);
+  autosave.reset('capture', 2, [stored]);
+  assert.equal(await autosave.commit(input('result', '000.00')), false);
+  assert.equal(writes, 1); assert.deepEqual(autosave.snapshot().pending, []);
+});

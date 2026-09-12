@@ -5,10 +5,11 @@ import AppIcon from '../ui/AppIcon.jsx';
 import ActionButtonGroup from '../ui/ActionButtonGroup.jsx';
 import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
-import { displayValue, valuePayload, valueKey } from '../../templates/calculations.js';
+import { displayValue, valuePayload, capturedInputValue, valueKey } from '../../templates/calculations.js';
 import { indexOccurrences } from '../../templates/occurrences.js';
 import { assertCaptureSize } from '../../templates/runtime-limits.js';
 import { contextWidgetPreview, contextWidgetValue, isContextWidget } from '../../templates/context-widgets.js';
+import { fieldDefaultValue } from '../../templates/defaults.js';
 
 export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, occurrenceId, validation, disabled = false, report, parameter, serialNumber }) {
   const plan = mode === 'plan';
@@ -22,13 +23,16 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
   if (field.widget === 'checkbox_widget') return <Checkbox checked={Boolean(shown)} disabled={!edit || disabled} aria-label={label} onChange={edit ? (next) => { onChange?.(field.id, occurrenceId, next); onCommit?.(field.id, occurrenceId, next); } : undefined} />;
   if (!plan && !edit) return <div>{String(shown ?? '')}</div>;
   const inputProps = { 'aria-label': label, disabled: plan || disabled, placeholder: field.placeholder || (plan ? 'This is placeholder' : ''),
-    value: edit ? valuePayload(value) ?? '' : shown ?? '',
+    value: edit ? (field.widget === 'result_widget' ? capturedInputValue(value) : valuePayload(value)) ?? '' : shown ?? '',
     onChange: edit ? (event) => onChange?.(field.id, occurrenceId, event.currentTarget.value) : undefined,
     onBlur: edit ? (event) => onCommit?.(field.id, occurrenceId, event.currentTarget.value) : undefined };
   let type = 'text';
   if (field.widget === 'paragraph_widget') type = 'textarea';
   if (field.widget === 'number_widget') { inputProps.type = 'number'; inputProps.step = 'any'; }
-  if (field.widget === 'result_widget') inputProps.className = 'result_widget form-control-solid task-input';
+  if (field.widget === 'result_widget') {
+    inputProps.className = 'result_widget form-control-solid task-input';
+    if (!plan) inputProps.placeholder = fieldDefaultValue(field) !== null ? '' : field.placeholder || 'Enter value';
+  }
   if (field.widget === 'datepicker_widget') inputProps.type = 'date';
   if (field.widget === 'dropdown_widget') {
     type = 'dropdown'; inputProps.value = value?.optionId ?? '';
@@ -36,7 +40,12 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
     inputProps.onBlur = undefined;
     inputProps.onChange = edit ? (event) => { onChange?.(field.id, occurrenceId, event.target.value); onCommit?.(field.id, occurrenceId, event.target.value); } : undefined;
   }
-  return <FormElement type={type} className="mb-0" inputProps={inputProps} message={validation?.errors[0]?.message} messageTone="error" />;
+  const hasResultDefault = edit && field.widget === 'result_widget' && fieldDefaultValue(field) !== null;
+  const control = <FormElement type={type} className={hasResultDefault ? 'mb-0 w-100' : 'mb-0'} inputProps={inputProps} message={validation?.errors[0]?.message} messageTone="error" />;
+  if (hasResultDefault) return <div className="input-group mb-0">{control}
+    <small className="text-muted w-100" style={{ fontSize: '10px', marginTop: 2 }}>Default value · Enter &quot;-&quot; for blank</small>
+  </div>;
+  return control;
 });
 
 function MoveButton({ kind, id, direction, icon, label, onCommand, disabled }) {

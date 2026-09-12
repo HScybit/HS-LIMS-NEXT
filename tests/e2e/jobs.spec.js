@@ -152,6 +152,80 @@ test('job parameter labels stay with separate values through measurement clones,
   expect(saved.datasheet.status).toBe('in_progress'); expect(errors).toEqual([]);
 });
 
+test('source result defaults survive editor retries and record unchanged entries only after analyst blur', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  const user = await createAccount(owner, { permissions: ['samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'templates.read', 'templates.manage', 'settings.manage'] });
+  Object.assign(user, await signIn({ identifier: user.username, password: user.password }));
+  const flow = await prepareSubjectJob(owner, user, user, { resultWidget: true, resultValueType: 'result', resultDefaultValue: '000.00' });
+  const errors = []; page.on('pageerror', (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/login');
+  await page.getByLabel('Username', { exact: true }).fill(user.username);
+  await page.getByLabel('Password', { exact: true }).fill(user.password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/me$/);
+  await page.goto(`/master_template_management/${flow.template.templateId}`);
+  const definitionResponse = await page.request.get(`/api/templates/${flow.template.templateId}`);
+  expect(definitionResponse.status()).toBe(200);
+  const definition = await definitionResponse.json();
+  const field = Object.values(definition.model.fieldsById).find((item) => item.widget === 'result_widget');
+  const column = page.locator(`[data-col-id="${field.columnId}"]`);
+  const dialog = page.getByRole('dialog', { name: 'Widget Configuration', exact: true });
+  async function openDefaults() {
+    await page.getByRole('button', { name: 'Edit Mode Off', exact: true }).click();
+    await column.locator('.action-dropdown-toggle').click();
+    await page.getByRole('menuitem', { name: 'Widget', exact: true }).click();
+  }
+  await openDefaults();
+  await expect(dialog.getByLabel('Default Value', { exact: true })).toHaveValue('000.00');
+  await expect(dialog).toContainText('Use "-" to keep this default as blank / null.');
+  await dialog.getByLabel('Default Value', { exact: true }).fill('Not detected');
+  await dialog.getByLabel('Placeholder', { exact: true }).fill('Enter observed result');
+  const templateRoute = `**/api/template-versions/${flow.template.versionId}`;
+  await page.route(templateRoute, (route) => route.request().method() === 'PATCH'
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Synthetic default editor interruption' } }) }) : route.continue());
+  await dialog.getByRole('button', { name: 'Update data', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Synthetic default editor interruption' })).toBeVisible();
+  await expect(dialog.getByLabel('Default Value', { exact: true })).toHaveValue('Not detected');
+  await page.screenshot({ path: testInfo.outputPath('result-default-editor-desktop.png'), fullPage: true, animations: 'disabled' });
+  await page.unroute(templateRoute);
+  await dialog.getByRole('button', { name: 'Update data', exact: true }).click(); await expect(dialog).toBeHidden();
+  await page.reload(); await openDefaults();
+  await expect(dialog.getByLabel('Default Value', { exact: true })).toHaveValue('Not detected');
+  await expect(dialog.getByLabel('Placeholder', { exact: true })).toHaveValue('Enter observed result');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.goto(`/samples/${flow.sample.id}/data_sheets/${flow.job.datasheetId}`);
+  const results = page.getByRole('textbox', { name: 'entered_result', exact: true });
+  await expect(results).toHaveCount(2);
+  for (const result of await results.all()) await expect(result).toHaveValue('000.00');
+  await expect(page.getByText('Default value · Enter "-" for blank', { exact: true })).toHaveCount(2);
+  const entryCount = async () => (await owner.query('SELECT count(*)::integer AS count FROM job_result_entries WHERE organization_id=$1 AND datasheet_id=$2', [user.organizationId, flow.job.datasheetId])).rows[0].count;
+  expect(await entryCount()).toBe(0);
+  const valuesPath = `/api/datasheets/${flow.job.datasheetId}/values`; const valuesRoute = `**${valuesPath}`;
+  await page.route(valuesRoute, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Synthetic default entry interruption' } }) }));
+  await results.first().focus(); await page.getByRole('button', { name: 'Calculate', exact: true }).click();
+  await expect(page.locator('.tr-details-results-page').getByRole('alert')).toContainText('Synthetic default entry interruption');
+  expect(await entryCount()).toBe(0); await expect(results.first()).toHaveValue('000.00');
+  await page.unroute(valuesRoute);
+  const retried = page.waitForResponse((response) => response.url().endsWith(valuesPath) && response.request().method() === 'PATCH');
+  await page.getByRole('button', { name: 'Retry save', exact: true }).click(); expect((await retried).status()).toBe(200);
+  await expect(page.getByRole('button', { name: 'Calculate', exact: true })).toBeEnabled();
+  await expect(page.locator('.tr-details-results-page').getByRole('alert')).toHaveCount(0);
+  expect(await entryCount()).toBe(1);
+  await page.reload(); await expect(results.first()).toHaveValue('000.00');
+  const fallbackSaved = page.waitForResponse((response) => response.url().endsWith(valuesPath) && response.request().method() === 'PATCH');
+  await results.nth(1).fill('   '); await page.getByRole('button', { name: 'Calculate', exact: true }).click();
+  expect((await fallbackSaved).status()).toBe(200);
+  await expect(page.getByRole('button', { name: 'Calculate', exact: true })).toBeEnabled();
+  await expect(results.nth(1)).toHaveValue('000.00'); expect(await entryCount()).toBe(2);
+  await page.screenshot({ path: testInfo.outputPath('result-default-capture-desktop.png'), fullPage: true, animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.lims-main')).toHaveCSS('margin-left', '0px');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('result-default-capture-mobile.png'), fullPage: true, animations: 'disabled' });
+  expect(errors).toEqual([]);
+});
+
 for (const [resultValueType, secondResult] of [['numeric', '4.20'], ['result', 'Not detected']]) {
   test(`${resultValueType} group results survive failures and retain their parent decision in child activity and the certificate`, async ({ page }, testInfo) => {
     test.setTimeout(60_000);

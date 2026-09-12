@@ -21,6 +21,11 @@ export function valuePayload(value) {
   return ({ numeric: value.numberValue, text: value.textValue, boolean: value.booleanValue, date: value.dateValue, option: value.optionId })[value.valueType];
 }
 
+export function capturedInputValue(value) {
+  const payload = valuePayload(value);
+  return payload != null && value.numberValue != null ? value.lexical ?? payload : payload;
+}
+
 // Shared client/server evaluation; persisted calculations are always recomputed on the server.
 export function calculateCapture(model, occurrences, savedValues) {
   if (occurrences.length > 5000) throw new ExpressionError('repeat_limit', 'Capture exceeds the supported repeat count.');
@@ -145,6 +150,7 @@ export function displayValue(field, value) {
   if (!value || value.state === 'absent' || value.state === 'empty') return '';
   if (value.state === 'not_applicable') return 'NA';
   if (value.state === 'invalid') return '';
+  if (field.widget === 'result_widget') return capturedInputValue(value);
   const payload = valuePayload(value);
   if (['numeric', 'result'].includes(field.valueType) && value.numberValue != null) return formatValueWithDecimalPoints(payload, field.numeric?.displayScale, field.numeric?.padDecimals);
   if (field.valueType === 'option') return field.options.find((option) => option.id === payload)?.label ?? '';

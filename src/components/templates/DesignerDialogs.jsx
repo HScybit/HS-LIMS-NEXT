@@ -9,6 +9,7 @@ import SecondaryButton from '../ui/SecondaryButton.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
 import { widgetTypes } from '../../templates/input.js';
 import { contextWidgetFields, isContextWidget } from '../../templates/context-widgets.js';
+import { fieldDefaultValue } from '../../templates/defaults.js';
 
 const widgetOptions = Object.keys(widgetTypes).map((value) => ({ value, label: value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase()) })).sort((a, b) => a.label.localeCompare(b.label));
 
@@ -25,6 +26,7 @@ export function DesignerModal({ panel, model, onClose, onCommand, busy }) {
     if (panel.type === 'widget') return { type: 'configureField', columnId: column.id, widget: field.widget, alias: field.alias, label: field.label, placeholder: field.placeholder, required: field.required, editable: field.editable,
       displayScale: field.numeric?.displayScale ?? '', padDecimals: field.numeric?.padDecimals ?? false, minimum: field.numeric?.minimum ?? '', maximum: field.numeric?.maximum ?? '',
       sourceField: field.sourceField ?? null, serialPadding: field.serialPadding ?? null,
+      ...(field.widget === 'result_widget' ? { defaultValue: fieldDefaultValue(field) ?? '' } : {}),
       ...(field.widget === 'formula_widget' ? { formula: field.formula ?? '' } : {}), options: field.options.map((option) => option.value) };
     if (panel.type === 'column') return { type: 'configureColumn', id: column.id, span: column.span, cssClass: column.cssClass || 'col', widget: field?.widget || 'text_widget', isFinalResult: column.isFinalResult };
     if (panel.type === 'sectionSettings') return { type: 'configureSection', id: section.id, name: section.name, cssClass: section.cssClass, visible: section.visible, isHeader: section.isHeader, isFooter: section.isFooter, isFinalResult: section.isFinalResult, isParameterLoop: section.isParameterLoop, isParameterLoopHeader: section.isParameterLoopHeader };
@@ -49,7 +51,9 @@ export function DesignerModal({ panel, model, onClose, onCommand, busy }) {
           {form.widget === 'text_widget' ? input('label', 'Title') : null}{input('alias', 'Key')}
           {isContextWidget(form.widget) && contextWidgetFields[form.widget].length ? <FormElement type="searchable-select" label={form.widget === 'sample_details_widget_v2' ? 'Sample Attribute' : 'Data Field'} inputProps={{ value: form.sourceField ?? '', options: contextWidgetFields[form.widget].map((value) => ({ value, label: value.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()) })), placeholder: 'Select field', onChange: (value) => update('sourceField', value || null) }} /> : null}
           {form.widget === 'sno_widget' ? input('serialPadding', '0 Padding', 'text', { type: 'number', min: 0, max: 100, onChange: (event) => update('serialPadding', event.target.value === '' ? null : Number(event.target.value)) }) : null}
-          {['input_widget', 'number_widget', 'paragraph_widget'].includes(form.widget) ? input('placeholder', 'Placeholder') : null}
+          {['input_widget', 'number_widget', 'paragraph_widget', 'result_widget'].includes(form.widget) ? input('placeholder', 'Placeholder') : null}
+          {form.widget === 'result_widget' ? <FormElement type="text" label="Default Value" inputProps={{ value: form.defaultValue, placeholder: 'Default value', onChange: (event) => update('defaultValue', event.target.value) }}
+            helperText={<small className="text-muted">Use &quot;-&quot; to keep this default as blank / null.</small>} /> : null}
           {form.widget === 'text_widget' ? <Toggle label="Editable" checked={form.editable} onChange={(value) => update('editable', value)} /> : null}
           {form.widget === 'formula_widget' ? <>{input('formula', 'Formula', 'textarea')}{input('displayScale', 'Decimal Points', 'text', { type: 'number', min: 0, max: 100, onChange: (event) => update('displayScale', event.target.value === '' ? '' : Number(event.target.value)) })}<Toggle label="Show Decimal Points" checked={form.padDecimals} onChange={(value) => update('padDecimals', value)} /></> : null}
           {form.widget === 'dropdown_widget' ? <FormElement type="text" label="Comma Separated Options" inputProps={{ value: form.options.join(','), onChange: (event) => update('options', event.target.value.split(',').map((value) => value.trim())) }} /> : null}

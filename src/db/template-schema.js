@@ -96,12 +96,14 @@ export const templateFields = pgTable('template_fields', {
   label: text('label').notNull().default(''), placeholder: text('placeholder').notNull().default(''), required: boolean('required').notNull().default(false),
   editable: boolean('editable').notNull().default(false), defaultState: text('default_state').notNull().default('absent'),
   sourceField: text('source_field'), serialPadding: integer('serial_padding'),
-  defaultText: text('default_text'), defaultNumber: numeric('default_number'), defaultBoolean: boolean('default_boolean'), defaultDate: date('default_date', { mode: 'string' }),
+  defaultText: text('default_text'), defaultNumber: numeric('default_number'), defaultBoolean: boolean('default_boolean'), defaultDate: date('default_date', { mode: 'string' }), defaultLexical: text('default_lexical'),
 }, (t) => [versionKey(t), versionLink(t), logicalLink(t, t.columnId, templateColumns), logicalLink(t, t.repeatGroupId, templateRepeatGroups),
   unique('template_column_field_key').on(t.organizationId, t.versionId, t.columnId),
   unique('template_field_type_key').on(t.organizationId, t.versionId, t.id, t.valueType),
   index('template_fields_alias').on(t.organizationId, t.versionId, t.alias),
   check('template_field_alias', sql`${t.alias} ~ '^[A-Za-z0-9_]*$' and length(${t.alias}) <= 200`),
+  check('template_default_lexical', sql`${t.defaultLexical} is null or (${t.widget} = 'result_widget' and ${t.defaultState} = 'present' and ${t.defaultNumber} is not null and length(${t.defaultLexical}) between 1 and 1000
+    and case when ${t.defaultLexical} ~ '^-?[0-9]+([.][0-9]+)?$' then ${t.defaultNumber} = ${t.defaultLexical}::numeric else false end)`),
   check('template_widget_type', sql`(${t.widget} in ('text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'result_widget' and ${t.valueType} in ('numeric', 'result')) or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option')`),
   check('template_field_context', sql`(${t.sourceField} is null or
     (${t.widget} = 'sample_details_widget_v2' and ${t.sourceField} in ('sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'productName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference')) or

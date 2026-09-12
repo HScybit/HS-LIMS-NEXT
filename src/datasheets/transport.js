@@ -1,9 +1,10 @@
-// The runtime browser renders stored results; calculation trees and authoring
-// defaults stay on the server. All original definition/value history remains in SQL.
+// The runtime browser renders stored results without calculation trees. Result
+// defaults are needed for the source blur fallback and hint; history stays in SQL.
 const sectionKeys = ['id', 'name', 'parentColumnId', 'repeatGroupId', 'ownRepeatGroupId', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'isParameterLoop', 'isParameterLoopHeader', 'rowIds'];
 const rowKeys = ['id', 'sectionId', 'repeatGroupId', 'ownRepeatGroupId', 'cssClass', 'columnIds', 'serialNumber'];
 const columnKeys = ['id', 'rowId', 'span', 'cssClass', 'isFinalResult', 'fieldId', 'childSectionIds'];
 const fieldKeys = ['id', 'columnId', 'repeatGroupId', 'widget', 'valueType', 'alias', 'label', 'placeholder', 'required', 'editable', 'sourceField', 'serialPadding'];
+const resultDefaultKeys = ['defaultState', 'defaultNumber', 'defaultText', 'defaultLexical'];
 const numericKeys = ['displayScale', 'padDecimals', 'minimum', 'maximum'];
 const groupKeys = ['id', 'parentGroupId', 'sectionId', 'rowId', 'source', 'minimum', 'maximum'];
 const valueKeys = ['fieldId', 'occurrenceId', 'revision', 'valueType', 'state', 'origin', 'numberValue', 'textValue', 'booleanValue', 'dateValue', 'optionId', 'lexical', 'errorCode', 'errorMessage'];
@@ -22,6 +23,7 @@ export function datasheetTemplateView(model) {
     columnsById: map(model.columnsById, columnKeys), groupsById: map(model.groupsById, groupKeys),
     fieldsById: Object.fromEntries(Object.entries(model.fieldsById).map(([id, field]) => [id, {
       ...select(field, fieldKeys), numeric: field.numeric ? select(field.numeric, numericKeys) : null,
+      ...(field.widget === 'result_widget' ? select(field, resultDefaultKeys) : {}),
       options: field.options.map((option) => select(option, ['id', 'label', 'value'])),
     }])),
   };

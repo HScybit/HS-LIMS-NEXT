@@ -9,7 +9,7 @@ import { registerSample } from '../../src/samples/register.js';
 import { generateTestRequests } from '../../src/test-requests/generate.js';
 import { createTestRequestJobs } from '../../src/test-requests/jobs.js';
 
-export async function prepareSubjectJob(owner, creator, analyst, { manualParent = false, resultWidget = false, resultValueType = 'numeric', finalSection = false, jobWorkflowId = null } = {}) {
+export async function prepareSubjectJob(owner, creator, analyst, { manualParent = false, resultWidget = false, resultValueType = 'numeric', resultDefaultValue, finalSection = false, jobWorkflowId = null } = {}) {
   const source = await createLaboratoryFixture(owner, creator, { repeated: false });
   const client = await owner.connect();
   let template;
@@ -58,6 +58,12 @@ export async function prepareSubjectJob(owner, creator, analyst, { manualParent 
   const edited = await work((client, identity) => editTemplate(client, identity, template.versionId, 1,
     { type: 'configureSection', id: template.parameterSectionId, name: 'Analytical results', cssClass: '', visible: true, isHeader: false, isFooter: false, isFinalResult: finalSection, isParameterLoop: true }));
   template.revision = edited.model.version.revision;
+  if (resultDefaultValue !== undefined) {
+    const field = Object.values(edited.model.fieldsById).find((item) => item.widget === 'result_widget');
+    const configured = await work((client, identity) => editTemplate(client, identity, template.versionId, template.revision,
+      { type: 'configureField', columnId: field.columnId, widget: field.widget, alias: field.alias, defaultValue: resultDefaultValue, displayScale: 2 }));
+    template.revision = configured.model.version.revision;
+  }
   const settings = await work(loadLaboratorySettings);
   await work((client, identity) => saveLaboratorySettings(client, identity, { revision: settings.settings.revision,
     autoCreateJobs: false, resultSummaryTemplateId: template.templateId, jobWorkflowId }));

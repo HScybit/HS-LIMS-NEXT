@@ -9,9 +9,10 @@ import { pdfPageText } from '../helpers/pdf-page-text.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { loadDatasheet } from '../../src/datasheets/service.js';
-import { saveCapture, changeRepeat } from '../../src/templates/capture.js';
+import { saveCapture, changeRepeat, createCapture } from '../../src/templates/capture.js';
 import { requireCaptureWrite } from '../../src/templates/access.js';
-import { createTemplate, editTemplate } from '../../src/templates/authoring.js';
+import { createTemplate, editTemplate, createDraft, freezeTemplate } from '../../src/templates/authoring.js';
+import { loadDefinition, loadCapture } from '../../src/templates/loader.js';
 import { loadWorkflowRun } from '../../src/workflows/load.js';
 import { submitDatasheetTransition } from '../../src/workflows/requests.js';
 import { generateReports, loadReport } from '../../src/reports/service.js';
@@ -118,4 +119,71 @@ test('qualitative child results complete through the real workflow and remain ty
   await owner.query("UPDATE test_parameters SET name='Changed later qualitative parameter',revision=revision+1 WHERE organization_id=$1 AND id=$2", [account.organizationId, flow.source.parameter.id]);
   const later = await work((client, identity) => loadReport(client, identity, generated.items[0].id), { readOnly: true });
   assert.equal(renderer.renderReportDocument(later, renderer.stylesheet), html);
+});
+
+test('configured defaults and clones retain authored zero without selecting a child result until an actual commit', async () => {
+  const flow = await prepare({ manualParent: true, resultDefaultValue: '000.00' });
+  let sheet = await load(flow.job.datasheetId); const field = fieldOf(sheet);
+  const values = sheet.capture.values.filter((value) => value.fieldId === field.id);
+  assert.equal(field.defaultLexical, '000.00'); assert.equal(values.length, 4);
+  assert.ok(values.every((value) => value.origin === 'default' && value.numberValue === '0.00' && value.lexical === '000.00'));
+  const count = async () => (await owner.query('SELECT count(*)::integer AS count FROM job_result_entries WHERE organization_id=$1 AND datasheet_id=$2', [account.organizationId, sheet.datasheet.id])).rows[0].count;
+  assert.equal(await count(), 0);
+  const row = sheet.capture.occurrences.find((item) => item.subject);
+  const saved = await work((client, identity) => saveCapture(client, identity, sheet.capture.instance.id, sheet.capture.revision, [input(field, row, null)]));
+  assert.equal(await count(), 1);
+  const entered = saved.values.find((value) => value.fieldId === field.id && value.occurrenceId === row.id);
+  assert.equal(entered.origin, 'entered'); assert.equal(entered.lexical, '000.00');
+  const cloned = await work((client, identity) => changeRepeat(client, identity, sheet.capture.instance.id, saved.revision, { type: 'clone', occurrenceId: row.parentId, withData: false }));
+  const newIds = new Set(cloned.occurrences.filter((item) => !sheet.capture.occurrences.some((before) => before.id === item.id)).map((item) => item.id));
+  const copied = cloned.values.filter((value) => value.fieldId === field.id && newIds.has(value.occurrenceId));
+  assert.equal(copied.length, 2); assert.ok(copied.every((value) => value.origin === 'default' && value.lexical === '000.00'));
+  assert.equal(await count(), 1);
+  await work((client, identity) => editTemplate(client, identity, flow.template.versionId, flow.template.revision,
+    { type: 'configureField', columnId: field.columnId, widget: field.widget, alias: field.alias, defaultValue: 'Not detected' }));
+  sheet = await load(flow.job.datasheetId); assert.equal(fieldOf(sheet).defaultLexical, '000.00');
+});
+
+test('default history cannot be forged at a later revision or disagree with a new occurrence frozen default', async () => {
+  const flow = await prepare({ resultDefaultValue: 'Not detected' }); const sheet = await load(flow.job.datasheetId); const field = fieldOf(sheet);
+  const row = sheet.capture.occurrences.find((item) => item.subject);
+  for (const newOccurrence of [false, true]) {
+    await assert.rejects(work(async (client) => {
+      await requireCaptureWrite(client, sheet.capture.instance.id);
+      await client.query('UPDATE template_instances SET revision=revision+1 WHERE organization_id=$1 AND id=$2', [account.organizationId, sheet.capture.instance.id]);
+      const occurrenceId = newOccurrence ? randomUUID() : row.id;
+      if (newOccurrence) await client.query(`INSERT INTO template_occurrences(organization_id,id,instance_id,version_id,group_id,parent_id,position,created_revision)
+        VALUES($1,$2,$3,$4,$5,$6,2,$7)`, [account.organizationId, occurrenceId, sheet.capture.instance.id, sheet.model.version.id, row.groupId, row.parentId, sheet.capture.revision + 1]);
+      await client.query(`INSERT INTO template_values(organization_id,instance_id,version_id,field_id,occurrence_id,revision,value_type,state,origin,text_value,saved_by)
+        VALUES($1,$2,$3,$4,$5,$6,'result','present','default',$7,$8)`,
+      [account.organizationId, sheet.capture.instance.id, sheet.model.version.id, field.id, occurrenceId, sheet.capture.revision + 1, newOccurrence ? 'Forged default' : 'Not detected', account.userId]);
+    }), { code: '23514', message: 'Default history must match its frozen field and new occurrence' });
+  }
+  assert.equal((await load(flow.job.datasheetId)).capture.revision, sheet.capture.revision);
+});
+
+test('default authoring survives frozen version copying, stale saves and clearing without rewriting earlier capture values', async () => {
+  const template = await work((client, identity) => createTemplate(client, identity, { name: 'Synthetic controlled result defaults', kind: 'datasheet' }));
+  let edited = await work((client, identity) => editTemplate(client, identity, template.versionId, 1, { type: 'addSection' }));
+  edited = await work((client, identity) => editTemplate(client, identity, template.versionId, edited.model.version.revision, { type: 'addRow', sectionId: edited.model.rootSectionIds[0] }));
+  const columnId = Object.keys(edited.model.columnsById)[0];
+  edited = await work((client, identity) => editTemplate(client, identity, template.versionId, edited.model.version.revision,
+    { type: 'configureField', columnId, widget: 'result_widget', alias: 'controlled_result', defaultValue: 'Not detected' }));
+  await work((client, identity) => freezeTemplate(client, identity, template.versionId, edited.model.version.revision));
+  const capture = await work((client, identity) => createCapture(client, identity, template.versionId));
+  const draft = await work((client, identity) => createDraft(client, identity, template.versionId));
+  const copied = await work((client, identity) => loadDefinition(client, identity.organization_id, draft.versionId), { readOnly: true });
+  assert.equal(Object.values(copied.model.fieldsById)[0].defaultText, 'Not detected');
+  const command = { type: 'configureField', columnId, widget: 'result_widget', alias: 'controlled_result', defaultValue: '-' };
+  edited = await work((client, identity) => editTemplate(client, identity, draft.versionId, 1, command));
+  assert.equal(Object.values(edited.model.fieldsById)[0].defaultState, 'absent');
+  await assert.rejects(work((client, identity) => editTemplate(client, identity, draft.versionId, 1, command)), { code: 'stale_template' });
+  await work((client, identity) => freezeTemplate(client, identity, draft.versionId, edited.model.version.revision));
+  const next = await work((client, identity) => createCapture(client, identity, draft.versionId));
+  const [oldValues, newValues] = await Promise.all([
+    work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId), { readOnly: true }),
+    work((client, identity) => loadCapture(client, identity.organization_id, next.instanceId), { readOnly: true }),
+  ]);
+  assert.equal(oldValues.values[0].textValue, 'Not detected'); assert.equal(oldValues.values[0].origin, 'default');
+  assert.equal(newValues.values.length, 0);
 });
