@@ -95,6 +95,10 @@ test('parameter listing joins only its tenant labs and supports literal search, 
   const filtered = await work((client, identity) => listTestParameters(client, identity, { search: prefix,
     filters: { lab_id: { type: 'text', value: fixture.laboratory.name }, name: { type: 'text', value: '100%_\\' } } }), viewer, true);
   assert.equal(filtered.totalCount, 1); assert.equal(filtered.rows[0]._id, first.id); assert.equal(filtered.rows[0].lab_id, fixture.laboratory.name);
+  assert.equal((await work((client, identity) => listTestParameters(client, identity,
+    { filters: { name: { type: 'text', value: `${prefix} exact` } } }), viewer, true)).rows[0]._id, first.id);
+  assert.equal((await work((client, identity) => listTestParameters(client, identity,
+    { search: `${prefix} exact` }), viewer, true)).totalCount, 0);
   assert.equal((await work((client, identity) => listTestParameters(client, identity, { search: prefix, page: 100 }), account, true)).rows.length, 0);
   for (const query of [{ pageSize: 101 }, { search: '\0' }, { sort: { key: 'name; DELETE', dir: 'asc' } }, { filters: { name: { type: 'relation', value: [] } } }, { filters: { hidden: { type: 'text', value: 'x' } } }]) {
     await assert.rejects(work((client, identity) => listTestParameters(client, identity, query), account, true), (error) => error.status === 400);

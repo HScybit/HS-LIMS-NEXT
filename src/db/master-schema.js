@@ -85,7 +85,9 @@ export const testParameters = pgTable('test_parameters', {
 export const methodsOfAnalysis = pgTable('methods_of_analysis', {
   ...identity(), ...metadata(), description: text('description').notNull().default(''), methodUuid: text('method_uuid').notNull(),
   decimalScale: integer('decimal_scale').notNull().default(2), parseNumber: boolean('parse_number').notNull().default(false),
+  accessUserCount: integer('access_user_count').notNull().default(0), saveRequestId: uuid('save_request_id'),
 }, (t) => [...named(t, 'methods_of_analysis'), uniqueIndex('method_uuid_key').on(t.organizationId, sql`lower(${t.methodUuid})`),
+  check('method_access_user_count', sql`${t.accessUserCount} between 0 and 500`),
   check('method_number_settings', sql`${t.decimalScale} between 0 and 12 and length(trim(${t.methodUuid})) between 1 and 100`)]);
 
 export const parameterMethods = pgTable('parameter_methods', {

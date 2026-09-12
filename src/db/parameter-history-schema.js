@@ -27,7 +27,8 @@ export const testParameterVersions = pgTable('test_parameter_versions', {
   foreignKey({ name: 'test_parameter_version_unit_fk', columns: [table.organizationId, table.measurementUnitId], foreignColumns: [measurementUnits.organizationId, measurementUnits.id] }),
   check('test_parameter_version_revision', sql`(${table.operation}='create' and ${table.previousRevision} is null and ${table.revision}=1)
     or (${table.operation} in ('update','retire') and ${table.previousRevision} is not null and ${table.previousRevision}>0 and ${table.revision}=${table.previousRevision}+1)`),
-  check('test_parameter_version_fields', sql`length(trim(${table.name})) between 1 and 200 and length(${table.description})<=16000
+  check('test_parameter_version_fields', sql`length(trim(${table.name})) between 1 and 250
+    and (${table.operation}='retire' or (length(trim(${table.name}))<=200 and length(${table.description})<=16000))
     and length(trim(${table.code})) between 1 and 64 and length(trim(${table.masterKey})) between 1 and 64
     and length(trim(${table.schemeAbbreviation})) between 1 and 64 and ${table.displayOrder}>=0 and ${table.defaultScale} between 0 and 12
     and (${table.operation}<>'retire' or not ${table.active})`),

@@ -28,6 +28,7 @@ import { loadCustomCss, saveCustomCss, loadCurrentCustomCss } from '../src/repor
 import { reportSvg } from '../tests/helpers/report-svg.js';
 import { emptyUncertaintyGrid, updateUncertaintyGrid } from '../src/masters/parameter-grid.js';
 import { loadTestParameter, saveTestParameter, retireTestParameter } from '../src/masters/test-parameters.js';
+import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
@@ -102,6 +103,36 @@ try {
     assert.deepEqual(await loadTestParameter(client, identity, masterInput.id, { atRevision: 1 }), historical);
     await assert.rejects(loadTestParameter(client, identity, masterInput.id), { code: 'parameter_not_found' });
   }, { csrfToken: session.csrfToken });
+  await withSession(session.token, async (client, identity) => {
+    const command = { id: randomUUID(), revision: 0, requestId: randomUUID(), name: 'Fresh method history', uuid: `ISO ${randomUUID()}`,
+      description: '  Exact notes  ', decimalScale: 0, parseNumber: false, accessUserIds: [account.userId] };
+    const saved = await saveMethod(client, identity, command);
+    assert.equal((await saveMethod(client, identity, command)).revision, 1);
+    assert.equal(saved.decimalScale, 0); assert.equal(saved.parseNumber, false); assert.deepEqual(saved.accessUserIds, [account.userId]);
+    const historical = await loadMethod(client, identity, command.id, { atRevision: 1 });
+    assert.equal(historical.savedBy, account.userId);
+    assert.equal((await listMethods(client, identity, { search: command.uuid })).totalCount, 1);
+    await saveMethod(client, identity, { ...command, revision: 1, requestId: randomUUID(), parseNumber: true, accessUserIds: [] });
+    const removal = { id: command.id, revision: 2, requestId: randomUUID() };
+    assert.equal((await retireMethod(client, identity, removal)).revision, 3);
+    assert.equal((await retireMethod(client, identity, removal)).revision, 3);
+    assert.deepEqual(await loadMethod(client, identity, command.id, { atRevision: 1 }), historical);
+    await assert.rejects(loadMethod(client, identity, command.id), { code: 'method_not_found' });
+  }, { csrfToken: session.csrfToken });
+  for (const [table, extraColumns, retire, load] of [
+    ['methods_of_analysis', 'method_uuid', retireMethod, loadMethod],
+    ['test_parameters', 'master_key,scheme_abbreviation', retireTestParameter, loadTestParameter],
+  ]) {
+    const id = randomUUID(); const name = 'L'.repeat(250); const description = 'd'.repeat(16001);
+    await owner.query(`INSERT INTO ${table}(organization_id,id,code,name,description,${extraColumns})
+      VALUES($1,$2::uuid,$2::text,$3,$4,${table === 'test_parameters' ? '$2::text,$2::text' : '$2::text'})`, [account.organizationId, id, name, description]);
+    await withSession(session.token, async (client, identity) => {
+      assert.equal((await retire(client, identity, { id, revision: 1, requestId: randomUUID() })).revision, 2);
+      const history = await load(client, identity, id, { atRevision: 2 });
+      assert.equal(history.name, name); assert.equal(history.description, description); assert.equal(history.savedBy, account.userId);
+      await assert.rejects(load(client, identity, id, { atRevision: 1 }), (error) => error.status === 404);
+    }, { csrfToken: session.csrfToken });
+  }
   await withSession(session.token, async (client, identity) => {
     const customer = await quickCreateCustomer(client, identity, { name: 'Synthetic fresh customer', legalName: 'Synthetic legal name', contactPersonName: 'Synthetic contact',
       contactPersonEmail: 'fresh@example.invalid', contactPersonPhone: '00000000', billToAddress: 'Synthetic billing\nSecond line', shipToAddress: 'Synthetic receiving' });
@@ -196,7 +227,7 @@ try {
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, typed parameter uncertainty history/retry/retirement, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, typed parameter uncertainty and method/user history/retry/retirement, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

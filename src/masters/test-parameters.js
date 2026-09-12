@@ -126,6 +126,7 @@ export async function retireTestParameter(client, identity, input) {
 
 const listColumns = { scheme_abbr: 'parameter.scheme_abbreviation', name: 'parameter.name', lab_id: 'lab.name', key: 'parameter.master_key', order: 'parameter.display_order' };
 const literalSearch = (value) => `%${value.replace(/[\\%_]/g, '\\$&')}%`;
+const columnSearch = (value) => literalSearch(value).replace(/\s+/g, '%');
 function searchText(value, label) {
   const result = text(value, label, 500, { optional: true }).trim();
   if (result.includes('\0')) throw new HttpError(400, 'invalid_input', `${label} cannot contain null characters.`);
@@ -140,14 +141,14 @@ export async function listTestParameters(client, identity, input = {}) {
   const bind = (value) => { args.push(value); return `$${args.length}`; };
   if (search) {
     const match = bind(literalSearch(search));
-    conditions.push(`(${Object.values(listColumns).map((column) => `${column}::text ILIKE ${match}`).join(' OR ')})`);
+    conditions.push(`(${Object.entries(listColumns).filter(([key]) => key !== 'order').map(([, column]) => `${column} ILIKE ${match}`).join(' OR ')})`);
   }
   const filters = input.filters ?? {}; fieldsOnly(filters, Object.keys(listColumns));
   for (const [key, filter] of Object.entries(filters)) {
     fieldsOnly(filter, ['type', 'value']);
     if (filter.type !== 'text') throw new HttpError(400, 'invalid_filter', 'Parameter filters require text.');
     const value = searchText(filter.value, 'Filter');
-    if (value) conditions.push(`${listColumns[key]}::text ILIKE ${bind(literalSearch(value))}`);
+    if (value) conditions.push(`${listColumns[key]}::text ILIKE ${bind(columnSearch(value))}`);
   }
   const sort = input.sort;
   if (sort) {
