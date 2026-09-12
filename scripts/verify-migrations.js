@@ -144,7 +144,7 @@ try {
   const pdf = await withSession(session.token, (client, identity) => reportPdfFile(client, identity, reportId), { readOnly: true });
   assert.equal(pdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdf.byteLength > 5000);
   const signedAccount = { ...account, ...session };
-  const jobFlow = await prepareSubjectJob(owner, signedAccount, signedAccount, { resultWidget: true });
+  const jobFlow = await prepareSubjectJob(owner, signedAccount, signedAccount, { resultWidget: true, resultValueType: 'result' });
   const work = (action, options = {}) => withSession(session.token, action, { csrfToken: session.csrfToken, ...options });
   let jobSheet = await work((client, identity) => loadDatasheet(client, identity, jobFlow.job.datasheetId), { readOnly: true });
   const fields = Object.values(jobSheet.model.fieldsById); const raw = fields.find((field) => field.alias === 'raw_0');
@@ -152,7 +152,7 @@ try {
   await work((client, identity) => saveCapture(client, identity, jobSheet.capture.instance.id, jobSheet.capture.revision,
     jobSheet.capture.occurrences.filter((row) => row.subject).flatMap((row, index) => [
       { fieldId: raw.id, occurrenceId: row.id, state: 'present', value: '0' },
-      { fieldId: result.id, occurrenceId: row.id, state: 'present', value: index === 0 ? '0' : '4.20' },
+      { fieldId: result.id, occurrenceId: row.id, state: 'present', value: index === 0 ? '0' : 'Not detected' },
     ])));
   jobSheet = await work((client, identity) => loadDatasheet(client, identity, jobFlow.job.datasheetId), { readOnly: true });
   const run = await work((client, identity) => loadWorkflowRun(client, identity, jobFlow.job.workflowRunId), { readOnly: true });
@@ -165,13 +165,15 @@ try {
   const jobReports = await work((client, identity) => generateReports(client, identity, jobFlow.sample.id, { revision: jobFlow.sample.revision, requestId: randomUUID(),
     reportType: 'consolidated', selectedSampleTestIds: selected.map((row) => row.sample_test_id), templateSelections: [{ key: 'consolidated', templateId: template.templateId }] }));
   const jobReportId = jobReports.items[0].id;
+  const qualitativeReport = await work((client, identity) => loadReport(client, identity, jobReportId), { readOnly: true });
+  assert.deepEqual(qualitativeReport.results.map((row) => [row.resultType, row.finalResult]), [['numeric', '0'], ['text', 'Not detected']]);
   const jobPrint = await work((client, identity) => enqueueReportPdf(client, identity, jobReportId));
   assert.deepEqual(await processNextReportJob({ pool: worker, renderer: await loadReportRenderer(), workerId: randomUUID() }), { jobId: jobPrint.job.id, status: 'succeeded' });
   const jobPdf = await work((client, identity) => reportPdfFile(client, identity, jobReportId), { readOnly: true });
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

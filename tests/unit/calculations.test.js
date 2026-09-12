@@ -5,6 +5,22 @@ import { parseExpression } from '../../src/templates/expressions.js';
 import { calculateCapture, valueKey } from '../../src/templates/calculations.js';
 import { templateView } from '../../src/templates/transport.js';
 import { analyticalRecords } from '../helpers/templates.js';
+import { agreedResultValue } from '../../src/datasheets/job-results.js';
+
+test('result formulas consume typed numbers and retain qualitative inputs when arithmetic cannot use them', () => {
+  const records = analyticalRecords({ rowCount: 1, repeated: false });
+  const field = records.fields[0]; field.widget = 'result_widget'; field.valueType = 'result';
+  const model = assembleDefinition(records);
+  const occurrences = [{ id: 'root', groupId: null, parentId: null, position: 0 }];
+  for (const definition of [model, templateView(model)]) {
+    const value = { fieldId: field.id, occurrenceId: 'root', valueType: 'result', state: 'present', ...agreedResultValue(field, '4.20') };
+    assert.equal(calculateCapture(definition, occurrences, [value]).calculated[0].numberValue, '8.4');
+    const text = { ...value, numberValue: undefined, lexical: undefined, ...agreedResultValue(field, 'Not detected') };
+    const failed = calculateCapture(definition, occurrences, [text]);
+    assert.equal(failed.calculated[0].state, 'invalid');
+    assert.equal(failed.values.find((item) => item.fieldId === field.id).textValue, 'Not detected');
+  }
+});
 
 test('calculations and conditions use frozen option values, normalize numeric variables and retain false', () => {
   const fields = [

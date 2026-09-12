@@ -14,7 +14,7 @@ import { valueKey, valuePayload } from '../../templates/calculations.js';
 import '../../styles/template-designer.scss';
 import '../../styles/tr-details-page.scss';
 
-const valueProperty = { numeric: 'numberValue', text: 'textValue', boolean: 'booleanValue', date: 'dateValue', option: 'optionId' };
+const valueProperty = { numeric: 'numberValue', result: 'textValue', text: 'textValue', boolean: 'booleanValue', date: 'dateValue', option: 'optionId' };
 const inputFor = (fieldId, occurrenceId, value) => ({ fieldId, occurrenceId, state: value === '' || value == null ? 'empty' : 'present', ...(value !== '' && value != null ? { value } : {}) });
 const indexedValues = (values) => Object.fromEntries(values.map((value) => [valueKey(value.fieldId, value.occurrenceId), value]));
 function draftValue(field, input) {

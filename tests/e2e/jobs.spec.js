@@ -152,71 +152,98 @@ test('job parameter labels stay with separate values through measurement clones,
   expect(saved.datasheet.status).toBe('in_progress'); expect(errors).toEqual([]);
 });
 
-test('group results survive a failed workflow request and retain their parent decision in child activity and the certificate', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
-  const user = await createAccount(owner, { permissions: ['samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'templates.manage', 'settings.manage'] });
-  Object.assign(user, await signIn({ identifier: user.username, password: user.password }));
-  const flow = await prepareSubjectJob(owner, user, user, { resultWidget: true });
-  const template = await withSession(user.token, createReportTemplate, { csrfToken: user.csrfToken });
-  const errors = []; page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('/login');
-  await page.getByLabel('Username', { exact: true }).fill(user.username);
-  await page.getByLabel('Password', { exact: true }).fill(user.password);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page).toHaveURL(/\/me$/);
-  await page.goto(`/samples/${flow.sample.id}/data_sheets/${flow.job.datasheetId}`);
-  const raw = page.getByRole('spinbutton', { name: 'raw_0', exact: true });
-  const results = page.getByRole('textbox', { name: 'entered_result', exact: true });
-  await expect(raw).toHaveCount(2); await expect(results).toHaveCount(2);
-  for (let index = 0; index < 2; index += 1) { await raw.nth(index).fill('0'); await results.nth(index).fill(index === 0 ? '0' : '4.20'); }
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(page).toHaveURL(`/samples/${flow.sample.id}/test_requests/${flow.job.id}`);
-  const transitionRoute = `**/api/workflow-runs/${flow.job.workflowRunId}/datasheet-transitions`;
-  await page.route(transitionRoute, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Synthetic group decision interruption' } }) }));
-  await page.getByRole('button', { name: 'Request Approval', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Request Approval', exact: true });
-  await dialog.getByLabel('Comments', { exact: true }).fill('Synthetic group results accepted');
-  await dialog.getByRole('button', { name: 'Send Request', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('Synthetic group decision interruption');
-  await expect(dialog.getByLabel('Comments', { exact: true })).toHaveValue('Synthetic group results accepted');
-  const retained = await page.request.get(`/api/datasheets/${flow.job.datasheetId}`).then((response) => response.json());
-  expect(retained.capture.instance.status).toBe('editing'); expect(retained.capture).not.toHaveProperty('pinnedValues');
-  await page.unroute(transitionRoute);
-  await dialog.getByRole('button', { name: 'Send Request', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(page.locator('.tr-details-page-header__title-row')).toContainText('Completed');
-  await expect(page.getByRole('link', { name: 'Add Results', exact: true })).toHaveCount(0);
-  const completed = await page.request.get(`/api/datasheets/${flow.job.datasheetId}`).then((response) => response.json());
-  expect(completed.capture.instance.status).toBe('frozen');
-  await page.screenshot({ path: testInfo.outputPath('group-decision-desktop.png'), fullPage: true, animations: 'disabled' });
-  for (const child of flow.requests) {
-    await page.goto(`/samples/${flow.sample.id}/test_requests/${child.id}`);
+for (const [resultValueType, secondResult] of [['numeric', '4.20'], ['result', 'Not detected']]) {
+  test(`${resultValueType} group results survive failures and retain their parent decision in child activity and the certificate`, async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
+    const user = await createAccount(owner, { permissions: ['samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'templates.manage', 'settings.manage'] });
+    Object.assign(user, await signIn({ identifier: user.username, password: user.password }));
+    const flow = await prepareSubjectJob(owner, user, user, { resultWidget: true, resultValueType });
+    const template = await withSession(user.token, createReportTemplate, { csrfToken: user.csrfToken });
+    const errors = []; page.on('pageerror', (error) => errors.push(error.message));
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('/login');
+    await page.getByLabel('Username', { exact: true }).fill(user.username);
+    await page.getByLabel('Password', { exact: true }).fill(user.password);
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page).toHaveURL(/\/me$/);
+    await page.goto(`/samples/${flow.sample.id}/data_sheets/${flow.job.datasheetId}`);
+    const raw = page.getByRole('spinbutton', { name: 'raw_0', exact: true });
+    const results = page.getByRole('textbox', { name: 'entered_result', exact: true });
+    await expect(raw).toHaveCount(2); await expect(results).toHaveCount(2);
+    for (let index = 0; index < 2; index += 1) { await raw.nth(index).fill('0'); await results.nth(index).fill(index === 0 ? '0' : secondResult); }
+    if (resultValueType === 'result') {
+      const valuesRoute = `**/api/datasheets/${flow.job.datasheetId}/values`;
+      await page.route(valuesRoute, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Synthetic qualitative save interruption' } }) }));
+      await results.nth(1).fill('Absent');
+      await page.getByRole('button', { name: 'Calculate', exact: true }).click();
+      await expect(page.locator('.tr-details-results-page').getByRole('alert')).toContainText('Synthetic qualitative save interruption');
+      await expect(results.nth(1)).toHaveValue('Absent');
+      await page.unroute(valuesRoute);
+      const retrySaved = page.waitForResponse((response) => response.url().endsWith(`/api/datasheets/${flow.job.datasheetId}/values`)
+        && response.request().method() === 'PATCH' && response.request().postDataJSON().values.some((value) => value.value === 'Absent'));
+      await page.getByRole('button', { name: 'Retry save', exact: true }).click();
+      expect((await retrySaved).status()).toBe(200);
+      await expect(page.getByRole('button', { name: 'Calculate', exact: true })).toBeEnabled();
+      await expect(page.locator('.tr-details-results-page').getByRole('alert')).toHaveCount(0);
+      await page.reload(); await expect(results.nth(1)).toHaveValue('Absent');
+      await results.nth(1).fill(secondResult);
+      await page.getByRole('button', { name: 'Calculate', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Calculate', exact: true })).toBeEnabled();
+      await page.screenshot({ path: testInfo.outputPath('qualitative-capture-desktop.png'), fullPage: true, animations: 'disabled' });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.locator('.lims-main')).toHaveCSS('margin-left', '0px');
+      await page.screenshot({ path: testInfo.outputPath('qualitative-capture-mobile.png'), fullPage: true, animations: 'disabled' });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+    }
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(page).toHaveURL(`/samples/${flow.sample.id}/test_requests/${flow.job.id}`);
+    const transitionRoute = `**/api/workflow-runs/${flow.job.workflowRunId}/datasheet-transitions`;
+    await page.route(transitionRoute, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Synthetic group decision interruption' } }) }));
+    await page.getByRole('button', { name: 'Request Approval', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Request Approval', exact: true });
+    await dialog.getByLabel('Comments', { exact: true }).fill('Synthetic group results accepted');
+    await dialog.getByRole('button', { name: 'Send Request', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('Synthetic group decision interruption');
+    await expect(dialog.getByLabel('Comments', { exact: true })).toHaveValue('Synthetic group results accepted');
+    const retained = await page.request.get(`/api/datasheets/${flow.job.datasheetId}`).then((response) => response.json());
+    expect(retained.capture.instance.status).toBe('editing'); expect(retained.capture).not.toHaveProperty('pinnedValues');
+    await page.unroute(transitionRoute);
+    await dialog.getByRole('button', { name: 'Send Request', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
     await expect(page.locator('.tr-details-page-header__title-row')).toContainText('Completed');
-    await expect(page.getByRole('link', { name: `Job ${flow.job.requestNumber}`, exact: true })).toHaveAttribute('href', `/samples/${flow.sample.id}/test_requests/${flow.job.id}`);
-    await expect(page.getByRole('button', { name: 'Request Approval', exact: true })).toHaveCount(0);
-  }
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('.lims-main')).toHaveCSS('margin-left', '0px');
-  await page.screenshot({ path: testInfo.outputPath('group-child-mobile.png'), fullPage: true, animations: 'disabled' });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`/samples/${flow.sample.id}`);
-  await page.getByRole('link', { name: 'Test Reports', exact: true }).click();
-  await page.getByRole('button', { name: /^Consolidated/ }).click();
-  await page.getByLabel('Consolidated Report template', { exact: true }).selectOption(template.templateId);
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
-  const report = page.frameLocator('.finalised-report-preview__frame').getByRole('article');
-  await expect(report.getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
-  await expect(report.locator('[data-result-test-id]')).toHaveCount(2);
-  await expect(report.locator('[data-result-test-id]').nth(0)).toHaveText('0');
-  await expect(report.locator('[data-result-test-id]').nth(1)).toHaveText('4.20');
-  await page.reload();
-  await expect(report.locator('[data-result-test-id]').nth(0)).toHaveText('0');
-  await expect(report.locator('[data-result-test-id]').nth(1)).toHaveText('4.20');
-  await page.screenshot({ path: testInfo.outputPath('group-certificate-desktop.png'), fullPage: true, animations: 'disabled' });
-  expect(errors).toEqual([]);
-});
+    await expect(page.getByRole('link', { name: 'Add Results', exact: true })).toHaveCount(0);
+    const completed = await page.request.get(`/api/datasheets/${flow.job.datasheetId}`).then((response) => response.json());
+    expect(completed.capture.instance.status).toBe('frozen');
+    await page.screenshot({ path: testInfo.outputPath('group-decision-desktop.png'), fullPage: true, animations: 'disabled' });
+    for (const child of flow.requests) {
+      await page.goto(`/samples/${flow.sample.id}/test_requests/${child.id}`);
+      await expect(page.locator('.tr-details-page-header__title-row')).toContainText('Completed');
+      await expect(page.getByRole('link', { name: `Job ${flow.job.requestNumber}`, exact: true })).toHaveAttribute('href', `/samples/${flow.sample.id}/test_requests/${flow.job.id}`);
+      await expect(page.getByRole('button', { name: 'Request Approval', exact: true })).toHaveCount(0);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('.lims-main')).toHaveCSS('margin-left', '0px');
+    await page.screenshot({ path: testInfo.outputPath('group-child-mobile.png'), fullPage: true, animations: 'disabled' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`/samples/${flow.sample.id}`);
+    await page.getByRole('link', { name: 'Test Reports', exact: true }).click();
+    await page.getByRole('button', { name: /^Consolidated/ }).click();
+    await page.getByLabel('Consolidated Report template', { exact: true }).selectOption(template.templateId);
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    const report = page.frameLocator('.finalised-report-preview__frame').getByRole('article');
+    await expect(report.getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
+    await expect(report.locator('[data-result-test-id]')).toHaveCount(2);
+    await expect(report.locator('[data-result-test-id]').nth(0)).toHaveText('0');
+    await expect(report.locator('[data-result-test-id]').nth(1)).toHaveText(secondResult);
+    await page.reload();
+    await expect(report.locator('[data-result-test-id]').nth(0)).toHaveText('0');
+    await expect(report.locator('[data-result-test-id]').nth(1)).toHaveText(secondResult);
+    await page.screenshot({ path: testInfo.outputPath('group-certificate-desktop.png'), fullPage: true, animations: 'disabled' });
+    expect(errors).toEqual([]);
+  });
+}
 
 test('the source automatic-job setting persists and generated jobs can be allocated through their Jobs card', async ({ page, context }, testInfo) => {
   test.setTimeout(60_000);

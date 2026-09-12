@@ -17,6 +17,7 @@ export function compareOccurrencePosition(left, right) {
 
 export function valuePayload(value) {
   if (!value || value.state !== 'present') return null;
+  if (value.valueType === 'result') return value.numberValue ?? value.textValue;
   return ({ numeric: value.numberValue, text: value.textValue, boolean: value.booleanValue, date: value.dateValue, option: value.optionId })[value.valueType];
 }
 
@@ -129,7 +130,7 @@ export function calculateCapture(model, occurrences, savedValues) {
       }
       if (value?.state === 'invalid') result.errors.push({ code: value.errorCode, message: value.errorMessage });
       if (result.required && (!value || ['absent', 'empty'].includes(value.state) || (value.state === 'present' && value.textValue === ''))) result.errors.push({ code: 'required', message: 'This field is required.' });
-      if (value?.state === 'present' && field.valueType === 'numeric') {
+      if (value?.state === 'present' && value.numberValue != null && ['numeric', 'result'].includes(field.valueType)) {
         const numeric = Number(value.numberValue);
         if (field.numeric?.minimum != null && numeric < Number(field.numeric.minimum)) result.errors.push({ code: 'below_minimum', message: `Value must be at least ${field.numeric.minimum}.` });
         if (field.numeric?.maximum != null && numeric > Number(field.numeric.maximum)) result.errors.push({ code: 'above_maximum', message: `Value must not exceed ${field.numeric.maximum}.` });
@@ -145,7 +146,7 @@ export function displayValue(field, value) {
   if (value.state === 'not_applicable') return 'NA';
   if (value.state === 'invalid') return '';
   const payload = valuePayload(value);
-  if (field.valueType === 'numeric') return formatValueWithDecimalPoints(payload, field.numeric?.displayScale, field.numeric?.padDecimals);
+  if (['numeric', 'result'].includes(field.valueType) && value.numberValue != null) return formatValueWithDecimalPoints(payload, field.numeric?.displayScale, field.numeric?.padDecimals);
   if (field.valueType === 'option') return field.options.find((option) => option.id === payload)?.label ?? '';
   return payload;
 }

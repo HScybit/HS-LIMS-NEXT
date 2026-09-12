@@ -37,7 +37,7 @@ function scalar(candidate, source) {
   if (typeof payload === 'boolean') return { ...result, resultType: 'boolean', booleanValue: payload };
   const numericText = typeof payload === 'string' && /^-?\d+(?:\.\d+)?$/.test(payload.trim());
   const comparable = Number.parseFloat(payload);
-  if (field.valueType === 'numeric' && value.state === 'present' || numericText) {
+  if (['numeric', 'result'].includes(field.valueType) && value.state === 'present' && value.numberValue != null || numericText) {
     if (!Number.isFinite(comparable) || canonicalDecimal(String(payload).trim()) !== canonicalDecimal(comparable)) unresolved();
     return { ...result, resultType: 'numeric', numberValue: String(payload).trim() };
   }

@@ -10,7 +10,7 @@ import { calculateCapture, valueKey } from './calculations.js';
 import { requirePermission, uuid, revision, fieldsOnly, decimal, bool, dateOnly, text } from './input.js';
 import { setCaptureContext, requireCaptureWrite } from './access.js';
 import { assertCaptureSize } from './runtime-limits.js';
-import { agreedResultNumber, recordJobResultEntries } from '../datasheets/job-results.js';
+import { agreedResultNumber, agreedResultValue, recordJobResultEntries } from '../datasheets/job-results.js';
 
 function storedValues(identity, instance, versionId, nextRevision, values) {
   return values.map((value) => ({ ...value, organizationId: identity.organization_id, instanceId: instance.id, versionId,
@@ -75,6 +75,7 @@ function enteredValue(model, occurrences, input) {
     return result;
   }
   if (field.valueType === 'numeric') { result.numberValue = field.widget === 'result_widget' ? agreedResultNumber(field, input.value) : decimal(input.value, 'Value'); result.lexical = String(input.value); }
+  if (field.valueType === 'result') Object.assign(result, agreedResultValue(field, input.value));
   if (field.valueType === 'text') {
     if (typeof input.value !== 'string') throw new HttpError(400, 'invalid_input', 'A present text value must be text.');
     result.textValue = text(input.value, 'Value', 16000, { optional: true });

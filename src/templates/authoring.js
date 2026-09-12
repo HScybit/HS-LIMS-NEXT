@@ -85,15 +85,15 @@ async function configureField(db, base, model, command) {
   if (alias && Object.values(model.fieldsById).some((field) => field.id !== previous?.id && field.alias === alias)) throw new HttpError(400, 'duplicate_alias', 'Key already exist!');
   const field = {
     ...base, id: previous?.id ?? randomUUID(), columnId: column.id, repeatGroupId: model.rowsById[column.rowId].repeatGroupId,
-    widget: command.widget, valueType: widgetTypes[command.widget], alias, label: text(command.label, 'Title', 16000, { optional: true }),
+    widget: command.widget, valueType: previous?.valueType ?? widgetTypes[command.widget], alias, label: text(command.label, 'Title', 16000, { optional: true }),
     placeholder: text(command.placeholder, 'Placeholder', 1000, { optional: true }), required: bool(command.required ?? false, 'Required'), editable: bool(command.editable ?? false, 'Editable'),
     sourceField, serialPadding,
   };
   if (previous) await db.update(t.templateFields).set(field).where(and(scope(t.templateFields, base.organizationId, base.versionId), eq(t.templateFields.id, field.id)));
   else await db.insert(t.templateFields).values(field);
   model.fieldsById[field.id] = { ...previous, ...field };
-  if (field.valueType === 'numeric') {
-    const config = { ...base, fieldId: field.id, displayScale: command.displayScale == null || command.displayScale === '' ? null : integer(command.displayScale, 'Decimal points', 0, 100),
+  if (['numeric', 'result'].includes(field.valueType)) {
+    const config = { ...base, fieldId: field.id, valueType: field.valueType, displayScale: command.displayScale == null || command.displayScale === '' ? null : integer(command.displayScale, 'Decimal points', 0, 100),
       padDecimals: bool(command.padDecimals ?? false, 'Show decimal points'), minimum: decimal(command.minimum, 'Minimum', { optional: true }), maximum: decimal(command.maximum, 'Maximum', { optional: true }) };
     if (config.minimum !== null && config.maximum !== null && Number(config.minimum) > Number(config.maximum)) throw new HttpError(400, 'invalid_bounds', 'Minimum cannot exceed maximum.');
     await db.insert(t.templateNumericConfig).values(config).onConflictDoUpdate({ target: [t.templateNumericConfig.organizationId, t.templateNumericConfig.versionId, t.templateNumericConfig.fieldId], set: config });
@@ -293,7 +293,7 @@ export async function copyDefinition(db, records, organizationId, versionId) {
   await insertBatch(db, t.templateColumns, records.columns.map((row) => ({ ...row, ...base })));
   await insertBatch(db, t.templateRepeatGroups, records.groups.map((row) => ({ ...row, ...base })));
   await insertBatch(db, t.templateFields, records.fields.map(({ numeric: _numeric, ...row }) => ({ ...row, ...base })));
-  await insertBatch(db, t.templateNumericConfig, records.fields.filter((row) => row.numeric).map((row) => ({ ...row.numeric, ...base })));
+  await insertBatch(db, t.templateNumericConfig, records.fields.filter((row) => row.numeric).map((row) => ({ ...row.numeric, valueType: row.valueType, ...base })));
   await insertBatch(db, t.templateOptions, records.options.map((row) => ({ ...row, ...base })));
   await insertBatch(db, t.templateExpressions, records.expressions.map(({ nodes: _nodes, ...row }) => ({ ...row, ...base })));
   await insertBatch(db, t.templateExpressionNodes, records.expressions.flatMap((row) => expressionRecords(base, row.id, row.nodes)));

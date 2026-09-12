@@ -9,7 +9,7 @@ import { registerSample } from '../../src/samples/register.js';
 import { generateTestRequests } from '../../src/test-requests/generate.js';
 import { createTestRequestJobs } from '../../src/test-requests/jobs.js';
 
-export async function prepareSubjectJob(owner, creator, analyst, { manualParent = false, resultWidget = false, finalSection = false, jobWorkflowId = null } = {}) {
+export async function prepareSubjectJob(owner, creator, analyst, { manualParent = false, resultWidget = false, resultValueType = 'numeric', finalSection = false, jobWorkflowId = null } = {}) {
   const source = await createLaboratoryFixture(owner, creator, { repeated: false });
   const client = await owner.connect();
   let template;
@@ -29,7 +29,7 @@ export async function prepareSubjectJob(owner, creator, analyst, { manualParent 
       const columnId = randomUUID(); const fieldId = randomUUID();
       for (const column of records.columns) { column.span = 3; column.isFinalResult = false; }
       records.columns.push({ id: columnId, rowId: records.rows[0].id, position: 3, span: 3, isFinalResult: true });
-      records.fields.push({ id: fieldId, columnId, repeatGroupId: null, widget: 'result_widget', valueType: 'numeric', alias: 'entered_result', label: 'Result',
+      records.fields.push({ id: fieldId, columnId, repeatGroupId: null, widget: 'result_widget', valueType: resultValueType, alias: 'entered_result', label: 'Result',
         numeric: { fieldId, displayScale: 2, padDecimals: false } });
     }
     let manualGroupId = null;

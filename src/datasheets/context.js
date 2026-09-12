@@ -1,6 +1,8 @@
 // One metadata statement loads the source data widgets for the whole datasheet.
 // Scientific labels come from frozen specifications; actor labels use a bounded
 // tenant-scoped lookup. No per-widget request or serialized context is persisted.
+import { valuePayload } from '../templates/calculations.js';
+
 export async function loadDatasheetContext(client, identity, sheet, captureRevision) {
   const started = performance.now();
   const result = await client.query(`WITH selected_results AS MATERIALIZED (
@@ -13,7 +15,7 @@ export async function loadDatasheetContext(client, identity, sheet, captureRevis
       specification.parameter_name AS "parameterName",specification.method_name AS "methodName",specification.unit_symbol AS "measurementUnit",specification.rule_name AS specification,
       submission.submitted_at AS "submittedAt",source_sheet.completed_at AS "completedAt",
       CASE WHEN selected.id IS NOT NULL THEN selected.recorded_by ELSE coalesce(submission.submitted_by,assignment.assigned_user_id) END AS analyst_id,
-      CASE WHEN selected.id IS NOT NULL THEN 'numeric' ELSE submission.result_type END AS result_type,
+      CASE WHEN selected.id IS NULL THEN submission.result_type END AS result_type,
       CASE WHEN selected.id IS NULL THEN submission.number_value END AS number_value,
       CASE WHEN selected.id IS NULL THEN submission.text_value END AS text_value,CASE WHEN selected.id IS NULL THEN submission.boolean_value END AS boolean_value,
       selected.id AS "resultEntryId",selected.child_datasheet_id AS "resultDatasheetId",selected.recorded_at AS "resultSavedAt",
@@ -43,7 +45,7 @@ export function assembleDatasheetContext(context, capture) {
   const first = context.rows[0];
   const sample = first ? Object.fromEntries(['sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference'].map((key) => [key, first[key]])) : {};
   const results = context.rows.map((row, index) => ({ id: row.testRequestId, serialNumber: index + 1, ...Object.fromEntries(['testRequestId', 'requestNumber', 'productName', 'parameterName', 'methodName', 'measurementUnit', 'specification', 'analystName', 'submittedAt', 'completedAt', 'resultEntryId', 'resultDatasheetId', 'resultSavedAt'].map((key) => [key, row[key]])),
-    finalResult: row.resultEntryId ? capture.pinnedValues.get(`${row.resultInstanceId}:${row.resultFieldId}:${row.resultOccurrenceId}:${row.resultValueRevision}`)?.numberValue ?? null
+    finalResult: row.resultEntryId ? valuePayload(capture.pinnedValues.get(`${row.resultInstanceId}:${row.resultFieldId}:${row.resultOccurrenceId}:${row.resultValueRevision}`))
       : row.result_type === 'numeric' ? row.number_value : row.result_type === 'boolean' ? row.boolean_value : row.text_value }));
   return { sample, results, parametersByRequestId: Object.fromEntries(results.map((row) => [row.testRequestId, row])) };
 }
