@@ -5,6 +5,7 @@ import { datasheetTemplateView, datasheetCaptureView } from './transport.js';
 import { calculateCapture } from '../templates/calculations.js';
 import { isContextWidget } from '../templates/context-widgets.js';
 import { loadDatasheetContext, assembleDatasheetContext } from './context.js';
+import { withTemplateImages } from '../template-assets/service.js';
 
 export async function datasheetRecord(client, identity, datasheetId, sampleId) {
   uuid(datasheetId, 'Datasheet');
@@ -42,11 +43,13 @@ export async function loadDatasheet(client, identity, datasheetId, { sampleId, a
     ? await loadDatasheetContext(client, identity, sheet, captureRevision) : null;
   const capture = await loadCapture(client, identity.organization_id, sheet.templateInstanceId, captureRevision, { pinnedValues: context?.pinnedValues ?? [] });
   const calculation = calculateCapture(definition.model, capture.occurrences, capture.values);
+  const withImages = await withTemplateImages(client, identity.organization_id, definition, capture);
   const projectionStart = performance.now();
-  const modelView = datasheetTemplateView(definition.model); const runtimeView = datasheetCaptureView(capture);
+  const modelView = datasheetTemplateView(withImages.model); const runtimeView = datasheetCaptureView(capture);
   const projectionMs = performance.now() - projectionStart;
   return { datasheet: sheet, model: modelView, capture: runtimeView, dataContext: context ? assembleDatasheetContext(context, capture) : undefined, validation: calculation.validation,
     canExecute: atRevision === undefined && sheet.canWork && identity.permission_codes.includes('datasheets.execute') && sheet.assignedAnalyst
       && ['allocated', 'in_progress', 'rejected'].includes(sheet.requestStatus) && ['in_progress', 'rejected'].includes(sheet.status) && capture.instance.status === 'editing',
-    metrics: { metadataQueryCount: context ? 2 : 1, metadataMs: metadataMs + (context?.databaseMs ?? 0), definition: definition.metrics, capture: capture.metrics, calculationMs: calculation.durationMs, projectionMs } };
+    metrics: { metadataQueryCount: context ? 2 : 1, metadataMs: metadataMs + (context?.databaseMs ?? 0), definition: definition.metrics, capture: capture.metrics,
+      ...(withImages.metrics.assets ? { assets: withImages.metrics.assets } : {}), calculationMs: calculation.durationMs, projectionMs } };
 }

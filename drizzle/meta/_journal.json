@@ -652,6 +652,13 @@
       "when": 1789248740008,
       "tag": "0092_mfa_enrollment",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1789252462831,
+      "tag": "0093_template_image_widgets",
+      "breakpoints": true
     }
   ]
 }

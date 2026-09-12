@@ -28,7 +28,7 @@ function defaults(model, occurrences) {
   }
   return occurrences.flatMap((occurrence) => (fieldsByGroup.get(occurrence.groupId ?? null) ?? []).map((field) => ({
     fieldId: field.id, occurrenceId: occurrence.id, valueType: field.valueType, state: field.defaultState, origin: 'default',
-    numberValue: field.defaultNumber, textValue: field.defaultText, booleanValue: field.defaultBoolean, dateValue: field.defaultDate, lexical: field.defaultLexical,
+    numberValue: field.defaultNumber, textValue: field.defaultText, booleanValue: field.defaultBoolean, dateValue: field.defaultDate, lexical: field.defaultLexical, imageId: field.defaultImageId,
   })));
 }
 
@@ -68,7 +68,7 @@ function enteredValue(model, occurrences, input) {
   const field = model.fieldsById[input.fieldId];
   const occurrence = occurrences.get(input.occurrenceId);
   if (!field || !occurrence || (field.repeatGroupId ?? null) !== (occurrence.groupId ?? null)) throw new HttpError(400, 'invalid_capture_field', 'Field does not belong to this capture occurrence.');
-  if (field.widget === 'formula_widget' || isContextWidget(field.widget) || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
+  if (['formula_widget', 'template_image_widget'].includes(field.widget) || isContextWidget(field.widget) || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
   if (!['present', 'empty', 'absent'].includes(input.state)) throw new HttpError(400, 'invalid_value_state', 'Select a supported value state.');
   if (input.state !== 'present' && input.value !== undefined && input.value !== null && input.value !== '') throw new HttpError(400, 'unexpected_value', 'An empty or absent value cannot include a payload.');
   input = resolveResultInput(field, input);

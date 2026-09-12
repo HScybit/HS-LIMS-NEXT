@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, integer, numeric, doublePrecision, date, primaryKey, unique, uniqueIndex, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 import { reportDocuments } from './report-assets-schema.js';
 
@@ -11,6 +11,23 @@ const version = () => uuid('version_id').notNull();
 const versionKey = (table) => primaryKey({ columns: [table.organizationId, table.versionId, table.id] });
 const versionLink = (table) => foreignKey({ columns: [table.organizationId, table.versionId], foreignColumns: [templateVersions.organizationId, templateVersions.id] });
 const logicalLink = (table, column, target, name) => foreignKey({ name, columns: [table.organizationId, table.versionId, column], foreignColumns: [target.organizationId, target.versionId, target.id] });
+
+const bytes = customType({ dataType: () => 'bytea' });
+export const templateImageAssets = pgTable('template_image_assets', {
+  organizationId: tenant().references(() => organizations.id), id: uuid('id').notNull(),
+  originalName: text('original_name').notNull(), mediaType: text('media_type').notNull(), content: bytes('content').notNull(),
+  byteLength: integer('byte_length').notNull(), sha256: text('sha256').notNull(), width: integer('width').notNull(), height: integer('height').notNull(),
+  frameCount: integer('frame_count').notNull(), printContent: bytes('print_content').notNull(), printByteLength: integer('print_byte_length').notNull(), printSha256: text('print_sha256').notNull(),
+  uploadedBy: uuid('uploaded_by').notNull(), uploadedAt: time('uploaded_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ name: 'template_image_asset_pk', columns: [t.organizationId, t.id] }),
+  foreignKey({ name: 'template_image_asset_actor_fk', columns: [t.organizationId, t.uploadedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('template_image_asset_shape', sql`${t.mediaType} in ('image/png','image/jpeg','image/gif','image/webp') and length(trim(${t.originalName})) between 1 and 255
+    and ${t.sha256} ~ '^[a-f0-9]{64}$' and ${t.printSha256} ~ '^[a-f0-9]{64}$'
+    and ${t.byteLength} between 1 and 10485760 and ${t.byteLength}=octet_length(${t.content})
+    and ${t.printByteLength} between 1 and 10485760 and ${t.printByteLength}=octet_length(${t.printContent})
+    and ${t.width} between 1 and 10000 and ${t.height} between 1 and 10000 and ${t.frameCount} between 1 and 200
+    and ${t.width}::bigint*${t.height}::bigint*${t.frameCount}::bigint<=40000000`),
+]);
 
 export const templates = pgTable('templates', {
   organizationId: tenant().references(() => organizations.id), id: logicalId(),
@@ -97,21 +114,35 @@ export const templateFields = pgTable('template_fields', {
   editable: boolean('editable').notNull().default(false), defaultState: text('default_state').notNull().default('absent'),
   sourceField: text('source_field'), serialPadding: integer('serial_padding'),
   defaultText: text('default_text'), defaultNumber: numeric('default_number'), defaultBoolean: boolean('default_boolean'), defaultDate: date('default_date', { mode: 'string' }), defaultLexical: text('default_lexical'),
+  defaultImageId: uuid('default_image_id'),
 }, (t) => [versionKey(t), versionLink(t), logicalLink(t, t.columnId, templateColumns), logicalLink(t, t.repeatGroupId, templateRepeatGroups),
   unique('template_column_field_key').on(t.organizationId, t.versionId, t.columnId),
   unique('template_field_type_key').on(t.organizationId, t.versionId, t.id, t.valueType),
+  foreignKey({ name: 'template_field_default_image_fk', columns: [t.organizationId, t.defaultImageId], foreignColumns: [templateImageAssets.organizationId, templateImageAssets.id] }),
   index('template_fields_alias').on(t.organizationId, t.versionId, t.alias),
   check('template_field_alias', sql`${t.alias} ~ '^[A-Za-z0-9_]*$' and length(${t.alias}) <= 200`),
   check('template_default_lexical', sql`${t.defaultLexical} is null or (${t.widget} = 'result_widget' and ${t.defaultState} = 'present' and ${t.defaultNumber} is not null and length(${t.defaultLexical}) between 1 and 1000
     and case when ${t.defaultLexical} ~ '^-?[0-9]+([.][0-9]+)?$' then ${t.defaultNumber} = ${t.defaultLexical}::numeric else false end)`),
-  check('template_widget_type', sql`(${t.widget} in ('text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'result_widget' and ${t.valueType} in ('numeric', 'result')) or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option')`),
+  check('template_widget_type', sql`(${t.widget} in ('text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'result_widget' and ${t.valueType} in ('numeric', 'result')) or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option') or (${t.widget} = 'template_image_widget' and ${t.valueType} = 'image')`),
+  check('template_image_readonly', sql`${t.widget}<>'template_image_widget' or not ${t.editable}`),
   check('template_field_context', sql`(${t.sourceField} is null or
     (${t.widget} = 'sample_details_widget_v2' and ${t.sourceField} in ('sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'productName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference')) or
     (${t.widget} = 'tr_data_widget' and ${t.sourceField} in ('requestNumber', 'parameterName', 'productName', 'methodName', 'analystName', 'submittedAt', 'completedAt')) or
     (${t.widget} = 'decision_rule_widget' and ${t.sourceField} in ('specification', 'measurementUnit', 'parameterName', 'productName', 'methodName', 'decisionOutcome')))
     and (${t.serialPadding} is null or (${t.widget} = 'sno_widget' and ${t.serialPadding} between 0 and 100))
     and (${t.widget} not in ('sample_details_widget_v2', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') or not ${t.editable})`),
-  check('template_field_default', sql`(${t.defaultState} in ('absent', 'empty') and num_nonnulls(${t.defaultText}, ${t.defaultNumber}, ${t.defaultBoolean}, ${t.defaultDate}) = 0) or (${t.defaultState} = 'present' and num_nonnulls(${t.defaultText}, ${t.defaultNumber}, ${t.defaultBoolean}, ${t.defaultDate}) = 1 and ((${t.valueType} in ('text', 'result') and ${t.defaultText} is not null) or (${t.valueType} in ('numeric', 'result') and ${t.defaultNumber} is not null and ${t.defaultNumber}::text not in ('NaN', 'Infinity', '-Infinity')) or (${t.valueType} = 'boolean' and ${t.defaultBoolean} is not null) or (${t.valueType} = 'date' and ${t.defaultDate} is not null)))`),
+  check('template_field_default', sql`(${t.defaultState} in ('absent', 'empty') and num_nonnulls(${t.defaultText}, ${t.defaultNumber}, ${t.defaultBoolean}, ${t.defaultDate}, ${t.defaultImageId}) = 0) or (${t.defaultState} = 'present' and num_nonnulls(${t.defaultText}, ${t.defaultNumber}, ${t.defaultBoolean}, ${t.defaultDate}, ${t.defaultImageId}) = 1 and ((${t.valueType} in ('text', 'result') and ${t.defaultText} is not null) or (${t.valueType} in ('numeric', 'result') and ${t.defaultNumber} is not null and ${t.defaultNumber}::text not in ('NaN', 'Infinity', '-Infinity')) or (${t.valueType} = 'boolean' and ${t.defaultBoolean} is not null) or (${t.valueType} = 'date' and ${t.defaultDate} is not null) or (${t.valueType} = 'image' and ${t.defaultImageId} is not null)))`),
+]);
+
+export const templateImageConfig = pgTable('template_image_config', {
+  organizationId: tenant(), versionId: version(), fieldId: uuid('field_id').notNull(), valueType: text('value_type').notNull().default('image'),
+  widthPercent: doublePrecision('width_percent').notNull().default(100), marginTop: doublePrecision('margin_top').notNull().default(0),
+  marginBottom: doublePrecision('margin_bottom').notNull().default(0), marginLeft: doublePrecision('margin_left').notNull().default(0), marginRight: doublePrecision('margin_right').notNull().default(0),
+  alignment: text('alignment').notNull().default('start'),
+}, (t) => [primaryKey({ name: 'template_image_config_pk', columns: [t.organizationId, t.versionId, t.fieldId] }), versionLink(t),
+  foreignKey({ name: 'template_image_config_field_fk', columns: [t.organizationId, t.versionId, t.fieldId, t.valueType], foreignColumns: [templateFields.organizationId, templateFields.versionId, templateFields.id, templateFields.valueType] }),
+  check('template_image_config_type', sql`${t.valueType}='image' and ${t.alignment} in ('start','center','end')`),
+  ...[t.widthPercent, t.marginTop, t.marginBottom, t.marginLeft, t.marginRight].map((column) => check(`template_image_${column.name}_finite`, sql`${column} not in ('NaN'::float8,'Infinity'::float8,'-Infinity'::float8)`)),
 ]);
 
 export const templateNumericConfig = pgTable('template_numeric_config', {
@@ -197,6 +228,7 @@ export const templateValues = pgTable('template_values', {
   organizationId: tenant(), instanceId: uuid('instance_id').notNull(), versionId: version(), fieldId: uuid('field_id').notNull(), occurrenceId: uuid('occurrence_id').notNull(),
   revision: integer('revision').notNull(), valueType: text('value_type').notNull(), state: text('state').notNull(), origin: text('origin').notNull(),
   numberValue: numeric('number_value'), textValue: text('text_value'), booleanValue: boolean('boolean_value'), dateValue: date('date_value', { mode: 'string' }), optionId: uuid('option_id'),
+  imageId: uuid('image_id'),
   lexical: text('lexical'), errorCode: text('error_code'), errorMessage: text('error_message'),
   savedBy: uuid('saved_by').notNull(), savedAt: time('saved_at').notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.organizationId, t.instanceId, t.fieldId, t.occurrenceId, t.revision] }),
@@ -205,13 +237,14 @@ export const templateValues = pgTable('template_values', {
   foreignKey({ name: 'template_value_occurrence_fk', columns: [t.organizationId, t.instanceId, t.versionId, t.occurrenceId], foreignColumns: [templateOccurrences.organizationId, templateOccurrences.instanceId, templateOccurrences.versionId, templateOccurrences.id] }),
   foreignKey({ name: 'template_value_option_fk', columns: [t.organizationId, t.versionId, t.fieldId, t.optionId], foreignColumns: [templateOptions.organizationId, templateOptions.versionId, templateOptions.fieldId, templateOptions.id] }),
   foreignKey({ columns: [t.organizationId, t.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  foreignKey({ name: 'template_value_image_fk', columns: [t.organizationId, t.imageId], foreignColumns: [templateImageAssets.organizationId, templateImageAssets.id] }),
   index('template_value_latest').on(t.organizationId, t.instanceId, t.fieldId, t.occurrenceId, t.revision.desc()),
   check('template_value_revision', sql`${t.revision} > 0 and ${t.origin} in ('entered', 'calculated', 'default')`),
   check('template_value_payload', sql`(
-    (${t.state} in ('absent', 'empty', 'not_applicable', 'invalid') and num_nonnulls(${t.numberValue}, ${t.textValue}, ${t.booleanValue}, ${t.dateValue}, ${t.optionId}) = 0) or
-    (${t.state} = 'present' and num_nonnulls(${t.numberValue}, ${t.textValue}, ${t.booleanValue}, ${t.dateValue}, ${t.optionId}) = 1 and (
+    (${t.state} in ('absent', 'empty', 'not_applicable', 'invalid') and num_nonnulls(${t.numberValue}, ${t.textValue}, ${t.booleanValue}, ${t.dateValue}, ${t.optionId}, ${t.imageId}) = 0) or
+    (${t.state} = 'present' and num_nonnulls(${t.numberValue}, ${t.textValue}, ${t.booleanValue}, ${t.dateValue}, ${t.optionId}, ${t.imageId}) = 1 and (
       (${t.valueType} in ('numeric', 'result') and ${t.numberValue} is not null and ${t.numberValue}::text not in ('NaN', 'Infinity', '-Infinity')) or
       (${t.valueType} in ('text', 'result') and ${t.textValue} is not null) or (${t.valueType} = 'boolean' and ${t.booleanValue} is not null) or
-      (${t.valueType} = 'date' and ${t.dateValue} is not null) or (${t.valueType} = 'option' and ${t.optionId} is not null)
+      (${t.valueType} = 'date' and ${t.dateValue} is not null) or (${t.valueType} = 'option' and ${t.optionId} is not null) or (${t.valueType} = 'image' and ${t.imageId} is not null)
     ))) and ((${t.state} = 'invalid' and ${t.errorCode} is not null and ${t.errorMessage} is not null) or (${t.state} <> 'invalid' and ${t.errorCode} is null and ${t.errorMessage} is null))`),
 ]);

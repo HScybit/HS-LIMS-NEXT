@@ -3,7 +3,7 @@ import { text } from './input.js';
 
 export function fieldDefaultValue(field) {
   if (field?.defaultState !== 'present') return null;
-  return field.defaultLexical ?? field.defaultNumber ?? field.defaultText ?? field.defaultBoolean ?? field.defaultDate ?? null;
+  return field.defaultLexical ?? field.defaultNumber ?? field.defaultText ?? field.defaultBoolean ?? field.defaultDate ?? field.defaultImageId ?? null;
 }
 
 export function resultDefaultFields(field, input) {

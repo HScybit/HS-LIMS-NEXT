@@ -18,7 +18,7 @@ export function compareOccurrencePosition(left, right) {
 export function valuePayload(value) {
   if (!value || value.state !== 'present') return null;
   if (value.valueType === 'result') return value.numberValue ?? value.textValue;
-  return ({ numeric: value.numberValue, text: value.textValue, boolean: value.booleanValue, date: value.dateValue, option: value.optionId })[value.valueType];
+  return ({ numeric: value.numberValue, text: value.textValue, boolean: value.booleanValue, date: value.dateValue, option: value.optionId, image: value.imageId })[value.valueType];
 }
 
 export function capturedInputValue(value) {

@@ -11,7 +11,7 @@ import { saveCapture } from '../../src/templates/capture.js';
 import { loadWorkflowRun } from '../../src/workflows/load.js';
 import { submitDatasheetTransition } from '../../src/workflows/requests.js';
 
-export async function prepareReportFlow(owner, account, { complete = true, printRoleId, finalSection = false, finalContext = false, productLines = 1, sampleCanWork = true, cancelTestRequest = false } = {}) {
+export async function prepareReportFlow(owner, account, { complete = true, printRoleId, finalSection = false, finalContext = false, productLines = 1, sampleCanWork = true, cancelTestRequest = false, prepareDatasheet } = {}) {
   const work = (callback, options) => withSession(account.token, callback, { csrfToken: account.csrfToken, ...options });
   const fixture = await createLaboratoryFixture(owner, account, { repeated: finalSection, printRoleId, sampleCanWork, cancelTestRequest });
   let draft = await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 1,
@@ -27,6 +27,7 @@ export async function prepareReportFlow(owner, account, { complete = true, print
     await edit({ type: 'addColumn', rowId });
     await edit({ type: 'configureField', columnId: draft.model.rowsById[rowId].columnIds.at(-1), widget: 'tr_result_widget', alias: 'frozen_result' });
   }
+  if (prepareDatasheet) await work((client, identity) => prepareDatasheet(client, identity, { ...fixture.template, revision: draft.model.version.revision }));
   const template = await work(createReportTemplate);
   const sample = await work((client, identity) => registerSample(client, identity, { ...fixture.registration,
     products: Array.from({ length: productLines }, () => structuredClone(fixture.registration.products[0])) }));

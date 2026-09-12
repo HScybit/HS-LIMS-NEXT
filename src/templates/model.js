@@ -51,6 +51,7 @@ export function assembleDefinition(records, { forFreeze = false } = {}) {
     if (!column || column.fieldId) invalid('Field placement is missing or duplicated.');
     if (column.childSectionIds.length) invalid('A column cannot contain both a widget and a nested container.');
     column.fieldId = field.id;
+    if (field.widget === 'template_image_widget' && !field.image) invalid('Template image layout configuration is missing.');
     field.options = [];
   }
   for (const option of options) {

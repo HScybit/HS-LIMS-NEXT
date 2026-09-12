@@ -7,7 +7,7 @@ const fieldKeys = ['id', 'columnId', 'repeatGroupId', 'widget', 'valueType', 'al
 const resultDefaultKeys = ['defaultState', 'defaultNumber', 'defaultText', 'defaultLexical'];
 const numericKeys = ['displayScale', 'padDecimals', 'minimum', 'maximum'];
 const groupKeys = ['id', 'parentGroupId', 'sectionId', 'rowId', 'source', 'minimum', 'maximum'];
-const valueKeys = ['fieldId', 'occurrenceId', 'revision', 'valueType', 'state', 'origin', 'numberValue', 'textValue', 'booleanValue', 'dateValue', 'optionId', 'lexical', 'errorCode', 'errorMessage'];
+const valueKeys = ['fieldId', 'occurrenceId', 'revision', 'valueType', 'state', 'origin', 'numberValue', 'textValue', 'booleanValue', 'dateValue', 'optionId', 'imageId', 'lexical', 'errorCode', 'errorMessage'];
 
 function select(record, keys) {
   const result = {};
@@ -19,11 +19,13 @@ export function datasheetTemplateView(model) {
   const map = (records, keys) => Object.fromEntries(Object.entries(records).map(([id, record]) => [id, select(record, keys)]));
   return {
     version: model.version, rootSectionIds: model.rootSectionIds, calculationOrder: model.calculationOrder,
+    ...(model.imageSources ? { imageSources: model.imageSources } : {}),
     sectionsById: map(model.sectionsById, sectionKeys), rowsById: map(model.rowsById, rowKeys),
     columnsById: map(model.columnsById, columnKeys), groupsById: map(model.groupsById, groupKeys),
     fieldsById: Object.fromEntries(Object.entries(model.fieldsById).map(([id, field]) => [id, {
       ...select(field, fieldKeys), numeric: field.numeric ? select(field.numeric, numericKeys) : null,
       ...(field.widget === 'result_widget' ? select(field, resultDefaultKeys) : {}),
+      ...(field.widget === 'template_image_widget' ? { ...select(field, ['defaultState', 'defaultImageId']), image: select(field.image ?? {}, ['widthPercent', 'marginTop', 'marginBottom', 'marginRight', 'marginLeft', 'alignment']) } : {}),
       options: field.options.map((option) => select(option, ['id', 'label', 'value'])),
     }])),
   };

@@ -10,6 +10,9 @@ import { startMfaSetup, verifyMfaSetup, disableMfa, loadMfaStatus } from '../src
 import { totpAt } from '../src/auth/totp.js';
 import { closePool, getPool } from '../src/db/pool.js';
 import { createAnalyticalTemplate } from '../tests/helpers/templates.js';
+import { addImageWidget } from '../tests/helpers/template-image-fixture.js';
+import { animatedPng } from '../tests/helpers/template-images.js';
+import { uploadTemplateImage } from '../src/template-assets/service.js';
 import { freezeTemplate, editTemplate } from '../src/templates/authoring.js';
 import { createCapture, saveCapture } from '../src/templates/capture.js';
 import { loadCapture, loadDefinition } from '../src/templates/loader.js';
@@ -184,7 +187,12 @@ try {
     const loaded = await loadSample(client, identity, sample.id);
     assert.equal(loaded.customerName, customer.name); assert.equal(loaded.products[0].tests[0].requestStatus, 'allocated');
   }, { csrfToken: session.csrfToken });
-  const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true });
+  const templateImage = { requestId: randomUUID(), originalName: 'Fresh animated template.png', mediaType: 'image/png', content: await animatedPng({ separateDefault: true }) };
+  const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true, prepareDatasheet: async (client, identity, template) => {
+    const result = await addImageWidget(client, identity, template, templateImage, { rowId: template.records.rows[0].id });
+    assert.equal(result.metrics.assets.queryCount, 1);
+    assert.equal((await uploadTemplateImage(client, identity, template.versionId, result.fieldId, result.model.version.revision - 1, templateImage)).replayed, true);
+  } });
   const assets = await withSession(session.token, async (client, identity) => {
     const created = await createReportAssets(client, identity);
     const vector = await uploadReportImage(client, identity, { requestId: randomUUID(), originalName: 'Fresh vector.svg', mediaType: 'image/svg+xml', content: reportSvg });
@@ -224,7 +232,9 @@ try {
   assert.ok(captured.assets.footer.html.includes(`data:image/svg+xml;base64,${reportSvg.toString('base64')}`));
   assert.equal(captured.assets.customCss.versionId, assets.stylesheet.versionId);
   assert.ok(captured.assets.customCss.css.includes(`data:image/svg+xml;base64,${reportSvg.toString('base64')}`));
-  assert.equal(captured.metrics.assets.queryCount, 1); assert.equal(captured.metrics.assets.images, 2);
+  assert.equal(captured.metrics.assets.queryCount, 1); assert.equal(captured.metrics.assets.images, 3);
+  assert.equal(captured.metrics.imageCounts[templateImage.requestId], 2);
+  assert.equal(captured.assets.templateImages[templateImage.requestId].src, `data:image/png;base64,${templateImage.content.toString('base64')}`);
   const queued = await withSession(session.token, (client, identity) => enqueueReportPdf(client, identity, reportId), { csrfToken: session.csrfToken });
   worker = createReportWorkerPool(workerUrl.href); await verifyReportWorkerRole(worker);
   assert.equal((await worker.query('SELECT id FROM sample_reports')).rowCount, 0);

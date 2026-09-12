@@ -134,7 +134,7 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
   const { versions, models, definitions } = await resolveCaptureVersions(client, identity, groups.map((group) => group.templateId),
     { kind: 'report', additionalVersionIds: selectedResults.filter((result) => result.source === 'section').map((result) => result.versionId) });
   const history = await reportFinalSections(client, identity, selectedResults, definitions);
-  for (const group of groups) assertReportSize(models.get(group.templateId), group.results, history.finalCaptures, history.datasheetModels);
+  const imageCounts = new Map(groups.map((group) => [group.key, assertReportSize(models.get(group.templateId), group.results, history.finalCaptures, history.datasheetModels).imageCounts ?? {}]));
   const db = database(client);
   await db.insert(sampleEvents).values({ organizationId: identity.organization_id, id: input.requestId, sampleId,
     eventType: input.finalizeSample ? 'reports_finalized' : 'reports_generated', actorUserId: identity.user_id,
@@ -167,7 +167,7 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
   }
   // Validate the actual captured assets for all groups before this transaction
   // can complete. No per-report/field content query or partial finalisation.
-  await loadReportAssetBatch(client, identity.organization_id, reports.map((report) => report.id));
+  await loadReportAssetBatch(client, identity.organization_id, reports.map((report) => report.id), Object.fromEntries(reports.map((report) => [report.id, imageCounts.get(report.groupKey)])));
   const sampleRevision = input.finalizeSample
     ? (await client.query('SELECT report_finalize_sample($1) AS revision', [input.requestId])).rows[0].revision : sample.revision;
   return { items: reports, replayed: false, sample: { id: sample.id, revision: sampleRevision, status: input.finalizeSample ? 'completed' : sample.status } };
@@ -214,7 +214,7 @@ export async function loadReport(client, identity, reportId) {
   const { finalCaptures, datasheetModels, metrics: captureMetrics } = await reportFinalSections(client, identity, results, loaded.definitions);
   const definition = loaded.definitions.get(report.templateVersionId);
   const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels);
-  const branding = await loadReportAssets(client, identity.organization_id, reportId);
+  const branding = await loadReportAssets(client, identity.organization_id, reportId, size.imageCounts);
   return { report, sample: { sampleNumber: report.sampleNumber, sampleCategoryName: report.sampleCategoryName, customerName: report.customerName, customerAddress: report.customerAddress,
     customerReference: report.customerReference, receivedAt: report.receivedAt, registeredAt: report.registeredAt, dueAt: report.dueAt, description: report.description },
     results, printConfig, model: templateView(definition.model), finalCaptures, datasheetModels, assets: branding.assets,

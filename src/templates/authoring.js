@@ -10,6 +10,7 @@ import { cloneLayout, layoutSelection } from './layout.js';
 import { widgetTypes, requirePermission, uuid, revision, text, integer, bool, decimal, ownRecord, fieldsOnly } from './input.js';
 import { contextWidgetFields, isContextWidget } from './context-widgets.js';
 import { fieldDefaultValue, resultDefaultFields } from './defaults.js';
+import { imageLayout, imageLayoutLabels } from './image-config.js';
 
 const scope = (table, org, versionId) => and(eq(table.organizationId, org), eq(table.versionId, versionId));
 const identityColumns = (identity, versionId) => ({ organizationId: identity.organization_id, versionId });
@@ -69,7 +70,7 @@ async function saveExpression(db, base, model, field, purpose, formula) {
 }
 
 async function configureField(db, base, model, command) {
-  fieldsOnly(command, ['type', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'sourceField', 'serialPadding', 'defaultValue']);
+  fieldsOnly(command, ['type', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'sourceField', 'serialPadding', 'defaultValue', 'image']);
   const column = ownRecord(model.columnsById, command.columnId, 'Column');
   if (column.childSectionIds.length) throw new HttpError(400, 'column_has_children', 'Remove the nested container before adding a widget.');
   if (!Object.hasOwn(widgetTypes, command.widget)) throw new HttpError(400, 'unsupported_widget', 'This widget type is not supported.');
@@ -81,6 +82,8 @@ async function configureField(db, base, model, command) {
   if (sourceField !== null && (!contextual || !contextWidgetFields[command.widget].includes(sourceField))) throw new HttpError(400, 'invalid_context_field', 'Select a supported data field for this widget.');
   if (serialPadding !== null && (command.widget !== 'sno_widget' || !Number.isSafeInteger(serialPadding) || serialPadding < 0 || serialPadding > 100)) throw new HttpError(400, 'invalid_serial_padding', 'Serial number padding must be between 0 and 100.');
   if (contextual && command.editable === true) throw new HttpError(400, 'readonly_context_widget', 'This widget displays its recorded source value.');
+  if (command.widget === 'template_image_widget' && command.editable === true) throw new HttpError(400, 'readonly_image_widget', 'Template images can only be changed in the designer.');
+  if (command.image !== undefined && command.widget !== 'template_image_widget') throw new HttpError(400, 'invalid_image_config', 'Image configuration belongs to an image widget.');
   const alias = text(command.alias, 'Identifier', 200, { optional: true }).trim();
   if (!/^[A-Za-z0-9_]*$/.test(alias)) throw new HttpError(400, 'invalid_alias', 'Identifier can contain only letters, numbers and underscores.');
   if (alias && Object.values(model.fieldsById).some((field) => field.id !== previous?.id && field.alias === alias)) throw new HttpError(400, 'duplicate_alias', 'Key already exist!');
@@ -108,6 +111,11 @@ async function configureField(db, base, model, command) {
   model.fieldsById[field.id] = { ...previous, ...field };
   if (config) {
     await db.insert(t.templateNumericConfig).values(config).onConflictDoUpdate({ target: [t.templateNumericConfig.organizationId, t.templateNumericConfig.versionId, t.templateNumericConfig.fieldId], set: config });
+  }
+  if (field.widget === 'template_image_widget') {
+    const previousLayout = Object.fromEntries(Object.keys(imageLayoutLabels).map((key) => [key, previous?.image?.[key]]));
+    const image = { ...base, fieldId: field.id, ...imageLayout(command.image ?? previousLayout) };
+    await db.insert(t.templateImageConfig).values(image).onConflictDoUpdate({ target: [t.templateImageConfig.organizationId, t.templateImageConfig.versionId, t.templateImageConfig.fieldId], set: image });
   }
   if (field.valueType === 'option') {
     if (!Array.isArray(command.options) || command.options.length > 1000) throw new HttpError(400, 'invalid_options', 'Provide at most 1,000 dropdown options.');
@@ -167,7 +175,7 @@ async function changeRepeatGroup(client, db, base, records, model, { kind, id, e
 }
 
 export async function editTemplate(client, identity, versionId, expectedRevision, command) {
-  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader', 'headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId', 'defaultValue']);
+  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader', 'headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId', 'defaultValue', 'image']);
   if (command.type === 'setReportAssets') {
     requirePermission(identity, 'templates.manage'); uuid(versionId, 'Template version'); revision(expectedRevision);
     const keys = ['headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId'];
@@ -276,6 +284,7 @@ export async function editTemplate(client, identity, versionId, expectedRevision
     await remove(t.templateExpressions, t.templateExpressions.id, selection.expressions);
     await remove(t.templateOptions, t.templateOptions.fieldId, selection.fields);
     await remove(t.templateNumericConfig, t.templateNumericConfig.fieldId, selection.fields);
+    await remove(t.templateImageConfig, t.templateImageConfig.fieldId, selection.fields);
     await remove(t.templateFields, t.templateFields.id, selection.fields);
     await remove(t.templateRepeatGroups, t.templateRepeatGroups.id, selection.groups);
     await remove(t.templateColumns, t.templateColumns.id, selection.columns);
@@ -303,8 +312,9 @@ export async function copyDefinition(db, records, organizationId, versionId) {
   await insertBatch(db, t.templateRows, records.rows.map((row) => ({ ...row, ...base })));
   await insertBatch(db, t.templateColumns, records.columns.map((row) => ({ ...row, ...base })));
   await insertBatch(db, t.templateRepeatGroups, records.groups.map((row) => ({ ...row, ...base })));
-  await insertBatch(db, t.templateFields, records.fields.map(({ numeric: _numeric, ...row }) => ({ ...row, ...base })));
+  await insertBatch(db, t.templateFields, records.fields.map(({ numeric: _numeric, image: _image, ...row }) => ({ ...row, ...base })));
   await insertBatch(db, t.templateNumericConfig, records.fields.filter((row) => row.numeric).map((row) => ({ ...row.numeric, valueType: row.valueType, ...base })));
+  await insertBatch(db, t.templateImageConfig, records.fields.filter((row) => row.image).map((row) => ({ ...row.image, ...base })));
   await insertBatch(db, t.templateOptions, records.options.map((row) => ({ ...row, ...base })));
   await insertBatch(db, t.templateExpressions, records.expressions.map(({ nodes: _nodes, ...row }) => ({ ...row, ...base })));
   await insertBatch(db, t.templateExpressionNodes, records.expressions.flatMap((row) => expressionRecords(base, row.id, row.nodes)));

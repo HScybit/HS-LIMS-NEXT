@@ -8,6 +8,7 @@ import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
 import { widgetTypes } from '../../templates/input.js';
+import { imageLayoutLabels } from '../../templates/image-config.js';
 import { contextWidgetFields, isContextWidget } from '../../templates/context-widgets.js';
 import { fieldDefaultValue } from '../../templates/defaults.js';
 
@@ -26,6 +27,7 @@ export function DesignerModal({ panel, model, onClose, onCommand, busy }) {
     if (panel.type === 'widget') return { type: 'configureField', columnId: column.id, widget: field.widget, alias: field.alias, label: field.label, placeholder: field.placeholder, required: field.required, editable: field.editable,
       displayScale: field.numeric?.displayScale ?? '', padDecimals: field.numeric?.padDecimals ?? false, minimum: field.numeric?.minimum ?? '', maximum: field.numeric?.maximum ?? '',
       sourceField: field.sourceField ?? null, serialPadding: field.serialPadding ?? null,
+      ...(field.widget === 'template_image_widget' ? { image: Object.fromEntries(Object.keys(imageLayoutLabels).map((key) => [key, field.image?.[key] ?? ''])) } : {}),
       ...(field.widget === 'result_widget' ? { defaultValue: fieldDefaultValue(field) ?? '' } : {}),
       ...(field.widget === 'formula_widget' ? { formula: field.formula ?? '' } : {}), options: field.options.map((option) => option.value) };
     if (panel.type === 'column') return { type: 'configureColumn', id: column.id, span: column.span, cssClass: column.cssClass || 'col', widget: field?.widget || 'text_widget', isFinalResult: column.isFinalResult };
@@ -49,6 +51,8 @@ export function DesignerModal({ panel, model, onClose, onCommand, busy }) {
         <section className="template-designer-form-section"><div className="template-designer-form-section__header"><h3>Behavior</h3><p>Configure the widget key and how this field behaves inside the template.</p></div><Toggle label="Required" checked={form.required} onChange={(value) => update('required', value)} /></section>
         <section className="template-designer-form-section"><div className="template-designer-form-section__header"><h3>Fields</h3><p>Identifiers must be unique across the template.</p></div><div className="template-designer-form-grid template-designer-form-grid--single">
           {form.widget === 'text_widget' ? input('label', 'Title') : null}{input('alias', 'Key')}
+          {form.widget === 'template_image_widget' ? Object.entries(imageLayoutLabels).map(([key, label]) => <FormElement key={key} type="text" label={label}
+            inputProps={{ value: form.image[key], onChange: (event) => update('image', { ...form.image, [key]: event.target.value }) }} />) : null}
           {isContextWidget(form.widget) && contextWidgetFields[form.widget].length ? <FormElement type="searchable-select" label={form.widget === 'sample_details_widget_v2' ? 'Sample Attribute' : 'Data Field'} inputProps={{ value: form.sourceField ?? '', options: contextWidgetFields[form.widget].map((value) => ({ value, label: value.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()) })), placeholder: 'Select field', onChange: (value) => update('sourceField', value || null) }} /> : null}
           {form.widget === 'sno_widget' ? input('serialPadding', '0 Padding', 'text', { type: 'number', min: 0, max: 100, onChange: (event) => update('serialPadding', event.target.value === '' ? null : Number(event.target.value)) }) : null}
           {['input_widget', 'number_widget', 'paragraph_widget', 'result_widget'].includes(form.widget) ? input('placeholder', 'Placeholder') : null}

@@ -11,6 +11,7 @@ import TemplateCanvas from './TemplateCanvas.jsx';
 import PageHeader from '../layout/PageHeader.jsx';
 import { DesignerDrawer, DesignerModal } from './DesignerDialogs.jsx';
 import TemplateSettingsPanel from './TemplateSettingsPanel.jsx';
+import { uploadTemplateImageFile } from './image-upload.js';
 import '../../styles/template-designer.scss';
 
 function StatPill({ label, value }) { return <span className="template-designer-stat-pill"><strong>{value}</strong><small>{label}</small></span>; }
@@ -78,6 +79,26 @@ export default function TemplateDesigner({ templateId, canManage }) {
     } finally { pending.current = false; setBusy(false); }
   }, [model, templateId]);
   const toggleEdit = useCallback((id) => setEditing((previous) => ({ ...previous, [id]: !previous[id] })), []);
+  const uploadImage = useCallback(async (fieldId, file) => {
+    if (pending.current || !model) throw new Error('Wait for the current template change to finish.');
+    pending.current = true; setBusy(true);
+    try {
+      let versionId = model.version.id; let revision = model.version.revision;
+      if (model.version.status === 'frozen') {
+        try {
+          const draft = await apiRequest(`/api/template-versions/${versionId}/draft`, { method: 'POST', body: {} });
+          versionId = draft.versionId; revision = draft.revision;
+          setModel({ ...model, version: { ...model.version, id: versionId, revision, status: 'draft' } });
+        } catch (failure) {
+          if (failure.code !== 'draft_exists') throw failure;
+          const current = await apiRequest(`/api/templates/${templateId}`); setModel(current.model);
+          throw new Error('An editable draft already exists. Review it before uploading this image.');
+        }
+      }
+      const result = await uploadTemplateImageFile(file, { versionId, fieldId, revision, requestId: crypto.randomUUID() });
+      setModel(result.model); setError('');
+    } finally { pending.current = false; setBusy(false); }
+  }, [model, templateId]);
 
   if (!model) return error ? <div className="container-fluid py-4"><div className="alert alert-warning" role="alert">{error}<button type="button" className="btn btn-link" onClick={() => setReload((value) => value + 1)}>Retry</button></div></div> : <AppLoader message="Loading template..." />;
   return <>
@@ -97,7 +118,7 @@ export default function TemplateDesigner({ templateId, canManage }) {
     <div className="customContainer plan template-designer-page template-designer-modern" aria-busy={busy}>
       <div className="template-canvas-workspace"><div className="template-canvas-workspace__sheet" style={{ '--template-canvas-zoom': zoom }}>
         {model.rootSectionIds.length ? <Profiler id="template-canvas" onRender={(_id, phase, duration, _base, start) => performance.measure(`template:react-${phase}`, { start, duration })}>
-          <TemplateCanvas model={model} mode={canManage ? 'plan' : 'view'} editing={editing} onToggleEdit={toggleEdit} onCommand={command} onPanel={setPanel} selected={selected} onSelect={setSelected} busy={busy} />
+          <TemplateCanvas model={model} mode={canManage ? 'plan' : 'view'} editing={editing} onToggleEdit={toggleEdit} onCommand={command} onPanel={setPanel} selected={selected} onSelect={setSelected} busy={busy} onUploadImage={uploadImage} showImagePlaceholder />
         </Profiler> : <div className="template-canvas-empty"><div className="template-canvas-empty__icon"><AppIcon name="file-text" size={26} /></div><h2>No containers yet</h2><p>Add a container to start building this printable template.</p>{canManage ? <button type="button" disabled={busy} onClick={() => command({ type: 'addSection' })}><AppIcon name="plus" size={17} /><span>Add Container</span></button> : null}</div>}
       </div></div>
     </div>

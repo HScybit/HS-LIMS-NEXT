@@ -32,7 +32,7 @@ export async function loadDefinitions(client, organizationId, versionIds, option
   }
   const where = (table) => and(eq(table.organizationId, organizationId), inArray(table.versionId, versionIds));
   const { templates, templateVersions: versions, templateSections: sections, templateRows: rows,
-    templateColumns: columns, templateFields: fields, templateNumericConfig: numeric,
+    templateColumns: columns, templateFields: fields, templateNumericConfig: numeric, templateImageConfig: image,
     templateOptions: choices, templateExpressions: expressions, templateExpressionNodes: nodes, templateRepeatGroups: groups } = tables;
   const latestVersions = options.templateIds ? db.selectDistinctOn([versions.templateId], { id: versions.id }).from(versions)
     .where(and(eq(versions.organizationId, organizationId), ne(versions.status, 'building'), inArray(versions.templateId, options.templateIds)))
@@ -55,8 +55,11 @@ export async function loadDefinitions(client, organizationId, versionIds, option
   const fieldNumeric = db.select().from(numeric)
     .where(and(eq(numeric.organizationId, fields.organizationId), eq(numeric.versionId, fields.versionId), eq(numeric.fieldId, fields.id)))
     .limit(1).as('template_numeric_config');
-  const fieldRows = await query('fields_numeric_configuration', () => db.select({ field: fields, numeric }).from(fields)
-    .leftJoinLateral(fieldNumeric, sql`true`).where(where(fields)).limit(200_001));
+  const fieldImage = db.select().from(image)
+    .where(and(eq(fields.valueType, 'image'), eq(image.organizationId, fields.organizationId), eq(image.versionId, fields.versionId), eq(image.fieldId, fields.id)))
+    .limit(1).as('template_image_config');
+  const fieldRows = await query('fields_numeric_configuration', () => db.select({ field: fields, numeric, image }).from(fields)
+    .leftJoinLateral(fieldNumeric, sql`true`).leftJoinLateral(fieldImage, sql`true`).where(where(fields)).limit(200_001));
   const optionRows = await query('options', () => db.select().from(choices).where(where(choices)).orderBy(asc(choices.position), asc(choices.id)).limit(200_001));
   // The bounded lateral lookup keeps fresh-data estimates from scanning every
   // node in the version for each expression. Retain the existing node projection.
@@ -72,7 +75,7 @@ export async function loadDefinitions(client, organizationId, versionIds, option
     records: { version: { ...selectedVersion.version, code: selectedVersion.code, active: selectedVersion.active },
       sections: [], rows: [], columns: [], fields: [], options: [], expressions: [], groups: [] },
   }]));
-  const fieldByColumn = new Map(fieldRows.map(({ field, numeric }) => [`${field.versionId}:${field.columnId}`, { ...field, numeric }]));
+  const fieldByColumn = new Map(fieldRows.map(({ field, numeric, image }) => [`${field.versionId}:${field.columnId}`, { ...field, numeric, ...(image ? { image } : {}) }]));
   const expressionMap = new Map();
   for (const { expression, node } of expressionRows) {
     const key = `${expression.versionId}:${expression.id}`;
@@ -139,7 +142,7 @@ export async function loadCaptures(client, organizationId, requests, { pinnedVal
   if (occurrences.rows.length > 200_000) throw new HttpError(422, 'capture_batch_limit', 'The combined captures exceed the supported report size.');
   const valueColumns = `value.instance_id AS "instanceId", value.field_id AS "fieldId", value.occurrence_id AS "occurrenceId",
     value.revision, value.value_type AS "valueType", value.state, value.origin, value.number_value AS "numberValue", value.text_value AS "textValue", value.boolean_value AS "booleanValue",
-    value.date_value::text AS "dateValue", value.option_id AS "optionId", value.lexical, value.error_code AS "errorCode", value.error_message AS "errorMessage", value.saved_at AS "savedAt", value.saved_by AS "savedBy"`;
+    value.date_value::text AS "dateValue", value.option_id AS "optionId", value.image_id AS "imageId", value.lexical, value.error_code AS "errorCode", value.error_message AS "errorMessage", value.saved_at AS "savedAt", value.saved_by AS "savedBy"`;
   // Explicit historical result selections share the third capture statement.
   // They remain separate from the active values rendered in the current rows.
   // Materialize each key set once: joining occurrences into the history scan

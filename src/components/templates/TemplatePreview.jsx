@@ -19,6 +19,6 @@ export default function TemplatePreview({ templateId, versionId }) {
   if (error) return <main className="template-print-preview template-print-preview--empty"><section className="template-print-preview__empty"><h1>Preview unavailable</h1><p>{error}</p><button type="button" onClick={() => window.close()}>Close</button></section></main>;
   if (!model) return <AppLoader message="Loading template preview..." fullPage />;
   return <main className="template-print-preview"><header className="template-print-preview__toolbar"><div className="template-print-preview__title"><p>Template Preview</p><h1>{model.version.name}</h1></div><div className="template-print-preview__controls"><div className="template-print-preview__segmented" role="group" aria-label="Preview mode"><button type="button" className="is-active">HTML</button></div><button type="button" onClick={() => window.close()}>Close</button></div></header>
-    <section className="template-print-preview__workspace"><div className="template-print-preview__html is-active"><article className="template-preview-document"><div className="template-preview-document__body"><TemplateCanvas model={model} mode="view" /></div></article></div></section>
+    <section className="template-print-preview__workspace"><div className="template-print-preview__html is-active"><article className="template-preview-document"><div className="template-preview-document__body"><TemplateCanvas model={model} mode="view" showImagePlaceholder /></div></article></div></section>
   </main>;
 }
