@@ -17,10 +17,18 @@ import { registerSample } from '../src/samples/register.js';
 import { loadSample } from '../src/samples/load.js';
 import { generateTestRequests } from '../src/test-requests/generate.js';
 import { allocateTestRequest } from '../src/test-requests/allocate.js';
+import { prepareReportFlow } from '../tests/helpers/report-flow.js';
+import { generateReports } from '../src/reports/service.js';
+import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
+import { loadReportRenderer } from '../src/reports/renderer.js';
+import { createReportWorkerPool, verifyReportWorkerRole, processNextReportJob } from '../src/reports/worker.js';
+
+process.loadEnvFile('.env.worker.local');
 
 const ownerUrl = new URL(process.env.MIGRATION_DATABASE_URL);
 const appUrl = new URL(process.env.DATABASE_URL);
-for (const [url, username] of [[ownerUrl, 'sampleify_owner'], [appUrl, 'sampleify_app']]) {
+const workerUrl = new URL(process.env.WORKER_DATABASE_URL);
+for (const [url, username] of [[ownerUrl, 'sampleify_owner'], [appUrl, 'sampleify_app'], [workerUrl, 'sampleify_report_worker']]) {
   if (url.hostname !== '127.0.0.1' || url.port !== '55442' || url.pathname !== '/sampleify_local' || url.username !== username) {
     throw new Error('Migration verification requires the dedicated local synthetic database roles.');
   }
@@ -30,12 +38,13 @@ for (const [url, username] of [[ownerUrl, 'sampleify_owner'], [appUrl, 'sampleif
 // neither existing data nor previously applied migrations are reset or removed.
 const databaseName = `sampleify_verify_${randomUUID().replaceAll('-', '')}`;
 const admin = new pg.Client({ connectionString: ownerUrl.href });
-let owner;
+let owner; let worker;
 try {
   await admin.connect();
   await admin.query(`CREATE DATABASE "${databaseName}"`);
   ownerUrl.pathname = `/${databaseName}`;
   appUrl.pathname = `/${databaseName}`;
+  workerUrl.pathname = `/${databaseName}`;
   process.env.DATABASE_URL = appUrl.href;
   owner = new pg.Pool({ connectionString: ownerUrl.href, max: 2 });
   const client = await owner.connect();
@@ -75,10 +84,21 @@ try {
     const loaded = await loadSample(client, identity, sample.id);
     assert.equal(loaded.customerName, customer.name); assert.equal(loaded.products[0].tests[0].requestStatus, 'allocated');
   }, { csrfToken: session.csrfToken });
+  const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true });
+  const generated = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, reportFlow.input), { csrfToken: session.csrfToken });
+  const reportId = generated.items[0].id;
+  const queued = await withSession(session.token, (client, identity) => enqueueReportPdf(client, identity, reportId), { csrfToken: session.csrfToken });
+  worker = createReportWorkerPool(workerUrl.href); await verifyReportWorkerRole(worker);
+  assert.equal((await worker.query('SELECT id FROM sample_reports')).rowCount, 0);
+  const printed = await processNextReportJob({ pool: worker, renderer: await loadReportRenderer(), workerId: randomUUID() });
+  assert.deepEqual(printed, { jobId: queued.job.id, status: 'succeeded' });
+  const pdf = await withSession(session.token, (client, identity) => reportPdfFile(client, identity, reportId), { readOnly: true });
+  assert.equal(pdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration and allocation passed with RLS. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation and a frozen PDF job passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
+  await worker?.end();
   await closePool();
   await owner?.end();
   await admin.end();

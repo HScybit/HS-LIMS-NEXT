@@ -10,7 +10,9 @@ Datasheet submission records the exact frozen capture, selected final result, un
 
 **Test Reports** opens the COA template selection and saved-revision preview. Consolidated, product-wise and parameter-wise drafts pin submitted results, scientific specifications, report templates and print choices. Report widgets include sample details, test-request data, decision-rule fields, final results and serial numbers. Final-result sections retain repeated rows from the frozen capture. Generation retries reuse their request identity; explicit regeneration creates another immutable revision. Definition and capture reads batch across the report's templates and datasheets.
 
-This is an initial working flow. Report finalisation, accreditation/ULR handling, PDF generation and durable jobs remain under development. Full sample editing and variants, project fields/images, allocation resources and qualification checks, remaining widgets, rich text, full access/print settings, MFA enrollment and migration adapters are also incomplete. Rejection timing and conflicting scientific error/numeric-prefix policies remain unresolved; affected actions do not silently choose a different interpretation.
+**Print** queues a durable PDF job and opens the browser print dialog when it is ready. A separate restricted worker renders the same frozen template/capture used by the preview. Each attempt retains its actual worker, timestamps and outcome; completed PDF bytes and checksums are immutable. Reopening or repeating Print uses the existing job and artifact for that report revision.
+
+This is an initial working flow. Report finalisation and accreditation/ULR handling remain under development. Full sample editing and variants, captured report assets, allocation resources and qualification checks, remaining widgets, rich text, full access/print settings, MFA enrollment and migration adapters are also incomplete. Rejection timing and conflicting scientific error/numeric-prefix policies remain unresolved; affected actions do not silently choose a different interpretation.
 
 ## Run locally
 
@@ -20,9 +22,11 @@ Requirements: Node **22.23.0**, npm, Docker Desktop and Google Chrome for browse
 nvm use
 npm ci
 npm run db:local
+npm run worker:setup
 npm run db:migrate
 npm run db:seed
 npm run db:seed:lab
+npm run build:report-renderer
 npm run dev
 ```
 
@@ -32,6 +36,12 @@ Open `http://127.0.0.1:3000`. The synthetic username and generated password are 
 
 `db:local` creates the dedicated `sampleify-next-local-postgres` container and `sampleify-next-local-postgres18` volume using PostgreSQL 18.6 on **127.0.0.1:55442**. It generates private `.env.local` credentials. Repeating the command starts the same database without removing data. Existing unrelated resources are rejected. Stop this database with `docker stop sampleify-next-local-postgres` when it is no longer needed.
 
+Run `npm run worker:reports` in a separate terminal for PDF printing. `worker:setup` provisions `sampleify_report_worker` before migrations and saves its private connection in `.env.worker.local`. The worker has no application/owner role membership and cannot write analytical records. Supply only `WORKER_DATABASE_URL` to the worker in a managed environment; never supply schema-owner credentials to a web or worker process.
+
+`npm run build` also builds the report renderer. During development, rebuild it and restart the worker after template-rendering, PDF, style or dependency changes. Private renderer artifacts live under `.local/report-renderers/`; their identifier hashes the bundled rendering code, stylesheet and dependency lock. A worker processes only its matching release. Drain old queued jobs with the matching worker/dependencies before retiring a release; retain generated PDF artifacts and database backups. Deploy the renderer artifacts alongside the web and worker release. Without a worker, jobs remain queued; closing the browser does not cancel them. Transient failures retry with delays up to five attempts. A terminal failure requires correcting its cause and explicitly regenerating the report to create a new revision.
+
+PDF rendering uses installed Google Chrome, permits only captured inline resources and has a 30-second rendering limit and 50 MiB output limit. It does not fetch report images from the network. Header/footer heights and margins retain the source CSS-pixel units. Uncaptured assets prevent printing until the asset adapter is completed. The HTML and render model exist only in memory; the database stores typed job/attempt metadata and generated PDF bytes.
+
 Password recovery uses a local capture adapter: messages are written to `.local/mail/` and never sent externally. Open the URL from the generated text file to complete a reset. The adapter only runs with a loopback application origin. External delivery and production configuration require a separate integration.
 
 ## Local verification
@@ -39,6 +49,7 @@ Password recovery uses a local capture adapter: messages are written to `.local/
 ```sh
 npm run lint
 npm test
+npm run build:report-renderer
 npm run test:integration
 npm run test:migrations
 npm run build
@@ -47,7 +58,7 @@ npm run test:e2e
 npm run verify
 ```
 
-Browser tests launch the production build at `http://127.0.0.1:3100`, using installed Google Chrome and new synthetic accounts. Integration tests accept only the dedicated local database. Test data remains available for inspection; tests do not truncate or drop tables. Browser traces and reports are ignored by Git.
+Browser tests launch the production build at `http://127.0.0.1:3100`, using installed Google Chrome and new synthetic accounts. The Print test starts a separate worker, verifies the actual PDF blob and checksum, and observes the native print call without opening a headless print dialog. Native dialog/print-layout checks use visible Chrome separately. Integration tests accept only the dedicated local database. Test data remains available for inspection; tests do not truncate or drop tables. Browser traces and reports are ignored by Git.
 
 `test:migrations` creates a fresh synthetic database in the same local PostgreSQL container, applies the full migration chain twice, and checks authentication, template capture, customer creation, sample registration and allocation using the restricted application role. It retains that database and records its name in `.local/migration-verification.json`; it never resets an existing database.
 
@@ -80,4 +91,4 @@ The server benchmark creates synthetic small, large and nested templates in the 
 
 Each browser benchmark requires its completed server fixture report and a profiling build. It measures 30 loads locally and with 4× CPU throttling, 150 ms network latency and limited bandwidth, plus saves. Runtime measurements also separate input response and React commits from API loading, parsing and initialization. Run benchmarks without concurrent builds or tests. Reports stay in `.local/`; these synthetic measurements do not establish source-application or production performance.
 
-Never commit `.env.local`, `.local/`, credentials, database dumps or browser traces. No GitHub Actions service is required.
+Never commit `.env.local`, `.env.worker.local`, `.local/`, credentials, database dumps or browser traces. No GitHub Actions service is required.

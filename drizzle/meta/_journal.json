@@ -316,6 +316,34 @@
       "when": 1789176132137,
       "tag": "0044_report_owner_parameter_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1789180335924,
+      "tag": "0045_durable_report_pdf_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1789180598323,
+      "tag": "0046_report_pdf_worker_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789181812016,
+      "tag": "0047_report_pdf_job_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789183046270,
+      "tag": "0048_private_trigger_functions",
+      "breakpoints": true
     }
   ]
 }

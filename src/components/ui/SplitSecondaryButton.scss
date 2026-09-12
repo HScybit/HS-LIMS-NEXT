@@ -1,0 +1,53 @@
+.smplfy-btn-group.btn-group {
+  position: relative;
+  display: inline-flex;
+}
+
+.smplfy-btn-group.btn-group > .smplfy-btn:has(+ .dropdown-toggle-split),
+.smplfy-btn-group.btn-group > .dropdown-toggle-split.smplfy-btn {
+  --bs-btn-border-width: var(--smplfy-button-space-0);
+  --smplfy-button-current-height: var(--smplfy-split-button-height);
+  --smplfy-button-current-gap: var(--smplfy-split-button-gap);
+  --smplfy-button-current-icon-size: var(--smplfy-split-button-icon-size);
+
+  min-height: var(--smplfy-split-button-height);
+  height: var(--smplfy-split-button-height);
+  flex: 0 0 auto;
+  box-shadow: none;
+}
+
+.smplfy-btn-group.btn-group > .smplfy-btn:has(+ .dropdown-toggle-split) {
+  width: var(--smplfy-split-button-primary-width);
+  padding:
+    var(--smplfy-split-button-padding-y)
+    var(--smplfy-split-button-padding-x);
+  border-start-start-radius: var(--smplfy-split-button-radius);
+  border-start-end-radius: var(--smplfy-button-space-0);
+  border-end-start-radius: var(--smplfy-split-button-radius);
+  border-end-end-radius: var(--smplfy-button-space-0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--smplfy-split-button-gap);
+}
+
+.smplfy-btn-group.btn-group > .dropdown-toggle-split.smplfy-btn {
+  width: var(--smplfy-split-button-secondary-width);
+  min-width: var(--smplfy-split-button-secondary-width);
+  padding-inline: var(--smplfy-button-space-0);
+  border-inline-start: var(--smplfy-split-button-divider-width) solid var(--smplfy-split-button-divider-color);
+  border-start-start-radius: var(--smplfy-button-space-0);
+  border-start-end-radius: var(--smplfy-split-button-radius);
+  border-end-start-radius: var(--smplfy-button-space-0);
+  border-end-end-radius: var(--smplfy-split-button-radius);
+}
+
+.smplfy-btn-group.btn-group > .dropdown-toggle-split::after {
+  display: none;
+}
+
+.smplfy-btn-group.btn-group > .dropdown-menu {
+  position: absolute;
+  inset-block-start: calc(100% + var(--smplfy-dropdown-offset));
+  inset-inline-end: var(--smplfy-button-space-0);
+}

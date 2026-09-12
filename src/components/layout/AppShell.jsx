@@ -29,10 +29,12 @@ export default function AppShell({ identity, children }) {
   useEffect(() => {
     let active = true;
     let pending = false;
+    let refreshRequested = false;
     const controller = new AbortController();
     const expected = JSON.stringify(identity);
     async function refreshIdentity() {
-      if (pending || document.visibilityState === 'hidden') return;
+      if (document.visibilityState === 'hidden') return;
+      if (pending) { refreshRequested = true; return; }
       pending = true;
       try {
         const result = await apiRequest('/api/auth/session', { signal: controller.signal });
@@ -42,13 +44,18 @@ export default function AppShell({ identity, children }) {
         if (active && JSON.stringify(result.identity) !== expected) router.refresh();
       } catch (error) {
         if (active && error.status === 401) { router.replace('/login'); router.refresh(); }
-      } finally { pending = false; }
+      } finally {
+        pending = false;
+        if (refreshRequested && active) { refreshRequested = false; void refreshIdentity(); }
+      }
     }
     const interval = window.setInterval(refreshIdentity, 20_000);
     const channel = 'BroadcastChannel' in window ? new BroadcastChannel('sampleify_session') : null;
     if (channel) channel.onmessage = refreshIdentity;
     document.addEventListener('visibilitychange', refreshIdentity);
     window.addEventListener('focus', refreshIdentity);
+    // A tab can finish hydration after a logout broadcast or focus event.
+    void refreshIdentity();
     return () => {
       active = false;
       controller.abort();

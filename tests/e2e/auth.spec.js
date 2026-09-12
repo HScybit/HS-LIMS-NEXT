@@ -83,6 +83,26 @@ test('HTTP boundaries reject cross-origin, malformed and CSRF-free mutations', a
   expect((await request.post('/api/auth/logout', { headers: { Origin: origin }, data: {} })).status()).toBe(403);
 });
 
+test('a tab finishing hydration after another tab logs out discards its earlier authenticated screen', async ({ page, context }) => {
+  const account = await createAccount(owner);
+  await signIn(page, account);
+  const other = await context.newPage();
+  let release;
+  const scriptsReady = new Promise((resolve) => { release = resolve; });
+  await other.route('**/_next/static/chunks/*.js', async (route) => { await scriptsReady; await route.continue(); });
+  try {
+    await other.goto('/me', { waitUntil: 'commit' });
+    await expect(other.getByRole('heading', { name: 'Synthetic Analyst', exact: true })).toBeVisible();
+    await page.bringToFront();
+    await page.getByRole('button', { name: 'Log out', exact: true }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await other.bringToFront();
+    release();
+    await expect(other).toHaveURL(/\/login$/);
+    await expect(other.getByRole('heading', { name: 'Synthetic Analyst', exact: true })).toHaveCount(0);
+  } finally { release(); await other.close(); }
+});
+
 test('password recovery UI consumes a real locally captured single-use link', async ({ page }) => {
   const account = await createAccount(owner);
   await page.goto('/login');

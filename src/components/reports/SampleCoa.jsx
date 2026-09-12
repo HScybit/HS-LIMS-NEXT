@@ -15,6 +15,7 @@ import TemplateCanvas from '../templates/TemplateCanvas.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import { defaultPrintSettings } from '../../reports/input.js';
 import { ParameterSelectionModal, PrintConfigModal } from './ReportModals.jsx';
+import ReportPrintControl from './ReportPrintControl.jsx';
 import '../../styles/coa-report-selection-page.scss';
 import '../../styles/finalised-report-page.scss';
 import '../../styles/template-designer.scss';
@@ -112,6 +113,7 @@ export default function SampleCoa({ sampleId }) {
       <VersionSelector value={selectedId} options={versions.map((report) => ({ value: report.id, label: `Version ${report.revision}` }))} disabled={versions.length < 2} onChange={selectReport} />
       {selectedReport ? <StatusPill color="blue">{selectedReport.status === 'draft' ? 'Draft' : selectedReport.status}</StatusPill> : null}
     </div><div className="finalised-report-page-header__actions">
+      {selectedId ? <ReportPrintControl key={selectedId} reportId={selectedId} disabled={!activePreview || Boolean(previewError)} onError={setError} /> : null}
       {options.canGenerate ? <MoreActionButton items={[{ key: 'regenerate', label: 'Regenerate', leftIcon: 'refresh', onClick: () => { setSelecting(true); setError(''); } }]} /> : null}
     </div></section>}</PageHeader>
     {error ? <div className="alert alert-danger m-3" role="alert">{error}</div> : null}

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
-    "build": "next build",
+    "build": "npm run build:report-renderer && next build",
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint .",
     "db:local": "node scripts/local-database.js",
@@ -17,14 +17,17 @@
     "db:seed": "node --env-file=.env.local scripts/seed.js",
     "db:seed:lab": "node --env-file=.env.local scripts/seed-laboratory.js",
     "test": "node --test tests/unit/*.test.js",
-    "test:integration": "node --env-file=.env.local --test --test-concurrency=1 tests/integration/*.test.js",
-    "test:migrations": "node --env-file=.env.local scripts/verify-migrations.js",
+    "test:integration": "npm run build:report-renderer && node --env-file=.env.local --test --test-concurrency=1 tests/integration/*.test.js",
+    "test:migrations": "npm run build:report-renderer && node --env-file=.env.local scripts/verify-migrations.js",
     "test:e2e": "playwright test",
     "benchmark:templates": "node --env-file=.env.local scripts/benchmark-templates.js",
     "benchmark:datasheets": "node --env-file=.env.local scripts/benchmark-datasheets.js",
     "benchmark:browser": "playwright test --config=playwright.performance.config.js tests/performance/designer.spec.js",
     "benchmark:datasheet-browser": "playwright test --config=playwright.performance.config.js tests/performance/datasheets.spec.js",
-    "verify": "npm run lint && npm test && npm run test:integration && npm run build && npm run test:e2e"
+    "verify": "npm run lint && npm test && npm run test:integration && npm run build && npm run test:e2e",
+    "build:report-renderer": "node scripts/build-report-renderer.js",
+    "worker:setup": "node scripts/local-report-worker.js",
+    "worker:reports": "node --env-file=.env.worker.local scripts/report-worker.js"
   },
   "dependencies": {
     "@fontsource/inter": "5.2.8",
@@ -34,6 +37,7 @@
     "drizzle-orm": "0.45.2",
     "next": "16.3.4",
     "pg": "8.23.0",
+    "playwright-core": "1.63.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-select": "5.10.2",
@@ -42,6 +46,7 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "drizzle-kit": "0.31.10",
+    "esbuild": "0.25.12",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.4",
     "sass": "1.104.0"

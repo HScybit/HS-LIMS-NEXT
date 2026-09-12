@@ -19,7 +19,7 @@ const nextConfig = {
       '/api/template-versions/:versionId', '/api/template-versions/:versionId/:action(freeze|draft)',
       '/api/datasheets/:datasheetId', '/api/datasheets/:datasheetId/:action(values|calculate|repeats|submit)',
       '/api/samples', '/api/samples/:sampleId', '/api/samples/:sampleId/test-requests',
-      '/api/samples/:sampleId/:action(reports|report-options)', '/api/reports/:reportId',
+      '/api/samples/:sampleId/:action(reports|report-options)', '/api/reports/:reportId', '/api/reports/:reportId/pdf',
       '/api/test-requests/:requestId', '/api/test-requests/:requestId/:action(assignments|allocation-options)',
       '/api/workflow-runs/:runId', '/api/workflow-runs/:runId/:action(transitions|datasheet-transitions)',
       '/api/approvals/:caseId', '/api/approval-assignments/:assignmentId/approve',
