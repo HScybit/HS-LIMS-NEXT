@@ -26,6 +26,8 @@ import { uploadReportImage } from '../src/report-assets/images.js';
 import { saveWatermark, loadWatermark, deleteWatermark } from '../src/report-assets/watermarks.js';
 import { loadCustomCss, saveCustomCss, loadCurrentCustomCss } from '../src/report-assets/custom-css.js';
 import { reportSvg } from '../tests/helpers/report-svg.js';
+import { emptyUncertaintyGrid, updateUncertaintyGrid } from '../src/masters/parameter-grid.js';
+import { loadTestParameter, saveTestParameter, retireTestParameter } from '../src/masters/test-parameters.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
@@ -71,7 +73,7 @@ try {
   const role = (await getPool().query('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')).rows[0];
   assert.deepEqual(role, { rolsuper: false, rolbypassrls: false });
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
-  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage'] });
+  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
   await withSession(session.token, async (client, identity) => {
     const template = await createAnalyticalTemplate(client, identity);
@@ -84,6 +86,22 @@ try {
     assert.equal(loaded.occurrences.length, 3);
   }, { csrfToken: session.csrfToken });
   const laboratory = await createLaboratoryFixture(owner, account);
+  const masterGrid = updateUncertaintyGrid(emptyUncertaintyGrid(), { headers: ['Sr. no.', 'Text', 'Notes'], data: [['1', '000.00', '=A1*2'], ['2', '  exact text  ', '']] });
+  const masterKey = `FRESH_${randomUUID().slice(0, 8)}`;
+  const masterInput = { id: randomUUID(), revision: 0, requestId: randomUUID(), name: 'Fresh uncertainty parameter', description: '',
+    key: masterKey, schemeAbbreviation: masterKey, order: 0, laboratoryId: laboratory.laboratory.id, measurementUncertainty: masterGrid };
+  await withSession(session.token, (client, identity) => saveTestParameter(client, identity, masterInput), { csrfToken: session.csrfToken });
+  await withSession(session.token, async (client, identity) => {
+    assert.equal((await saveTestParameter(client, identity, masterInput)).revision, 1);
+    const historical = await loadTestParameter(client, identity, masterInput.id, { atRevision: 1 });
+    assert.deepEqual(historical.measurementUncertainty, masterGrid); assert.equal(historical.savedBy, account.userId);
+    await saveTestParameter(client, identity, { ...masterInput, revision: 1, requestId: randomUUID(), name: 'Later fresh master', measurementUncertainty: null });
+    const removal = { id: masterInput.id, revision: 2, requestId: randomUUID() };
+    assert.equal((await retireTestParameter(client, identity, removal)).revision, 3);
+    assert.equal((await retireTestParameter(client, identity, removal)).revision, 3);
+    assert.deepEqual(await loadTestParameter(client, identity, masterInput.id, { atRevision: 1 }), historical);
+    await assert.rejects(loadTestParameter(client, identity, masterInput.id), { code: 'parameter_not_found' });
+  }, { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
     const customer = await quickCreateCustomer(client, identity, { name: 'Synthetic fresh customer', legalName: 'Synthetic legal name', contactPersonName: 'Synthetic contact',
       contactPersonEmail: 'fresh@example.invalid', contactPersonPhone: '00000000', billToAddress: 'Synthetic billing\nSecond line', shipToAddress: 'Synthetic receiving' });
@@ -178,7 +196,7 @@ try {
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, typed parameter uncertainty history/retry/retirement, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

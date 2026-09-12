@@ -77,6 +77,7 @@ export const testParameters = pgTable('test_parameters', {
   ...identity(), ...metadata(), description: text('description').notNull().default(''), laboratoryId: uuid('laboratory_id'), measurementUnitId: uuid('measurement_unit_id'),
   defaultScale: integer('default_scale').notNull().default(2), masterKey: text('master_key').notNull(), schemeAbbreviation: text('scheme_abbreviation').notNull(),
   displayOrder: integer('display_order').notNull().default(0),
+  uncertaintyConfigured: boolean('uncertainty_configured').notNull().default(false), saveRequestId: uuid('save_request_id'),
 }, (t) => [...named(t, 'test_parameters'), link(t, t.laboratoryId, laboratories), link(t, t.measurementUnitId, measurementUnits),
   uniqueIndex('test_parameter_master_key').on(t.organizationId, sql`lower(${t.masterKey})`), uniqueIndex('test_parameter_scheme_key').on(t.organizationId, sql`lower(${t.schemeAbbreviation})`),
   check('test_parameter_display', sql`${t.defaultScale} between 0 and 12 and ${t.displayOrder} >= 0 and length(trim(${t.masterKey})) between 1 and 64 and length(trim(${t.schemeAbbreviation})) between 1 and 64`)]);

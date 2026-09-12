@@ -30,11 +30,11 @@ try {
   await client.query(`INSERT INTO customer_addresses(organization_id, customer_id, address_type, freeform_address, is_default)
     SELECT $1, $2, 'billing', 'Synthetic demonstration address', true
     WHERE NOT EXISTS (SELECT 1 FROM customer_addresses WHERE organization_id=$1 AND customer_id=$2 AND address_type='billing')`, [account.organizationId, customer.rows[0].id]);
-  for (const permission of ['templates.read', 'templates.manage', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'report_settings.read', 'report_settings.manage']) {
+  for (const permission of ['templates.read', 'templates.manage', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'report_settings.read', 'report_settings.manage', 'masters.read', 'masters.manage']) {
     await client.query('INSERT INTO permissions(code, description) VALUES($1, $1) ON CONFLICT DO NOTHING', [permission]);
     await client.query('INSERT INTO role_permissions(organization_id, role_id, permission_code) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [account.organizationId, account.roleId, permission]);
   }
   await client.query('COMMIT');
-  console.log(`Synthetic laboratory ${existing.rowCount ? 'reused' : 'created'}; demonstration registration and allocation permissions are available. Existing passwords and laboratory records were preserved.`);
+  console.log(`Synthetic laboratory ${existing.rowCount ? 'reused' : 'created'}; demonstration registration, allocation and test-parameter permissions are available. Existing passwords and laboratory records were preserved.`);
 } catch (error) { await client.query('ROLLBACK'); throw error; }
 finally { client.release(); await owner.end(); }
