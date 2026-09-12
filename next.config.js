@@ -24,6 +24,7 @@ const nextConfig = {
       '/api/workflow-runs/:runId', '/api/workflow-runs/:runId/:action(transitions|datasheet-transitions)',
       '/api/approvals/:caseId', '/api/approval-assignments/:assignmentId/approve',
       '/api/report-assets/documents', '/api/report-assets/documents/:documentId',
+      '/api/report-assets/watermarks', '/api/report-assets/watermarks/:watermarkId',
     ].map((source) => ({ source, headers: [{ key: 'Content-Type', value: 'application/json; charset=utf-8' }] }))];
   },
 };

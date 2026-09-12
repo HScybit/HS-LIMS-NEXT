@@ -23,6 +23,7 @@ import { createReportTemplate } from '../tests/helpers/reports.js';
 import { createReportAssets } from '../tests/helpers/report-assets.js';
 import { deleteReportDocument, saveReportDocument } from '../src/report-assets/documents.js';
 import { uploadReportImage } from '../src/report-assets/images.js';
+import { saveWatermark, loadWatermark, deleteWatermark } from '../src/report-assets/watermarks.js';
 import { reportSvg } from '../tests/helpers/report-svg.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
@@ -97,6 +98,13 @@ try {
   const assets = await withSession(session.token, async (client, identity) => {
     const created = await createReportAssets(client, identity);
     const vector = await uploadReportImage(client, identity, { requestId: randomUUID(), originalName: 'Fresh vector.svg', mediaType: 'image/svg+xml', content: reportSvg });
+    const watermarkInput = { watermarkId: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh watermark', imageId: vector.id, opacity: 0, width: 240, height: 320, rotation: 0 };
+    const watermark = await saveWatermark(client, identity, watermarkInput);
+    assert.equal((await saveWatermark(client, identity, watermarkInput)).replayed, true);
+    await deleteWatermark(client, identity, watermark.watermark.id, { requestId: randomUUID(), revision: 1 });
+    const oldWatermark = await loadWatermark(client, identity, watermark.watermark.id, { versionId: watermark.watermark.versionId });
+    assert.equal(oldWatermark.imageId, vector.id); assert.equal(oldWatermark.opacity, 0); assert.equal(oldWatermark.rotation, 0);
+    await assert.rejects(loadWatermark(client, identity, watermark.watermark.id), { code: 'watermark_not_found' });
     const footer = await saveReportDocument(client, identity, { ...created.footerInput, requestId: randomUUID(), revision: 1,
       templateHtml: `${created.footerInput.templateHtml}<img src="${vector.url}" width="80" height="24">` });
     await editTemplate(client, identity, reportFlow.template.versionId, 1, created.command);
@@ -150,7 +158,7 @@ try {
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, grouped results/workflow, report finalisation/retry and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, registration, allocation, grouped results/workflow, report finalisation/retry, watermark history and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

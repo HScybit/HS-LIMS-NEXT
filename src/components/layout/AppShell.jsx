@@ -19,6 +19,7 @@ export default function AppShell({ identity, children }) {
   const pageLabel = pathname.includes('/data_sheets/') ? 'Add Results' : pathname.includes('/test_requests/') ? 'Test Request'
     : pathname.startsWith('/samples') ? 'Samples' : pathname.startsWith('/master_template_management') ? 'Master Templates'
       : pathname === '/header_management' ? 'Headers' : pathname === '/footer_management' ? 'Footers'
+        : pathname.startsWith('/watermark_report') ? 'Watermark Report'
         : pathname === '/organization_settings' || pathname.startsWith('/administration/') ? 'Organization Settings' : 'My Account';
   const [collapsed, setCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);

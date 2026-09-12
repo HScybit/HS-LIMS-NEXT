@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, integer, boolean, timestamp, primaryKey, unique, check, foreignKey, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, numeric, boolean, timestamp, primaryKey, unique, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 
 const bytes = customType({ dataType: () => 'bytea' });
@@ -55,4 +55,26 @@ export const reportDocumentDefaults = pgTable('report_document_defaults', {
 }, (t) => [
   foreignKey({ name: 'report_document_default_header_fk', columns: [t.organizationId, t.defaultHeaderId], foreignColumns: [reportDocuments.organizationId, reportDocuments.id] }),
   foreignKey({ name: 'report_document_default_change_fk', columns: [t.organizationId, t.changedVersionId], foreignColumns: [reportDocumentVersions.organizationId, reportDocumentVersions.id] }),
+]);
+
+export const reportWatermarks = pgTable('report_watermarks', {
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id), id: uuid('id').notNull(),
+  createdBy: uuid('created_by').notNull(), createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (t) => [primaryKey({ name: 'report_watermark_pk', columns: [t.organizationId, t.id] }),
+  foreignKey({ name: 'report_watermark_actor_fk', columns: [t.organizationId, t.createdBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+]);
+
+export const reportWatermarkVersions = pgTable('report_watermark_versions', {
+  organizationId: uuid('organization_id').notNull(), id: uuid('id').notNull(), watermarkId: uuid('watermark_id').notNull(),
+  revision: integer('revision').notNull(), name: text('name').notNull(), imageId: uuid('image_id').notNull(),
+  opacity: numeric('opacity').notNull(), width: integer('width').notNull(), height: integer('height').notNull(), rotation: integer('rotation').notNull(),
+  isRetired: boolean('is_retired').notNull(), savedBy: uuid('saved_by').notNull(),
+  savedAt: timestamp('saved_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(), transactionId: transactionId('transaction_id').notNull(),
+}, (t) => [primaryKey({ name: 'report_watermark_version_pk', columns: [t.organizationId, t.id] }),
+  unique('report_watermark_revision_key').on(t.organizationId, t.watermarkId, t.revision),
+  foreignKey({ name: 'report_watermark_version_watermark_fk', columns: [t.organizationId, t.watermarkId], foreignColumns: [reportWatermarks.organizationId, reportWatermarks.id] }),
+  foreignKey({ name: 'report_watermark_version_image_fk', columns: [t.organizationId, t.imageId], foreignColumns: [reportImageAssets.organizationId, reportImageAssets.id] }),
+  foreignKey({ name: 'report_watermark_version_actor_fk', columns: [t.organizationId, t.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('report_watermark_version_shape', sql`${t.revision}>0 and length(trim(${t.name})) between 1 and 200 and ${t.opacity} between 0 and 1
+    and ${t.width} between 1 and 10000 and ${t.height} between 1 and 10000 and ${t.rotation} in (0,90,180,270,360)`),
 ]);

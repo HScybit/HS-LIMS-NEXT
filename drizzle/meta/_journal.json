@@ -575,6 +575,13 @@
       "when": 1789214067831,
       "tag": "0081_static_svg_report_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1789216045921,
+      "tag": "0082_versioned_report_watermarks",
+      "breakpoints": true
     }
   ]
 }

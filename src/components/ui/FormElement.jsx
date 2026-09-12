@@ -6,6 +6,8 @@ import InputFieldDropdown from './InputFieldDropdown.jsx';
 import SearchableSelect from './SearchableSelect.jsx';
 import InputFieldText from './InputFieldText.jsx';
 import InputFieldTextarea from './InputFieldTextarea.jsx';
+import InputFieldRange from './InputFieldRange.jsx';
+import InputFieldStepIncrement from './InputFieldStepIncrement.jsx';
 import '../../styles/form-controls.scss';
 
 const inputByType = {
@@ -13,6 +15,8 @@ const inputByType = {
   dropdown: InputFieldDropdown,
   'searchable-select': SearchableSelect,
   textarea: InputFieldTextarea,
+  range: InputFieldRange,
+  'step-increment': InputFieldStepIncrement,
 };
 
 export default function FormElement({
