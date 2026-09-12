@@ -126,11 +126,34 @@ export const passwordResets = pgTable('password_resets', {
 export const userMfa = pgTable('user_mfa', {
   userId: uuid('user_id').primaryKey().references(() => users.id),
   // AES-256-GCM envelope is a scalar ciphertext, not serialized configuration.
-  encryptedSecret: text('encrypted_secret').notNull(),
+  encryptedSecret: text('encrypted_secret'),
   enabled: boolean('enabled').notNull().default(false),
   lastUsedStep: bigint('last_used_step', { mode: 'number' }).notNull().default(-1),
+  revision: integer('revision').notNull().default(1),
+  changeId: uuid('change_id'),
+  changeSessionId: uuid('change_session_id').references(() => sessions.id),
   createdAt: time('created_at').notNull().defaultNow(),
-});
+}, (table) => [
+  check('user_mfa_revision_positive', sql`${table.revision} > 0`),
+  check('user_mfa_secret_state', sql`(${table.enabled} and ${table.encryptedSecret} is not null and ${table.lastUsedStep} >= -1) or (not ${table.enabled} and ${table.encryptedSecret} is null and ${table.lastUsedStep} = -1)`),
+  check('user_mfa_change_identity', sql`(${table.changeId} is null) = (${table.changeSessionId} is null)`),
+]);
+
+// Enrollment is temporary, belongs to one authenticated session and is never a login factor.
+export const userMfaSetups = pgTable('user_mfa_setups', {
+  sessionId: uuid('session_id').primaryKey().references(() => sessions.id, { onDelete: 'cascade' }),
+  id: uuid('id').notNull().defaultRandom(),
+  encryptedSecret: text('encrypted_secret').notNull(),
+  credentialRevision: integer('credential_revision').notNull(),
+  mfaRevision: integer('mfa_revision').notNull(),
+  createdAt: time('created_at').notNull().defaultNow(),
+  expiresAt: time('expires_at').notNull(),
+}, (table) => [
+  uniqueIndex('user_mfa_setups_id_key').on(table.id),
+  check('user_mfa_setups_revisions', sql`${table.credentialRevision} > 0 and ${table.mfaRevision} >= 0`),
+  check('user_mfa_setups_expiry', sql`${table.expiresAt} > ${table.createdAt}`),
+  check('user_mfa_setups_ciphertext', sql`${table.encryptedSecret} ~ '^[A-Za-z0-9_-]{60,220}$'`),
+]);
 
 export const accountEvents = pgTable('account_events', {
   id: id(),

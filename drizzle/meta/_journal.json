@@ -645,6 +645,13 @@
       "when": 1789246606515,
       "tag": "0091_product_job_template_fallback",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1789248740008,
+      "tag": "0092_mfa_enrollment",
+      "breakpoints": true
     }
   ]
 }

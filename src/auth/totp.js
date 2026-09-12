@@ -2,6 +2,21 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEq
 
 const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
+export function generateTotpSecret() {
+  // Each random byte supplies five unbiased bits: 32 characters encode 160 bits.
+  return Array.from(randomBytes(32), (byte) => alphabet[byte & 31]).join('');
+}
+
+export function buildTotpUri(secret, username, fallback) {
+  decodeBase32(secret);
+  const issuer = 'SampleifyLIMS';
+  if (typeof username !== 'string') throw new Error('An authenticator account name is required.');
+  const account = username.replace(/:/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || fallback;
+  if (typeof account !== 'string' || !account || account.includes(':')) throw new Error('An authenticator account name is required.');
+  const query = new URLSearchParams({ secret, issuer, algorithm: 'SHA1', digits: '6', period: '30' });
+  return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?${query}`;
+}
+
 function decodeBase32(value) {
   if (typeof value !== 'string' || !/^[A-Z2-7]{16,128}=*$/.test(value)) throw new Error('Invalid authenticator secret.');
   let bits = 0;

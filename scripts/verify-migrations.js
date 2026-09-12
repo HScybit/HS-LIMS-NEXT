@@ -6,6 +6,8 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createAccount } from '../tests/helpers/database.js';
 import { signIn, withSession } from '../src/auth/service.js';
+import { startMfaSetup, verifyMfaSetup, disableMfa, loadMfaStatus } from '../src/auth/mfa.js';
+import { totpAt } from '../src/auth/totp.js';
 import { closePool, getPool } from '../src/db/pool.js';
 import { createAnalyticalTemplate } from '../tests/helpers/templates.js';
 import { freezeTemplate, editTemplate } from '../src/templates/authoring.js';
@@ -78,6 +80,16 @@ try {
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
   const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
+  // Enrollment must work from an empty schema using only the restricted app role.
+  const mfaSetup = await withSession(session.token, startMfaSetup, { csrfToken: session.csrfToken, accountAction: true });
+  const mfaInput = { setupId: mfaSetup.setupId, code: totpAt(mfaSetup.secret, Date.now()) };
+  const mfaResult = await withSession(session.token, (client, identity) => verifyMfaSetup(client, identity, mfaInput), { csrfToken: session.csrfToken, accountAction: true });
+  if (mfaResult.error) throw mfaResult.error;
+  assert.deepEqual(mfaResult, { enabled: true, revision: 1 });
+  assert.deepEqual(await withSession(session.token, (client, identity) => verifyMfaSetup(client, identity, mfaInput), { csrfToken: session.csrfToken, accountAction: true }), mfaResult);
+  const mfaRemoval = { revision: 1, requestId: randomUUID() };
+  await withSession(session.token, (client) => disableMfa(client, mfaRemoval), { csrfToken: session.csrfToken, accountAction: true });
+  assert.deepEqual(await withSession(session.token, loadMfaStatus, { readOnly: true, accountAction: true }), { enabled: false, revision: 2 });
   await withSession(session.token, async (client, identity) => {
     const template = await createAnalyticalTemplate(client, identity);
     await freezeTemplate(client, identity, template.versionId, 1);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { hashPassword, verifyPassword } from '../../src/auth/passwords.js';
 import { hashToken, matchesToken, newToken, validToken } from '../../src/auth/tokens.js';
 import { localRedirect } from '../../src/auth/tokens-client.js';
-import { decryptSecret, encryptSecret, totpAt, verifiedTotpStep } from '../../src/auth/totp.js';
+import { buildTotpUri, decryptSecret, encryptSecret, generateTotpSecret, totpAt, verifiedTotpStep } from '../../src/auth/totp.js';
 
 test('scrypt verifies correct passwords, preserves whitespace and rejects malformed encodings', async () => {
   const hash = await hashPassword(' synthetic password ');
@@ -61,4 +61,27 @@ test('encrypted authenticator secrets detect wrong keys, tampering and malformed
   assert.throws(() => decryptSecret(bytes.toString('base64url'), key));
   assert.throws(() => decryptSecret('bad', key));
   assert.throws(() => encryptSecret(secret, 'not-a-key'));
+});
+
+test('new authenticator keys are independent 32-character Base32 secrets accepted by existing encryption and TOTP', () => {
+  const secrets = Array.from({ length: 10 }, generateTotpSecret);
+  assert.equal(new Set(secrets).size, secrets.length);
+  for (const secret of secrets) {
+    assert.match(secret, /^[A-Z2-7]{32}$/);
+    assert.equal(decryptSecret(encryptSecret(secret, 'ab'.repeat(32)), 'ab'.repeat(32)), secret);
+    assert.match(totpAt(secret, 59_000), /^\d{6}$/);
+  }
+});
+
+test('authenticator URI preserves the Meteor issuer and sanitized account label with unambiguous parameters', () => {
+  const secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
+  const uri = new URL(buildTotpUri(secret, '  Lab: Analyst / अ &?=  '));
+  assert.equal(uri.protocol, 'otpauth:');
+  assert.equal(uri.hostname, 'totp');
+  assert.equal(decodeURIComponent(uri.pathname), '/SampleifyLIMS:Lab Analyst / अ &?=');
+  assert.deepEqual(Object.fromEntries(uri.searchParams), { secret, issuer: 'SampleifyLIMS', algorithm: 'SHA1', digits: '6', period: '30' });
+  assert.equal(decodeURIComponent(new URL(buildTotpUri(secret, ':', 'user-id')).pathname), '/SampleifyLIMS:user-id');
+  assert.equal(decodeURIComponent(new URL(buildTotpUri(secret, 'x'.repeat(200))).pathname).length, '/SampleifyLIMS:'.length + 120);
+  for (const invalid of [null, undefined, '', ' ', ':', {}, []]) assert.throws(() => buildTotpUri(secret, invalid));
+  assert.throws(() => buildTotpUri('bad-secret', 'Analyst'));
 });

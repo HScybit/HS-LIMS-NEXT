@@ -2,7 +2,7 @@
 
 Sampleify LIMS uses the Next.js App Router, React, PostgreSQL, Drizzle and the existing Bootstrap interface. Application code and configuration are JavaScript.
 
-The application provides database-backed sign-in, tenant-scoped sessions and permissions, profile edits, password changes, authenticator verification, logout and local password recovery. Master Templates includes listing, creation, container/row/column editing, formulas, ordering, cloning and HTML preview. The authenticated entry opens My Account.
+The application provides database-backed sign-in, tenant-scoped sessions and permissions, profile edits, password changes, authenticator enrollment and verification, logout and local password recovery. Master Templates includes listing, creation, container/row/column editing, formulas, ordering, cloning and HTML preview. The authenticated entry opens My Account.
 
 The template foundation supports text, input, paragraph, number, formula, checkbox, date and dropdown widgets. Definitions and captured results use typed relational tables, stable field identities and frozen versions. Samples includes an initial registration form, quick customer creation, list/detail views and a sample's test-request queue. Analysts can be allocated to requests and enter results using autosave, repeated rows, Calculate and Done. Failed saves retain input, revision conflicts require reload, and runtime versions retain their original template and scientific specifications.
 
@@ -30,7 +30,7 @@ Header/footer management at `/header_management` and `/footer_management` uses t
 
 Watermark management at `/watermark_report` retains the source list, image preview, opacity slider, dimensions and rotation control. Typed revisions preserve zero opacity, prior image/settings values and actual editors after replacement or deletion. Concurrent edits require the current revision, and interrupted response retries save once. This management screen does not automatically apply a watermark to COAs; the inspected source report callers have no active watermark selection.
 
-This is an initial working flow. Accreditation/ULR handling and report issue remain under development. Full sample editing and variants, additional report asset formats and fonts, allocation resources and qualification checks, remaining widgets, spreadsheet result modes, intermediate job/child workflow synchronization, full rich-text/access/print settings, MFA enrollment and migration adapters are also incomplete. NABL grouping, rejection timing and conflicting scientific error/numeric-prefix policies remain unresolved; affected actions do not silently choose a different interpretation.
+This is an initial working flow. Accreditation/ULR handling and report issue remain under development. Full sample editing and variants, additional report asset formats and fonts, allocation resources and qualification checks, remaining widgets, spreadsheet result modes, intermediate job/child workflow synchronization, full rich-text/access/print settings and migration adapters are also incomplete. NABL grouping, rejection timing and conflicting scientific error/numeric-prefix policies remain unresolved; affected actions do not silently choose a different interpretation.
 
 ## Run locally
 
@@ -78,7 +78,7 @@ npm run verify
 
 Browser tests launch the production build at `http://127.0.0.1:3100`, using installed Google Chrome and new synthetic accounts. The Print test starts a separate worker, verifies the actual PDF blob and checksum, and observes the native print call without opening a headless print dialog. Native dialog/print-layout checks use visible Chrome separately. Integration tests accept only the dedicated local database. Test data remains available for inspection; tests do not truncate or drop tables. Browser traces and reports are ignored by Git.
 
-`test:migrations` creates a fresh synthetic database in the same local PostgreSQL container, applies the full migration chain twice, and checks authentication, template capture, parameter uncertainty and method/user history and retirement, customer creation, sample registration, allocation and grouped result approval using the restricted application role. The restricted worker produces PDFs for individual final sections and grouped results. The command retains that database and records its name in `.local/migration-verification.json`; it never resets an existing database.
+`test:migrations` creates a fresh synthetic database in the same local PostgreSQL container, applies the full migration chain twice, and checks authentication, MFA enrollment/retry/disable, template capture, parameter uncertainty and method/user history and retirement, customer creation, sample registration, allocation and grouped result approval using the restricted application role. The restricted worker produces PDFs for individual final sections and grouped results. The command retains that database and records its name in `.local/migration-verification.json`; it never resets an existing database.
 
 ## Database changes
 
@@ -95,6 +95,8 @@ Capture reads select revision keys from the history index before fetching typed 
 New capture revisions have immutable records of their full PostgreSQL transaction ID, actor, database role, time and status. Runtime value and repeat changes must belong to the transaction that created their revision; captured values also require the real save actor and time. This prevents later writes from changing a committed revision. Captures created before this boundary retain their original evidence, with revision records beginning at their next actual change.
 
 Set `APP_ORIGIN` to the exact browser origin. Mutations require that origin and authenticated requests also require a session-bound CSRF token. Sessions expire after 12 hours, with at most five active sessions. Remember me preserves the source checkbox behavior without extending that duration. Passwords retain the source's eight-character minimum; password changes revoke other sessions, and resets revoke all sessions. The MFA encryption key must be 32 cryptographically random bytes encoded as hexadecimal and kept server-side.
+
+My Account supports the source MFA switch, local QR code and setup key, authenticator verification, and disable confirmation. Setup expires after ten minutes (or the session expiry if sooner), is encrypted at rest and belongs to the session that created it. Password changes invalidate pending setup. Failed verification is limited to five attempts per account in fifteen minutes, including concurrent requests and setup restarts. A successful enrollment consumes its TOTP step; use the next code when signing in again. Setup/change identities and revisions protect retries and stale dialogs. Disabling removes the stored factor secret. Existing signed-in sessions remain active when MFA changes, matching the source behavior. QR and setup responses are not cached; QR generation uses the local `qrcode` package and no external service.
 
 ## Template performance checks
 

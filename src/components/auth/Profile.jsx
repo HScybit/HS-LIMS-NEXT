@@ -8,6 +8,7 @@ import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import { showToast } from '../ui/toast.jsx';
 import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
+import MfaSettings from './MfaSettings.jsx';
 
 function getUserName(user) {
   return (
@@ -270,6 +271,7 @@ export default function Profile({ identity }) {
             </div>
           </form>
 
+          <MfaSettings key={identity.userId} identity={identity} />
         </div>
       </div>
     </main>
