@@ -10,22 +10,38 @@ import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import PageHeader from '../layout/PageHeader.jsx';
 import { apiRequest } from '../../lib/api-client.js';
+import { customFieldColumnKey, customFieldListDisplay } from '../../custom-fields/listing-values.js';
 
 const actionClass = 'smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 flex-shrink-0 text-nowrap';
 
 export default function TestParameterList({ canManage }) {
   const router = useRouter(); const search = useSearchParams(); const [reload, setReload] = useState(0);
   const [deletion, setDeletion] = useState(null); const [deleting, setDeleting] = useState(false); const [error, setError] = useState('');
+  const [customFields, setCustomFields] = useState(null); const [customFieldError, setCustomFieldError] = useState('');
   const returnPath = `/test_parameters${search.size ? `?${search}` : ''}`;
   const columns = useMemo(() => [
     { key: 'scheme_abbr', header: 'Scheme Abbreviation', searchable: true }, { key: 'name', header: 'Name', searchable: true },
     { key: 'lab_id', header: 'Lab', searchable: true }, { key: 'key', header: 'Key', searchable: true }, { key: 'order', header: 'Order', searchable: true },
+    ...(customFields ?? []).map((field) => ({ key: customFieldColumnKey(field), header: field.label, searchable: field.showInFilter,
+      filterable: field.showInFilter, hidden: !field.showInList, minWidth: 150,
+      format: (_value,row) => customFieldListDisplay(row.customFields?.[field.id],field) || '-',
+      ...(field.fieldType === 'select' && field.options.length ? { filterOptions: field.options.map((option) => ({ value: option.label,label: option.label })) } : {}),
+    })),
     { key: 'actions', header: 'Actions', minWidth: 160, render: (row) => <div className="d-flex flex-nowrap align-items-center gap-2">
       <Link className={actionClass} href={`/test_parameters/${row._id}/view?from=${encodeURIComponent(returnPath)}`}><AppIcon name="eye" /><span>View</span></Link>
       {canManage ? <><Link className={actionClass} href={`/test_parameters/${row._id}/edit?from=${encodeURIComponent(returnPath)}`}><AppIcon name="edit" /><span>Edit</span></Link>
         <button type="button" className="btn btn-sm btn-danger d-flex align-items-center gap-1 flex-shrink-0 text-nowrap" onClick={() => { setDeletion({ ...row, requestId: crypto.randomUUID() }); setError(''); }}><AppIcon name="trash" size="0.85em" />Delete</button></> : null}
     </div> },
-  ], [canManage, returnPath]);
+  ], [canManage, returnPath, customFields]);
+  useEffect(() => {
+    const controller = new AbortController();
+    apiRequest('/api/masters/test-parameters/custom-fields?view=list', { signal: controller.signal }).then(({ fields }) => {
+      if (controller.signal.aborted) return;
+      const sorted = [...fields].sort((left,right) => left.displayOrder-right.displayOrder || left.label.localeCompare(right.label));
+      setCustomFields((current) => current && JSON.stringify(current) === JSON.stringify(sorted) ? current : sorted); setCustomFieldError('');
+    }).catch((failure) => { if (!controller.signal.aborted) setCustomFieldError(failure.message); });
+    return () => controller.abort();
+  }, [reload]);
   const loadRows = useCallback(({ page, pageSize, search, filters, sort }) => {
     void reload;
     return apiRequest(`/api/masters/test-parameters?query=${encodeURIComponent(JSON.stringify({ page, pageSize, search, filters, sort }))}`);
@@ -49,7 +65,10 @@ export default function TestParameterList({ canManage }) {
       <div className="col page-header__start"><h1 className="page-title mb-0">Test Parameters</h1></div>
       <div className="col-auto page-header__actions">{canManage ? <PrimaryButton leftIcon="plus" onClick={() => router.push(`/test_parameters/new?from=${encodeURIComponent(returnPath)}`)}>New Test Parameter</PrimaryButton> : null}</div>
     </div></div></div></PageHeader>
-    <DataTable columns={columns} loadRows={loadRows} />
+    {customFieldError ? <div className="alert alert-danger m-4" role="alert">{customFieldError}<button type="button" className="btn btn-link"
+      onClick={() => setReload((value) => value+1)}>Retry loading fields</button></div> : null}
+    {customFields ? <DataTable columns={columns} loadRows={loadRows} /> : !customFieldError
+      ? <div className="text-muted m-4" role="status">Loading Parameter fields...</div> : null}
     <Modal open={Boolean(deletion)} title="Delete Test Parameter" onClose={() => { if (!deleting) setDeletion(null); }} actions={<>
       <SecondaryButton disabled={deleting} onClick={() => setDeletion(null)}>Cancel</SecondaryButton>
       <PrimaryButton styleVariant="destructive" disabled={deleting} onClick={remove}>{deleting ? 'Deleting…' : 'Delete'}</PrimaryButton>

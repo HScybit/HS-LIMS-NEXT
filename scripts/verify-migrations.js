@@ -33,7 +33,8 @@ import { saveWatermark, loadWatermark, deleteWatermark } from '../src/report-ass
 import { loadCustomCss, saveCustomCss, loadCurrentCustomCss } from '../src/report-assets/custom-css.js';
 import { reportSvg } from '../tests/helpers/report-svg.js';
 import { emptyUncertaintyGrid, updateUncertaintyGrid } from '../src/masters/parameter-grid.js';
-import { loadTestParameter, saveTestParameter, retireTestParameter } from '../src/masters/test-parameters.js';
+import { loadTestParameter, saveTestParameter, retireTestParameter, listTestParameters } from '../src/masters/test-parameters.js';
+import { generateParameterCustomFields } from '../src/masters/parameter-custom-field-generation.js';
 import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
 import { loadProduct, saveProduct, retireProduct, listProducts } from '../src/masters/products.js';
 import { loadCustomField, saveCustomField, retireCustomField, listCustomFields } from '../src/masters/custom-fields.js';
@@ -203,6 +204,22 @@ try {
     assert.equal(listed.rows.length, 1);
     assert.equal(Object.keys(listed.rows[0].customFields).length, 16);
   }, true);
+  await captureWork(async (client, identity) => {
+    const field = await saveCustomField(client, identity, { id: randomUUID(), requestId: randomUUID(), revision: 0,
+      key: 'parameter_serial', label: 'Parameter Serial', associatedWith: 'parameter', fieldType: 'text',
+      scheme: '{{entity.scheme_abbr}}/{{total_counter}}', generatedAt: 'on_init', showInList: true, showInFilter: true });
+    const parameter = { name: 'Fresh typed Parameter', key: randomUUID(), schemeAbbreviation: 'Ni', order: 0 };
+    const generated = await generateParameterCustomFields(client, identity,
+      { parameter, customFields: [{ fieldId: field.id, fieldRevision: 1, value: '' }] });
+    assert.deepEqual(generated.values, [{ fieldId: field.id, value: 'Ni/1' }]);
+    const command = { ...parameter, id: randomUUID(), revision: 0, requestId: randomUUID(),
+      customFields: [{ fieldId: field.id, fieldRevision: 1, value: generated.values[0].value }] };
+    const saved = await saveTestParameter(client, identity, command);
+    assert.equal((await listTestParameters(client, identity, { search: 'Ni/1' })).rows[0].customFields[field.id].displayValue, 'Ni/1');
+    await retireTestParameter(client, identity, { id: saved.id, revision: 1, requestId: randomUUID() });
+    assert.deepEqual((await loadTestParameter(client, identity, saved.id, { atRevision: 2 })).customFields, saved.customFields);
+    assert.deepEqual((await saveTestParameter(client, identity, command)).customFields, saved.customFields);
+  });
   const productJobSample = await withSession(session.token, (client, identity) => registerSample(client, identity, laboratory.registration), { csrfToken: session.csrfToken });
   assert.equal((await owner.query('SELECT product_revision FROM sample_products WHERE organization_id=$1 AND sample_id=$2',
     [account.organizationId, productJobSample.id])).rows[0].product_revision, 3);

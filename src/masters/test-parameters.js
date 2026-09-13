@@ -1,6 +1,12 @@
 import { HttpError } from '../auth/errors.js';
 import { fieldsOnly, integer, requirePermission, text, uuid } from '../templates/input.js';
 import { normalizeUncertaintyGrid } from './parameter-grid.js';
+import { customFieldValuesInput } from '../custom-fields/value-input.js';
+import { customFieldTimeZone } from '../custom-fields/server-dates.js';
+import { parameterCustomFields } from './custom-fields.js';
+import { loadParameterCustomFieldValues, prepareParameterCustomFieldValues, appendParameterCustomFieldValues } from './parameter-custom-fields.js';
+import { parameterCustomFieldMatch, loadParameterListingValues } from './parameter-custom-field-listing.js';
+import { customFieldColumnKey } from '../custom-fields/listing-values.js';
 
 function requireRead(identity) {
   if (!identity.permission_codes?.some((permission) => ['masters.read', 'masters.manage'].includes(permission))) throw new HttpError(403, 'forbidden', 'You cannot view test parameters.');
@@ -12,14 +18,18 @@ const keyText = (value, label) => {
 };
 
 export function testParameterInput(input) {
-  fieldsOnly(input, ['id', 'revision', 'requestId', 'name', 'description', 'key', 'schemeAbbreviation', 'order', 'laboratoryId', 'measurementUncertainty']);
+  fieldsOnly(input, ['id', 'revision', 'requestId', 'name', 'description', 'key', 'schemeAbbreviation', 'order', 'laboratoryId', 'measurementUncertainty', 'customFields', 'customFieldTimeZone']);
   const name = text(input.name, 'Parameter name', 200); const description = text(input.description, 'Description', 16000, { optional: true });
   if (name.includes('\0') || description.includes('\0')) throw new HttpError(400, 'invalid_input', 'Parameter text cannot contain null characters.');
+  const customFieldsProvided = Object.hasOwn(input, 'customFields');
+  const customFields = customFieldsProvided ? customFieldValuesInput(input.customFields) : undefined;
+  const zone = input.customFieldTimeZone == null ? null : customFieldTimeZone(input.customFieldTimeZone);
+  if (!customFieldsProvided && zone !== null) throw new HttpError(400, 'invalid_custom_field_timezone', 'A Custom Field time zone requires captured date fields.');
   return { id: uuid(input.id, 'Parameter').toLowerCase(), revision: integer(input.revision, 'Revision', 0, 2_147_483_646),
     requestId: uuid(input.requestId, 'Save request').toLowerCase(), name, description, key: keyText(input.key, 'Key'),
     schemeAbbreviation: keyText(input.schemeAbbreviation, 'Scheme abbreviation'), order: integer(input.order === undefined ? 0 : input.order, 'Order', 0, 2_147_483_647),
     laboratoryId: input.laboratoryId == null || input.laboratoryId === '' ? null : uuid(input.laboratoryId, 'Lab').toLowerCase(),
-    measurementUncertainty: normalizeUncertaintyGrid(input.measurementUncertainty) };
+    measurementUncertainty: normalizeUncertaintyGrid(input.measurementUncertainty), customFieldsProvided, customFields, customFieldTimeZone: zone };
 }
 
 async function loadGrid(client, organizationId, parameterId, revision) {
@@ -54,7 +64,8 @@ export async function loadTestParameter(client, identity, parameterId, { atRevis
   const record = (await client.query(`SELECT parameter.${history ? 'parameter_id' : 'id'} AS id,parameter.revision,parameter.code,parameter.name,parameter.description,
     parameter.master_key AS key,parameter.scheme_abbreviation AS "schemeAbbreviation",parameter.display_order AS "order",parameter.active,
     parameter.laboratory_id AS "laboratoryId",lab.name AS "laboratoryName",parameter.measurement_unit_id AS "measurementUnitId",parameter.default_scale AS "defaultScale",
-    parameter.${history ? 'has_uncertainty' : 'uncertainty_configured'} AS "hasUncertainty"
+    parameter.${history ? 'has_uncertainty' : 'uncertainty_configured'} AS "hasUncertainty",
+    parameter.custom_field_count AS "customFieldCount",parameter.custom_fields_provided AS "customFieldsProvided"
     ${history ? ',parameter.saved_by AS "savedBy",parameter.saved_at AS "savedAt",parameter.previous_revision AS "previousRevision",parameter.operation' : ''}
     FROM ${history ? 'test_parameter_versions' : 'test_parameters'} parameter
     LEFT JOIN laboratories lab ON lab.organization_id=parameter.organization_id AND lab.id=parameter.laboratory_id
@@ -65,11 +76,16 @@ export async function loadTestParameter(client, identity, parameterId, { atRevis
   const methods = (await client.query(`SELECT method_id AS "methodId",is_default AS "isDefault" FROM ${history ? 'test_parameter_version_methods' : 'parameter_methods'}
     WHERE organization_id=$1 AND ${history ? 'parameter_id' : 'test_parameter_id'}=$2 ${history ? 'AND revision=$3' : ''} ORDER BY method_id`,
   history ? [identity.organization_id, parameterId, record.revision] : [identity.organization_id, parameterId])).rows;
-  return { ...record, measurementUncertainty, methods };
+  const customFields = await loadParameterCustomFieldValues(client, identity, parameterId, record.revision, record.customFieldCount);
+  const customFieldTimeZone = record.customFieldsProvided ? customFields.find((field) => ['date', 'date_time'].includes(field.fieldType))?.timeZone ?? null : null;
+  return { ...record, measurementUncertainty, methods, customFields, customFieldTimeZone };
 }
 
 const authoredFields = (value) => ({ name: value.name, description: value.description, key: value.key, schemeAbbreviation: value.schemeAbbreviation,
-  order: value.order, laboratoryId: value.laboratoryId, measurementUncertainty: value.measurementUncertainty });
+  order: value.order, laboratoryId: value.laboratoryId, measurementUncertainty: value.measurementUncertainty,
+  customFieldsProvided: value.customFieldsProvided,
+  customFields: value.customFieldsProvided ? value.customFields.map(({ fieldId, fieldRevision, value }) => ({ fieldId, fieldRevision, value })) : undefined,
+  customFieldTimeZone: value.customFieldTimeZone });
 
 async function priorSave(client, identity, parameterId, revision, requestId, operation) {
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended('parameter-save:'||$1::text||':'||$2::text,0))", [identity.organization_id, requestId]);
@@ -88,24 +104,41 @@ export async function saveTestParameter(client, identity, value) {
     if (JSON.stringify(authoredFields(prior)) !== JSON.stringify(authoredFields(input))) throw new HttpError(409, 'save_request_reused', 'This save request was already used for different values.');
     return prior;
   }
-  const current = (await client.query('SELECT revision,active FROM test_parameters WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
+  await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('custom-field-definitions:'||$1::text,0))", [identity.organization_id]);
+  const current = (await client.query('SELECT revision,active,custom_field_count FROM test_parameters WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
   if (input.revision && !current?.active) throw new HttpError(404, 'parameter_not_found', 'Test parameter was not found.');
   if ((current?.revision ?? 0) !== input.revision) throw new HttpError(409, 'stale_parameter', 'The test parameter changed. Reload before saving.');
+  const definitions = await parameterCustomFields(client, identity);
+  const previousFields = current ? await loadParameterCustomFieldValues(client, identity, input.id, current.revision, current.custom_field_count) : [];
+  const capture = await prepareParameterCustomFieldValues(client, identity, { definitions, entries: input.customFields,
+    timeZone: input.customFieldTimeZone, previousFields });
   if (input.laboratoryId) {
     await client.query("SELECT laboratory_lock_references('laboratories',$1::uuid[])", [[input.laboratoryId]]);
     if (!(await client.query('SELECT id FROM laboratories WHERE organization_id=$1 AND id=$2 AND active', [identity.organization_id, input.laboratoryId])).rowCount) throw new HttpError(400, 'invalid_laboratory', 'Select an available lab.');
   }
-  const args = [identity.organization_id, input.id, input.name, input.description, input.key, input.schemeAbbreviation, input.order, input.laboratoryId, input.measurementUncertainty !== null, input.requestId];
+  const args = [identity.organization_id, input.id, input.name, input.description, input.key, input.schemeAbbreviation, input.order, input.laboratoryId, input.measurementUncertainty !== null, input.requestId,
+    capture.count, capture.provided];
   try {
-    if (!input.revision) await client.query(`INSERT INTO test_parameters(organization_id,id,name,description,master_key,scheme_abbreviation,display_order,laboratory_id,uncertainty_configured,save_request_id,code)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$5)`, args);
+    if (!input.revision) await client.query(`INSERT INTO test_parameters(organization_id,id,name,description,master_key,scheme_abbreviation,display_order,laboratory_id,uncertainty_configured,save_request_id,code,custom_field_count,custom_fields_provided)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$5,$11,$12)`, args);
     else await client.query(`UPDATE test_parameters SET name=$3,description=$4,master_key=$5,scheme_abbreviation=$6,display_order=$7,laboratory_id=$8,
-      uncertainty_configured=$9,save_request_id=$10,revision=revision+1,updated_at=transaction_timestamp() WHERE organization_id=$1 AND id=$2`, args);
+      uncertainty_configured=$9,save_request_id=$10,custom_field_count=$11,custom_fields_provided=$12,revision=revision+1,updated_at=transaction_timestamp() WHERE organization_id=$1 AND id=$2`, args);
+    await appendParameterCustomFieldValues(client, identity, input.id, input.revision + 1, capture);
+    await appendGrid(client, identity.organization_id, input.id, input.revision + 1, input.measurementUncertainty);
+    await client.query('SET CONSTRAINTS parameter_custom_fields_complete IMMEDIATE');
+    await client.query('SET CONSTRAINTS parameter_custom_fields_complete DEFERRED');
   } catch (error) {
+    if (error.constraint === 'parameter_custom_field_unique') throw new HttpError(409, 'duplicate_parameter_custom_field', 'A unique Custom Field value is already in use.');
+    if (error.constraint === 'parameter_custom_field_definition_set') throw new HttpError(409, 'parameter_custom_fields_changed', 'Custom Fields changed. Reload before saving.');
+    if (error.constraint === 'parameter_custom_field_required') throw new HttpError(400, 'invalid_custom_field_value', 'Complete the required Custom Fields.');
+    if (['parameter_custom_value_option', 'parameter_custom_value_option_fk', 'parameter_custom_value_user', 'parameter_custom_value_user_fk',
+      'parameter_custom_value_attachment', 'parameter_custom_value_attachment_fk'].includes(error.constraint)) {
+      throw new HttpError(400, 'invalid_parameter_custom_field_reference', 'A Custom Field selection is no longer available.');
+    }
+    if (error.constraint === 'test_parameter_save_request_key') throw new HttpError(409, 'save_request_reused', 'This save request was already used for another change.');
     if (error.code === '23505') throw new HttpError(409, 'duplicate_parameter', 'The parameter key or scheme abbreviation is already in use.');
     throw error;
   }
-  await appendGrid(client, identity.organization_id, input.id, input.revision + 1, input.measurementUncertainty);
   return loadTestParameter(client, identity, input.id);
 }
 
@@ -119,7 +152,7 @@ export async function retireTestParameter(client, identity, input) {
   if (!current?.active) throw new HttpError(404, 'parameter_not_found', 'Test parameter was not found.');
   if (current.revision !== revision) throw new HttpError(409, 'stale_parameter', 'The test parameter changed. Reload before deleting.');
   const previous = await loadTestParameter(client, identity, id);
-  await client.query('UPDATE test_parameters SET active=false,revision=revision+1,updated_at=transaction_timestamp(),save_request_id=$3 WHERE organization_id=$1 AND id=$2', [identity.organization_id, id, requestId]);
+  await client.query('UPDATE test_parameters SET active=false,custom_fields_provided=false,revision=revision+1,updated_at=transaction_timestamp(),save_request_id=$3 WHERE organization_id=$1 AND id=$2', [identity.organization_id, id, requestId]);
   await appendGrid(client, identity.organization_id, id, revision + 1, previous.measurementUncertainty);
   return { id, revision: revision + 1 };
 }
@@ -138,14 +171,26 @@ export async function listTestParameters(client, identity, input = {}) {
   const page = integer(input.page ?? 1, 'Page', 1, 1_000_000); const pageSize = integer(input.pageSize ?? 10, 'Page size', 1, 100);
   const search = searchText(input.search, 'Search');
   const args = [identity.organization_id]; const conditions = ['parameter.organization_id=$1', 'parameter.active'];
+  const customFields = await parameterCustomFields(client, identity, { forListing: true });
+  const customColumns = new Map(customFields.map((field) => [customFieldColumnKey(field), field]));
   const bind = (value) => { args.push(value); return `$${args.length}`; };
   if (search) {
     const match = bind(literalSearch(search));
-    conditions.push(`(${Object.entries(listColumns).filter(([key]) => key !== 'order').map(([, column]) => `${column} ILIKE ${match}`).join(' OR ')})`);
+    const searchableFields = customFields.filter((field) => field.showInFilter);
+    const customMatch = searchableFields.length ? ` OR ${parameterCustomFieldMatch(bind, searchableFields.map((field) => field.id), search)}` : '';
+    conditions.push(`(${Object.entries(listColumns).filter(([key]) => key !== 'order').map(([, column]) => `${column} ILIKE ${match}`).join(' OR ')}${customMatch})`);
   }
-  const filters = input.filters ?? {}; fieldsOnly(filters, Object.keys(listColumns));
+  const filters = input.filters ?? {}; fieldsOnly(filters, [...Object.keys(listColumns), ...customFields.filter((field) => field.showInFilter).map(customFieldColumnKey)]);
   for (const [key, filter] of Object.entries(filters)) {
     fieldsOnly(filter, ['type', 'value']);
+    if (customColumns.has(key)) {
+      const field = customColumns.get(key);
+      const expectedType = field.fieldType === 'select' && field.options.length ? 'select' : 'text';
+      if (filter.type !== expectedType) throw new HttpError(400, 'invalid_filter', 'Custom Field filters require the configured control type.');
+      const value = searchText(filter.value, 'Custom Field filter');
+      if (value) conditions.push(parameterCustomFieldMatch(bind, [field.id], value));
+      continue;
+    }
     if (filter.type !== 'text') throw new HttpError(400, 'invalid_filter', 'Parameter filters require text.');
     const value = searchText(filter.value, 'Filter');
     if (value) conditions.push(`${listColumns[key]}::text ILIKE ${bind(columnSearch(value))}`);
@@ -153,16 +198,21 @@ export async function listTestParameters(client, identity, input = {}) {
   const sort = input.sort;
   if (sort) {
     fieldsOnly(sort, ['key', 'dir']);
-    if (!Object.hasOwn(listColumns, sort.key) || !['asc', 'desc'].includes(sort.dir)) throw new HttpError(400, 'invalid_sort', 'Sort column or direction is invalid.');
+    if ((!Object.hasOwn(listColumns, sort.key) && !customColumns.get(sort.key)?.showInList) || !['asc', 'desc'].includes(sort.dir)) throw new HttpError(400, 'invalid_sort', 'Sort column or direction is invalid.');
   }
-  const order = sort ? `${listColumns[sort.key]} ${sort.dir} NULLS LAST` : 'parameter.created_at DESC';
+  const customSort = customColumns.get(sort?.key);
+  const order = customSort ? `CASE ordering_field.display_kind WHEN 'number' THEN 1 WHEN 'text' THEN 2 WHEN 'boolean' THEN 3 ELSE 0 END ${sort.dir},
+    ordering_field.display_number ${sort.dir},ordering_field.display_text COLLATE "C" ${sort.dir},ordering_field.display_boolean ${sort.dir}`
+    : sort ? `${listColumns[sort.key]} ${sort.dir} NULLS LAST` : 'parameter.created_at DESC';
   const from = `FROM test_parameters parameter LEFT JOIN laboratories lab ON lab.organization_id=parameter.organization_id AND lab.id=parameter.laboratory_id
+    ${customSort ? `LEFT JOIN parameter_version_custom_fields ordering_field ON ordering_field.organization_id=parameter.organization_id
+      AND ordering_field.parameter_id=parameter.id AND ordering_field.revision=parameter.revision AND ordering_field.field_id=${bind(customSort.id)}` : ''}
     WHERE ${conditions.join(' AND ')}`;
   const totalCount = (await client.query(`SELECT count(*)::integer AS total ${from}`, args)).rows[0].total;
   const rows = (await client.query(`SELECT parameter.id AS _id,parameter.revision,parameter.scheme_abbreviation AS scheme_abbr,
     parameter.name,lab.name AS lab_id,parameter.master_key AS key,parameter.display_order AS "order" ${from}
     ORDER BY ${order},parameter.id DESC LIMIT $${args.length + 1} OFFSET $${args.length + 2}`, [...args, pageSize, (page - 1) * pageSize])).rows;
-  return { rows, totalCount };
+  return { rows: await loadParameterListingValues(client, identity, rows, customFields), totalCount };
 }
 
 export async function parameterLaboratories(client, identity, input = {}) {

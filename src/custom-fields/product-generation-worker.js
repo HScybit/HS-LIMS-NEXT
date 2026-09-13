@@ -1,5 +1,5 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { generateProductScheme } from './product-generation.js';
+import { generateProductScheme, generateParameterScheme } from './product-generation.js';
 import { customFieldNeedsGeneration, customFieldFormDisplayValue } from './form-values.js';
 import { customFieldDateDisplayInZone } from './server-dates.js';
 
@@ -28,10 +28,12 @@ async function latestValue({ fieldId, pattern }) {
 }
 async function generate() {
   const { fields, values, doc, settings, counts, clock, timeZone, fieldId, mode } = workerData;
+  if (workerData.kind !== undefined && !['product', 'parameter'].includes(workerData.kind)) throw new Error('Unsupported Custom Field master.');
+  const scheme = workerData.kind === 'parameter' ? generateParameterScheme : generateProductScheme;
   const generated = [];
   for (const field of fields) {
     if (fieldId ? field.id !== fieldId : !customFieldNeedsGeneration(field, mode, values[field.id])) continue;
-    const value = await generateProductScheme({ field, doc, settings, counts, clock, latestValue });
+    const value = await scheme({ field, doc, settings, counts, clock, latestValue });
     if (typeof value !== 'string' || value.length > 16000 || value.includes('\0') || !value.isWellFormed()) {
       throw new Error(`${field.label}: The generated value must be valid text of at most 16000 characters.`);
     }

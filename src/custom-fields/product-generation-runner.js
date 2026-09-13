@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { HttpError } from '../auth/errors.js';
 
 // This is a command deadline, not a fallback counter. A timeout never produces an unverified number.
-export async function runProductGeneration(data, readPage, { timeoutMs = 10_000 } = {}) {
+export async function runMasterGeneration(data, readPage, { timeoutMs = 10_000 } = {}) {
   const worker = new Worker(resolve(process.cwd(), 'src/custom-fields/product-generation-worker.js'), {
     workerData: data, execArgv: [], env: {}, resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 16 },
   });
@@ -36,3 +36,5 @@ export async function runProductGeneration(data, readPage, { timeoutMs = 10_000 
     await activeRead;
   }
 }
+
+export const runProductGeneration = (...args) => runMasterGeneration(...args);

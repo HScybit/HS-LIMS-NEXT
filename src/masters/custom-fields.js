@@ -18,16 +18,16 @@ function requireRead(identity) {
   if (!identity.permission_codes?.some((permission) => ['masters.read', 'masters.manage'].includes(permission))) throw new HttpError(403, 'forbidden', 'You cannot view custom fields.');
 }
 
-export async function productCustomFields(client, identity, { forListing = false } = {}) {
+async function masterCustomFields(association, client, identity, { forListing = false } = {}) {
   requireRead(identity);
   const fields = (await client.query(`SELECT definition.id,definition.revision,field.field_id AS "versionId",
     field.option_count AS "optionCount",${Object.entries(columns).map(([key, column]) => `field.${column} AS "${key}"`).join(',')}
     FROM (SELECT id,revision,organization_id FROM custom_field_definitions
-      WHERE organization_id=$1 AND associated_with='product' AND active ${forListing ? 'AND (show_in_list OR show_in_filter)' : ''}
+      WHERE organization_id=$1 AND associated_with=$3 AND active ${forListing ? 'AND (show_in_list OR show_in_filter)' : ''}
       ORDER BY display_order,label,id LIMIT $2) definition
     LEFT JOIN custom_field_versions field ON field.organization_id=definition.organization_id
       AND field.field_id=definition.id AND field.revision=definition.revision`,
-  [identity.organization_id, customFieldCaptureLimit + 1])).rows;
+  [identity.organization_id, customFieldCaptureLimit + 1, association])).rows;
   if (fields.length > customFieldCaptureLimit) throw new HttpError(409, 'custom_field_limit', `This form supports at most ${customFieldCaptureLimit} Custom Fields.`);
   const incomplete = () => new HttpError(409, 'incomplete_custom_field', 'A Custom Field definition is incomplete. Reload before continuing.');
   if (fields.some((field) => field.versionId !== field.id)) throw incomplete();
@@ -54,6 +54,9 @@ export async function productCustomFields(client, identity, { forListing = false
   const compareText = (left, right) => left < right ? -1 : left > right ? 1 : 0;
   return result.sort((left, right) => left.displayOrder - right.displayOrder || compareText(left.label, right.label) || compareText(left.id, right.id));
 }
+
+export const productCustomFields = (...args) => masterCustomFields('product', ...args);
+export const parameterCustomFields = (...args) => masterCustomFields('parameter', ...args);
 
 export async function loadCustomField(client, identity, fieldId, { atRevision } = {}) {
   requireRead(identity); uuid(fieldId, 'Custom field');
@@ -222,5 +225,18 @@ export async function customFieldRoles(client, identity, input = {}) {
   const search = searchText(input.search, 'Role search');
   const rows = (await client.query(`SELECT id,name FROM roles WHERE organization_id=$1 AND name ILIKE $2 ORDER BY name,id LIMIT 101`,
     [identity.organization_id, literalSearch(search)])).rows;
+  return { rows: rows.slice(0, 100), hasMore: rows.length > 100 };
+}
+
+export async function masterCustomFieldUsers(client, identity, input = {}) {
+  requireRead(identity); fieldsOnly(input, ['search']);
+  const search = searchText(input.search, 'User search');
+  // RelationSelect searches its displayed label after replacing separators and JavaScript whitespace.
+  const labelSpacing = '[_/\u0009\u000a\u000b\u000c\u000d \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff-]+';
+  // The source GenericForm user selector includes inactive members too.
+  const rows = (await client.query(`SELECT user_id AS id,display_name AS name FROM method_access_user_labels
+    WHERE organization_id=$1 AND (display_name ILIKE $2 OR regexp_replace(display_name,$3,' ','g') ILIKE $2)
+    ORDER BY display_name,user_id LIMIT 101`,
+  [identity.organization_id, literalSearch(search), labelSpacing])).rows;
   return { rows: rows.slice(0, 100), hasMore: rows.length > 100 };
 }

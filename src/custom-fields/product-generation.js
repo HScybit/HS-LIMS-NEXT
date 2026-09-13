@@ -63,8 +63,8 @@ function replaceToken(scheme, token, value) {
 const finish = (value) => value.replace(/}}/g, '').replace(/{{/g, '');
 
 // The caller supplies an explicit clock/zone, tenant settings, batched counts and a latest-value reader.
-// Product's source generation document has six base fields and Custom Fields; it has no hidden NABL/category/customer context.
-export async function generateProductScheme({ field, doc, settings = {}, clock, counts, latestValue }) {
+// The source Product and Parameter forms have no hidden NABL/category/customer context.
+async function generateMasterScheme({ field, doc, settings = {}, clock, counts, latestValue }, kind) {
   async function tokenValue(token) {
     switch (token) {
       case 'financial_year': {
@@ -86,11 +86,11 @@ export async function generateProductScheme({ field, doc, settings = {}, clock, 
         return padSchemeNumber(parseSchemeCounter(previous, field, token, pattern) + 1, field);
       }
       case 'nabl_counter':
-      case 'total_counter': return padSchemeNumber(schemeNumber(settings.nonNablStartNumber, 1) + counts.products, field);
+      case 'total_counter': return padSchemeNumber(schemeNumber(settings.nonNablStartNumber, 1) + counts.records, field);
       case 'samples_counter':
       case 'sample_category_counter': return padSchemeNumber(counts.samples + 1, field);
-      case 'product_name': return doc.name || '';
-      case 'product_abbr': return doc.abbr || '';
+      case 'product_name': return kind === 'product' ? doc.name || '' : '';
+      case 'product_abbr': return kind === 'product' ? doc.abbr || '' : '';
       case 'nabl_term': return field.nonNablDisplayTerm || '';
       case 'category_name':
       case 'category_abbr':
@@ -108,3 +108,6 @@ export async function generateProductScheme({ field, doc, settings = {}, clock, 
   for (const token of schemeTokens(value)) value = replaceToken(value, token, await tokenValue(token));
   return finish(value);
 }
+
+export const generateProductScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.products } }, 'product');
+export const generateParameterScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.parameters } }, 'parameter');

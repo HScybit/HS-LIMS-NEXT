@@ -244,15 +244,4 @@ export async function productTemplates(client, identity, input = {}) {
   return { rows: rows.slice(0, 100), hasMore: rows.length > 100 };
 }
 
-export async function productCustomFieldUsers(client, identity, input = {}) {
-  requireRead(identity); fieldsOnly(input, ['search']);
-  const search = searchText(input.search, 'User search');
-  // RelationSelect searches its displayed label after replacing separators and JavaScript whitespace.
-  const labelSpacing = '[_/\u0009\u000a\u000b\u000c\u000d \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff-]+';
-  // The Product GenericForm user selector includes inactive members too.
-  const rows = (await client.query(`SELECT user_id AS id,display_name AS name FROM method_access_user_labels
-    WHERE organization_id=$1 AND (display_name ILIKE $2 OR regexp_replace(display_name,$3,' ','g') ILIKE $2)
-    ORDER BY display_name,user_id LIMIT 101`,
-  [identity.organization_id, literalSearch(search), labelSpacing])).rows;
-  return { rows: rows.slice(0, 100), hasMore: rows.length > 100 };
-}
+export { masterCustomFieldUsers as productCustomFieldUsers } from './custom-fields.js';
