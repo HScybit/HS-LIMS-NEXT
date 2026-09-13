@@ -1,5 +1,6 @@
 import { HttpError } from '../auth/errors.js';
 import { fieldsOnly, integer, uuid } from '../templates/input.js';
+import { customFieldCaptureLimit } from '../masters/custom-field-config.js';
 import { customFieldSubmittedValue } from './form-values.js';
 
 function primitiveValue(value) {
@@ -12,7 +13,7 @@ function primitiveValue(value) {
 
 // This validates transport shape. The owning service still validates each pinned definition and its references.
 export function customFieldValuesInput(input) {
-  if (!Array.isArray(input) || input.length > 500) throw new HttpError(400, 'invalid_custom_field_values', 'Provide at most 500 Custom Fields.');
+  if (!Array.isArray(input) || input.length > customFieldCaptureLimit) throw new HttpError(400, 'invalid_custom_field_values', `Provide at most ${customFieldCaptureLimit} Custom Fields.`);
   const ids = new Set(); let itemCount = 0;
   return Array.from(input, (entry) => {
     fieldsOnly(entry, ['fieldId', 'fieldRevision', 'value']);

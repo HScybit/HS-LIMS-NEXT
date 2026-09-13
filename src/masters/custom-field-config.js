@@ -1,3 +1,5 @@
+export const customFieldCaptureLimit = 500;
+
 export const customFieldTypes = [
   ['text', 'Text'], ['number', 'Number'], ['date', 'Date'], ['select', 'Dropdown/Select'],
   ['lookup', 'Lookup'], ['longtext', 'Long Text'], ['attachment', 'Attachment'],
