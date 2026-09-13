@@ -11,8 +11,18 @@ test('runtime Text edits keep source trim, blank, unchanged and zero behavior', 
 });
 
 test('Text widgets retain an actual captured title and otherwise use their frozen configured title', () => {
-  const field = { label: 'Frozen title' };
+  const field = { label: 'Frozen title', editable: true };
   for (const value of [undefined, { state: 'absent' }, { state: 'empty' }]) assert.equal(textWidgetTitle(field, value), 'Frozen title');
-  assert.equal(textWidgetTitle(field, { state: 'present', textValue: '0' }), '0');
-  assert.equal(textWidgetTitle(field, { state: 'present', textValue: 'Edited title' }), 'Edited title');
+  assert.equal(textWidgetTitle(field, { state: 'present', origin: 'entered', textValue: '0' }), '0');
+  assert.equal(textWidgetTitle(field, { state: 'present', origin: 'entered', textValue: 'Edited title' }), 'Edited title');
+});
+
+test('Text initialized defaults do not replace configured source titles, including zero and blank titles', () => {
+  for (const label of ['Conclusion', '0', 'false', '', ' ']) for (const editable of [true, false]) {
+    assert.equal(textWidgetTitle({ label, editable }, { state: 'present', origin: 'default', textValue: 'A different default' }), label);
+  }
+});
+
+test('noneditable Text displays its configured title even if an imported key has an entered value', () => {
+  assert.equal(textWidgetTitle({ label: 'Configured title', editable: false }, { state: 'present', origin: 'entered', textValue: 'Unrelated stored key value' }), 'Configured title');
 });

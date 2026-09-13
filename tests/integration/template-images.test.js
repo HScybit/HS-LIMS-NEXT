@@ -10,7 +10,7 @@ import { closePool, getPool } from '../../src/db/pool.js';
 import { uploadTemplateImage, withTemplateImages } from '../../src/template-assets/service.js';
 import { freezeTemplate, createDraft, editTemplate } from '../../src/templates/authoring.js';
 import { loadDefinition, loadCapture } from '../../src/templates/loader.js';
-import { createCapture, saveCapture } from '../../src/templates/capture.js';
+import { createCapture, saveCapture, changeRepeat } from '../../src/templates/capture.js';
 
 const owner = ownerPool(); let account;
 const work = (callback, options) => withSession(account.token, callback, { csrfToken: account.csrfToken, ...options });
@@ -65,6 +65,22 @@ test('frozen captures, runtime snapshots, draft clones and layout clones retain 
   for (const versionId of [created.versionId, snapshotId]) assert.equal((await definition(versionId)).model.fieldsById[created.fieldId].defaultImageId, image.requestId);
   assert.deepEqual((await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId, 1), { readOnly: true })).values, historical.values);
   await assert.rejects(work((client, identity) => saveCapture(client, identity, capture.instanceId, 1, [{ fieldId: created.fieldId, occurrenceId: historical.values[0].occurrenceId, state: 'present', value: nextImage.requestId }])), { code: 'readonly_field' });
+});
+
+test('runtime repeat clones preserve immutable image defaults with and without copied data', async () => {
+  const created = await fixture({ repeated: true }); const image = await input(); await upload(created, image);
+  await work((client, identity) => freezeTemplate(client, identity, created.versionId, 2));
+  const capture = await work((client, identity) => createCapture(client, identity, created.versionId));
+  const original = await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId));
+  const occurrenceId = original.values[0].occurrenceId; let current = original;
+  for (const withData of [false, true]) {
+    current = await work((client, identity) => changeRepeat(client, identity, capture.instanceId, current.revision, { type: 'clone', occurrenceId, withData }));
+    assert.ok(current.values.every((value) => value.origin === 'default' && value.imageId === image.requestId));
+  }
+  assert.equal(current.values.length, 4);
+  const reloaded = await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId));
+  assert.equal(reloaded.values.length, 4); assert.ok(reloaded.values.every((value) => value.origin === 'default' && value.imageId === image.requestId));
+  assert.deepEqual((await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId, 1))).values, original.values);
 });
 
 test('image configuration uses source layout values and remains immutable in frozen versions', async () => {

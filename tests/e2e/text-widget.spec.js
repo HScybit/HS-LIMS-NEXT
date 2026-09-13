@@ -27,6 +27,9 @@ test('editable Text preserves source keyboard, cancellation, repeat, retry and f
     const configured = await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, row.model.version.revision,
       { type: 'configureField', columnId, widget: 'text_widget', alias, label: editable ? 'Original heading' : 'Fixed heading', editable }));
     revision = configured.model.version.revision; fields[alias] = configured.model.columnsById[columnId].fieldId;
+    // Synthetic source-style defaults deliberately differ from configured titles.
+    await work((client) => client.query("UPDATE template_fields SET default_state='present',default_text='A different initialized default' WHERE organization_id=$1 AND version_id=$2 AND id=$3",
+      [account.organizationId, fixture.template.versionId, fields[alias]]));
   }
   const sample = await work((client, identity) => registerSample(client, identity, fixture.registration));
   const generated = await work((client, identity) => generateTestRequests(client, identity, sample.id));
@@ -57,8 +60,8 @@ test('editable Text preserves source keyboard, cancellation, repeat, retry and f
   await expect(columns.first()).toHaveText('0'); await expect(columns.nth(1)).toHaveText('Original heading');
   const afterZero = await runtime(); expect(afterZero.capture.revision).toBe(originalRevision + 1);
   expect(afterZero.model.fieldsById[fields.editable_heading].label).toBe('Original heading');
-  const firstOccurrence = afterZero.capture.values.find((value) => value.fieldId === fields.editable_heading).occurrenceId;
-  expect(afterZero.capture.values.find((value) => value.fieldId === fields.editable_heading).textValue).toBe('0');
+  const firstOccurrence = afterZero.capture.values.find((value) => value.fieldId === fields.editable_heading && value.origin === 'entered').occurrenceId;
+  expect(afterZero.capture.values.find((value) => value.fieldId === fields.editable_heading && value.occurrenceId === firstOccurrence).textValue).toBe('0');
   let fail = true; let failOther = false;
   await page.route(`**${api}/values`, async (route) => {
     if (route.request().postDataJSON().values.some((value) => fail && value.fieldId === fields.editable_heading

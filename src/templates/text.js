@@ -1,5 +1,7 @@
 export function textWidgetTitle(field, value) {
-  return value?.state === 'present' ? value.textValue : field.label;
+  // Source Text displays Title independently of initialized key defaults.
+  // Explicit runtime title edits use entered history on an editable field.
+  return field.editable && value?.state === 'present' && value.origin === 'entered' ? value.textValue : field.label;
 }
 
 // The source title editor trims on commit and leaves blank or unchanged

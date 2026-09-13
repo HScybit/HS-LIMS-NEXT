@@ -178,7 +178,12 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
     }
     occurrences = [...capture.occurrences, ...copies];
     additions = command.withData ? capture.values.filter((value) => mapping.has(value.occurrenceId) && value.origin !== 'calculated')
-      .map(({ revision: _revision, savedAt: _savedAt, savedBy: _savedBy, ...value }) => ({ ...value, occurrenceId: mapping.get(value.occurrenceId), origin: 'entered' })) : defaults(model, copies);
+      .map(({ revision: _revision, savedAt: _savedAt, savedBy: _savedBy, ...value }) => {
+        // Static defaults remain tied to the frozen field on the new row;
+        // promoting them to entered data changes Text titles or rejects images.
+        const staticDefault = value.origin === 'default' && ['text_widget', 'template_image_widget'].includes(model.fieldsById[value.fieldId].widget);
+        return { ...value, occurrenceId: mapping.get(value.occurrenceId), origin: staticDefault ? 'default' : 'entered' };
+      }) : defaults(model, copies);
   } else {
     if (siblings.length <= group.minimum) throw new HttpError(400, 'repeat_minimum', 'The minimum number of repeated rows must remain.');
     // Remove children before parents to preserve the ancestry constraint throughout the transaction.
