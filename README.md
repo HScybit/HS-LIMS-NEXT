@@ -46,6 +46,8 @@ Watermark management at `/watermark_report` retains the source list, image previ
 
 This is an initial working flow. Accreditation/ULR handling and report issue remain under development. Full sample editing and variants, additional report asset formats and fonts, allocation resources and qualification checks, remaining widgets, spreadsheet result modes, intermediate job/child workflow synchronization, full rich-text/access/print settings and migration adapters are also incomplete. NABL grouping, rejection timing and conflicting scientific error/numeric-prefix policies remain unresolved; affected actions do not silently choose a different interpretation.
 
+Checklists at `/checklists` includes the source list, form, detail view and deletion, with name search, active-status filtering and up to 200 ordered line items. New forms start inactive; inactive checklists can be edited and reactivated. Stable item identities and immutable relational revisions preserve actual edits, while deletion retains history. Failed saves and deletions keep their retry identity; stale saves keep the draft for explicit reload. `checklists.read` permits viewing and `checklists.manage` permits editing. Workflow-master binding and its reference-aware deletion checks remain follow-on work.
+
 ## Run locally
 
 Requirements: Node **22.23.0**, npm, Docker Desktop and Google Chrome for browser tests.

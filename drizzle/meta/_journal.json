@@ -841,6 +841,13 @@
       "when": 1789336076395,
       "tag": "0119_workflow_master_clone",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1789339151114,
+      "tag": "0120_checklist_master_history",
+      "breakpoints": true
     }
   ]
 }

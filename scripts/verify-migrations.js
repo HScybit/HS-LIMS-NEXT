@@ -58,6 +58,7 @@ import { loadReportRenderer } from '../src/reports/renderer.js';
 import { createReportWorkerPool, verifyReportWorkerRole, processNextReportJob } from '../src/reports/worker.js';
 import { createRole, updateRole, retireRole, loadRole, listRoles, loadRoleSettings } from '../src/roles/service.js';
 import { saveLaboratorySettings } from '../src/organization-settings/service.js';
+import { createChecklist, updateChecklist, retireChecklist, loadChecklist, listChecklists } from '../src/checklists/service.js';
 
 process.loadEnvFile('.env.worker.local');
 
@@ -96,8 +97,23 @@ try {
   const role = (await getPool().query('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')).rows[0];
   assert.deepEqual(role, { rolsuper: false, rolbypassrls: false });
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
-  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage', 'roles.manage', 'workflows.manage'] });
+  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage', 'roles.manage', 'workflows.manage', 'checklists.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
+  await withSession(session.token, async (client, identity) => {
+    const input = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh checklist', isActive: false,
+      items: [{ id: randomUUID(), prompt: '0' }, { id: randomUUID(), prompt: 'Verify results' }] };
+    const created = await createChecklist(client, identity, input);
+    const first = await loadChecklist(client, identity, input.id, { atRevision: 1 });
+    assert.equal(first.savedBy, account.userId); assert.equal(first.isActive, false);
+    assert.deepEqual(first.items, input.items.map((item, displayOrder) => ({ ...item, displayOrder })));
+    await updateChecklist(client, identity, { id: input.id, requestId: randomUUID(), revision: 1, isActive: true });
+    assert.deepEqual((await loadChecklist(client, identity, input.id)).items, first.items);
+    assert.deepEqual(await loadChecklist(client, identity, input.id, { atRevision: 1 }), first);
+    await retireChecklist(client, identity, { id: input.id, requestId: randomUUID(), revision: 2 });
+    assert.deepEqual(await createChecklist(client, identity, input), created);
+    assert.equal((await listChecklists(client, identity, { search: 'Fresh checklist' })).totalCount, 0);
+    await assert.rejects(loadChecklist(client, identity, input.id), { code: 'checklist_not_found' });
+  }, { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
     const workflow = await createWorkflow(client, identity, { code: randomUUID(), name: 'Fresh workflow layout', appliesTo: 'sample' });
     const initialInput = { code: 'initial', name: 'Initial', stateType: 'initial', canvasX: 0, canvasY: 0, inputCount: 0, outputCount: 8, badgeStyle: 'dark' };
