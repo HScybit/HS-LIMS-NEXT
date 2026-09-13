@@ -6,6 +6,7 @@ import { customFieldTypes, customFieldAssociations, customFieldLegacyAssociation
   customFieldDateTimeFormats, customFieldGenerationTimes } from '../masters/custom-field-config.js';
 
 const transactionId = customType({ dataType: () => 'xid8' });
+const bytes = customType({ dataType: () => 'bytea' });
 const choices = (options) => sql.raw(options.map(({ value }) => `'${value.replaceAll("'", "''")}'`).join(','));
 const settings = () => ({
   key: text('key').notNull(), label: text('label').notNull(), description: text('description').notNull().default(''),
@@ -92,4 +93,23 @@ export const customFieldVersionEditRoles = pgTable('custom_field_version_edit_ro
   foreignKey({ name: 'custom_field_edit_role_version_fk', columns: versionColumns(table), foreignColumns: versionColumns(customFieldVersions) }),
   foreignKey({ name: 'custom_field_edit_role_fk', columns: [table.organizationId, table.roleId], foreignColumns: [roles.organizationId, roles.id] }),
   check('custom_field_edit_role_order', sql`${table.position} between 0 and 499`),
+]);
+
+export const customFieldAttachments = pgTable('custom_field_attachments', {
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id), id: uuid('id').notNull(),
+  fieldId: uuid('field_id').notNull(), fieldRevision: integer('field_revision').notNull(),
+  originalName: text('original_name').notNull(), mediaType: text('media_type').notNull(),
+  content: bytes('content').notNull(), byteLength: integer('byte_length').notNull(), sha256: text('sha256').notNull(),
+  uploadedBy: uuid('uploaded_by').notNull(), uploadedAt: timestamp('uploaded_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ name: 'custom_field_attachment_pk', columns: [table.organizationId, table.id] }),
+  foreignKey({ name: 'custom_field_attachment_definition_fk', columns: [table.organizationId, table.fieldId, table.fieldRevision],
+    foreignColumns: versionColumns(customFieldVersions) }),
+  foreignKey({ name: 'custom_field_attachment_actor_fk', columns: [table.organizationId, table.uploadedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  index('custom_field_attachment_definition').on(table.organizationId, table.fieldId, table.fieldRevision),
+  check('custom_field_attachment_name', sql`length(trim(${table.originalName})) between 1 and 500
+    and ${table.originalName} !~ '[[:cntrl:]]' and position('/' in ${table.originalName})=0 and position(chr(92) in ${table.originalName})=0`),
+  check('custom_field_attachment_type', sql`length(${table.mediaType})<=255 and ${table.mediaType} ~ '^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$'`),
+  check('custom_field_attachment_content', sql`${table.byteLength} between 0 and 20971520 and ${table.byteLength}=octet_length(${table.content})
+    and ${table.sha256}=encode(sha256(${table.content}),'hex')`),
 ]);

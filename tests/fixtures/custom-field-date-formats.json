@@ -1,0 +1,261 @@
+[
+  {
+    "kind": "date",
+    "format": "DD/MM/YYYY",
+    "input": "31/12/2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "MM/DD/YYYY",
+    "input": "12/31/2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "YYYY-MM-DD",
+    "input": "2026-12-31",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "DD-MM-YYYY",
+    "input": "31-12-2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "MM-DD-YYYY",
+    "input": "12-31-2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "YYYY/MM/DD",
+    "input": "2026/12/31",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "DD.MM.YYYY",
+    "input": "31.12.2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "MM.DD.YYYY",
+    "input": "12.31.2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "DD MMM YYYY",
+    "input": "31 Dec 2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "MMM DD, YYYY",
+    "input": "Dec 31, 2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "DD MMMM YYYY",
+    "input": "31 December 2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "MMMM DD, YYYY",
+    "input": "December 31, 2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "MMMM Do YYYY",
+    "input": "December 31st 2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "D MMM YYYY",
+    "input": "31 Dec 2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date",
+    "format": "Do MMMM YYYY",
+    "input": "31st December 2026",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T00:00"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD/MM/YYYY HH:mm:ss",
+    "input": "31/12/2026 23:30:45",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD/MM/YYYY HH:mm",
+    "input": "31/12/2026 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD/MM/YYYY, HH:mm",
+    "input": "31/12/2026, 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD/MM/YYYY hh:mm A",
+    "input": "31/12/2026 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD/MM/YYYY, hh:mm A",
+    "input": "31/12/2026, 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "MM/DD/YYYY HH:mm",
+    "input": "12/31/2026 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "MM/DD/YYYY hh:mm A",
+    "input": "12/31/2026 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "YYYY-MM-DD HH:mm",
+    "input": "2026-12-31 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "YYYY-MM-DD hh:mm A",
+    "input": "2026-12-31 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T11:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD-MM-YYYY HH:mm",
+    "input": "31-12-2026 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD-MM-YYYY hh:mm A",
+    "input": "31-12-2026 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD MMM YYYY HH:mm",
+    "input": "31 Dec 2026 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD MMM YYYY hh:mm A",
+    "input": "31 Dec 2026 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "MMM DD, YYYY HH:mm",
+    "input": "Dec 31, 2026 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "MMM DD, YYYY hh:mm A",
+    "input": "Dec 31, 2026 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD MMMM YYYY HH:mm",
+    "input": "31 December 2026 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "DD MMMM YYYY hh:mm A",
+    "input": "31 December 2026 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "MMMM DD, YYYY HH:mm",
+    "input": "December 31, 2026 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "MMMM DD, YYYY hh:mm A",
+    "input": "December 31, 2026 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "MMMM Do YYYY | HH:mm",
+    "input": "December 31st 2026 | 23:30",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "MMMM Do YYYY | hh:mm A",
+    "input": "December 31st 2026 | 11:30 PM",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  },
+  {
+    "kind": "date_time",
+    "format": "YYYY-MM-DD HH:mm:ss",
+    "input": "2026-12-31 23:30:45",
+    "dateInput": "2026-12-31",
+    "dateTimeInput": "2026-12-31T23:30"
+  }
+]

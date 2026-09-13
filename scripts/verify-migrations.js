@@ -36,6 +36,7 @@ import { loadTestParameter, saveTestParameter, retireTestParameter } from '../sr
 import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
 import { loadProduct, saveProduct, retireProduct, listProducts } from '../src/masters/products.js';
 import { loadCustomField, saveCustomField, retireCustomField, listCustomFields } from '../src/masters/custom-fields.js';
+import { uploadCustomFieldAttachment, readCustomFieldAttachment } from '../src/custom-fields/attachments.js';
 import { createTestRequestJobs } from '../src/test-requests/jobs.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
@@ -168,6 +169,21 @@ try {
     assert.equal((await retireCustomField(client, identity, removal)).revision, 3); assert.equal((await retireCustomField(client, identity, removal)).revision, 3);
     assert.deepEqual((await loadCustomField(client, identity, command.id, { atRevision: 3 })).options, command.options.toReversed());
     assert.equal((await listCustomFields(client, identity)).totalCount, 0);
+  }, { csrfToken: session.csrfToken });
+  const attachment = await withSession(session.token, async (client, identity) => {
+    const field = await saveCustomField(client, identity, { id: randomUUID(), revision: 0, requestId: randomUUID(), label: 'Fresh attachment',
+      key: 'fresh_attachment', associatedWith: 'product', fieldType: 'attachment' });
+    const command = { requestId: randomUUID(), fieldId: field.id, fieldRevision: 1, originalName: 'Fresh विश्लेषण.bin',
+      mediaType: 'application/octet-stream', content: Buffer.from([0, 255, 1, 10]) };
+    const saved = await uploadCustomFieldAttachment(client, identity, command);
+    assert.equal((await uploadCustomFieldAttachment(client, identity, { ...command, requestId: randomUUID(), content: Buffer.alloc(0) })).byteLength, 0);
+    return { field, command, saved };
+  }, { csrfToken: session.csrfToken });
+  await withSession(session.token, (client, identity) => retireCustomField(client, identity,
+    { id: attachment.field.id, revision: 1, requestId: randomUUID() }), { csrfToken: session.csrfToken });
+  await withSession(session.token, async (client, identity) => {
+    assert.deepEqual(await uploadCustomFieldAttachment(client, identity, attachment.command), { ...attachment.saved, replayed: true });
+    assert.deepEqual((await readCustomFieldAttachment(client, identity, attachment.saved.id)).content, attachment.command.content);
   }, { csrfToken: session.csrfToken });
   const productJobSample = await withSession(session.token, (client, identity) => registerSample(client, identity, laboratory.registration), { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
