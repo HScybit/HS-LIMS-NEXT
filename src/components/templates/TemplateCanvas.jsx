@@ -15,8 +15,9 @@ import TextWidget from './TextWidget.jsx';
 import ParameterDetailWidget from './ParameterDetailWidget.jsx';
 import SampleLineWidget from './SampleLineWidget.jsx';
 import { resolveParameterTitle, verticalTitleValue } from '../../templates/parameter-title.js';
+import { createSerialNumberIndex } from '../../templates/serial-number.js';
 
-export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, onBeginEdit, onRefreshDetail, onCommand, captured = false, occurrenceId, validation, disabled = false, report, parameter, serialNumber, imageSources, onUploadImage, showImagePlaceholder }) {
+export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, onBeginEdit, onRefreshDetail, onCommand, captured = false, occurrenceId, validation, disabled = false, report, parameter, serialNumber, sectionId, imageSources, onUploadImage, showImagePlaceholder }) {
   const plan = mode === 'plan';
   const edit = mode === 'edit';
   const shown = displayValue(field, value);
@@ -25,6 +26,7 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
   if (field.widget === 'parameter_detail_widget') return <ParameterDetailWidget field={field} mode={mode} value={value} captured={captured}
     parameter={parameter ?? report?.parameterDetailFallback} onRefresh={onRefreshDetail} occurrenceId={occurrenceId} disabled={disabled} />;
   if (field.widget === 'sample_line_item_data_widget') return <SampleLineWidget field={field} mode={mode} lineItem={report?.lineItem} onCommand={onCommand} disabled={disabled} />;
+  if (field.widget === 'sno_widget') return <div data-ms-id={sectionId}>{contextWidgetValue(field, report, parameter, serialNumber)}</div>;
   if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} serialNumber={serialNumber} />;
   if (isContextWidget(field.widget)) return <div className={plan ? 'text-muted small' : 'text-break'}>{plan ? contextWidgetPreview[field.widget] : contextWidgetValue(field, report, parameter, serialNumber)}</div>;
   if (field.widget === 'text_widget') return <TextWidget field={field} mode={mode} value={value} parameter={parameter?.parameterTitleValues} occurrenceId={occurrenceId} disabled={disabled} onBeginEdit={onBeginEdit} onChange={onChange} onCommit={onCommit} />;
@@ -87,7 +89,7 @@ function ReportResult({ report, parameter, serialNumber }) {
 }
 
 // The markup/classes follow the source TemplateSectionNode, TemplateRowNode and TemplateColNode.
-function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId, values }) {
+function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId, values, serialNumber }) {
   const { model, plan, mode, selected, onSelect, onCommand, onPanel, busy, validation, onChange, onCommit, onBeginEdit } = context;
   const subject = context.runtime?.subjectFor(activeOccurrenceId);
   const parameter = subject ? { ...context.dataContext?.parametersByRequestId?.[subject.testRequestId], ...subject } : context.reportParameter;
@@ -114,13 +116,14 @@ function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId,
     <div className="row1">{field ? <TemplateWidget field={field} mode={widgetMode} value={values[key]} validation={validation[key]} onChange={onChange} onCommit={onCommit} onBeginEdit={onBeginEdit} occurrenceId={activeOccurrenceId} disabled={busy}
       onRefreshDetail={context.onRefreshDetail} onCommand={onCommand} captured={Boolean(context.runtime)}
       imageSources={context.imageSources ?? context.report?.assets?.templateImages ?? model.imageSources} onUploadImage={context.onUploadImage} showImagePlaceholder={context.showImagePlaceholder || plan}
-      report={context.report ?? context.dataContext} parameter={parameter} serialNumber={parameter?.serialNumber ?? context.reportSerialNumber ?? model.rowsById[column.rowId].serialNumber ?? 0} /> : null}
+      report={context.report ?? context.dataContext} parameter={parameter} sectionId={sectionId}
+      serialNumber={field.widget === 'sno_widget' ? serialNumber : parameter?.serialNumber ?? context.reportSerialNumber ?? model.rowsById[column.rowId].serialNumber ?? 0} /> : null}
       {column.childSectionIds.map((childId) => renderSection(context, childId, activeOccurrenceId, values))}
     </div>
   </div>;
 }
 
-const TemplateRow = memo(function TemplateRow({ context, id, sectionId, isEditing, activeOccurrenceId, values }) {
+const TemplateRow = memo(function TemplateRow({ context, id, sectionId, isEditing, activeOccurrenceId, values, serialNumber }) {
   const { model, selected, onSelect, onPanel, busy, onCommand, mode, runtime, onRepeat } = context;
   const row = model.rowsById[id];
   return <div key={`${id}:${activeOccurrenceId ?? ''}`} className={`widget-row m-0 align-items-center1 row flex-1 ${selected === id ? 'active' : ''}`} data-row-id={id} data-master-section-id={sectionId} data-occurrence-id={activeOccurrenceId}
@@ -132,7 +135,7 @@ const TemplateRow = memo(function TemplateRow({ context, id, sectionId, isEditin
       </div>{row.ownRepeatGroupId ? <span className="btn mb-1 btn-light-info text-primary btn-sm template-edit-button template-edit-button--soft"><AppIcon name="fa-copy" className="me-2" /> Cloneable</span> : null}</div>
       <div className="template-edit-move-controls" aria-label="Move row"><MoveButton kind="row" id={id} direction={-1} icon="fa-arrow-up" label="Move row up" onCommand={onCommand} disabled={busy} /><MoveButton kind="row" id={id} direction={1} icon="fa-arrow-down" label="Move row down" onCommand={onCommand} disabled={busy} /></div>
     </div></div> : null}
-    {row.columnIds.map((columnId) => <TemplateColumn key={columnId} context={context} id={columnId} sectionId={sectionId} isEditing={isEditing} activeOccurrenceId={activeOccurrenceId} values={values} />)}
+    {row.columnIds.map((columnId) => <TemplateColumn key={columnId} context={context} id={columnId} sectionId={sectionId} isEditing={isEditing} activeOccurrenceId={activeOccurrenceId} values={values} serialNumber={serialNumber} />)}
     {mode === 'edit' && runtime && row.ownRepeatGroupId && onRepeat ? <div className="row action-row p-0"><div className="col-12 p-0">
       {[
         { label: 'Delete row', icon: 'fa-trash', className: 'delete-row-btn btn-danger', type: 'remove' },
@@ -144,7 +147,7 @@ const TemplateRow = memo(function TemplateRow({ context, id, sectionId, isEditin
   </div>;
 }, (previous, next) => {
   if (previous.context !== next.context || previous.id !== next.id || previous.sectionId !== next.sectionId
-    || previous.isEditing !== next.isEditing || previous.activeOccurrenceId !== next.activeOccurrenceId) return false;
+    || previous.isEditing !== next.isEditing || previous.activeOccurrenceId !== next.activeOccurrenceId || previous.serialNumber !== next.serialNumber) return false;
   if (previous.values === next.values) return true;
   const { model } = previous.context;
   return model.rowsById[previous.id].columnIds.every((id) => {
@@ -158,11 +161,11 @@ const TemplateRow = memo(function TemplateRow({ context, id, sectionId, isEditin
   });
 });
 
-function renderRow(context, id, sectionId, isEditing, parentOccurrenceId, values) {
+function renderRow(context, id, sectionId, isEditing, parentOccurrenceId, values, serials) {
   const row = context.model.rowsById[id];
   const rows = context.runtime && row.ownRepeatGroupId ? context.runtime.forGroup(parentOccurrenceId, row.ownRepeatGroupId) : [{ id: parentOccurrenceId }];
   return rows.map(({ id: activeOccurrenceId }) => <TemplateRow key={`${id}:${activeOccurrenceId ?? ''}`} context={context} id={id} sectionId={sectionId}
-    isEditing={isEditing} activeOccurrenceId={activeOccurrenceId} values={values} />);
+    isEditing={isEditing} activeOccurrenceId={activeOccurrenceId} values={values} serialNumber={serials.get(id)?.get(activeOccurrenceId) ?? 0} />);
 }
 
 function renderSection(context, id, parentOccurrenceId, values, onlyOccurrenceId) {
@@ -173,6 +176,7 @@ function renderSection(context, id, parentOccurrenceId, values, onlyOccurrenceId
   const sections = runtime && section.ownRepeatGroupId ? runtime.forGroup(parentOccurrenceId, section.ownRepeatGroupId) : [{ id: parentOccurrenceId }];
   const reportContexts = !plan && !runtime && context.report && section.isParameterLoop && !context.reportParameter
     ? context.report.results.map((parameter, index) => ({ ...context, reportParameter: parameter, reportSerialNumber: index + 1 })) : [context];
+  const serials = context.serialNumbers.forSection(id, parentOccurrenceId, context.reportParameter);
   return sections.filter((instance) => !onlyOccurrenceId || instance.id === onlyOccurrenceId).map(({ id: activeOccurrenceId }) => <div key={`${id}:${activeOccurrenceId ?? ''}`} id={`${context.idPrefix}${runtime || context.report && activeOccurrenceId ? `${id}-${activeOccurrenceId}` : id}`} data-section-id={id} data-occurrence-id={activeOccurrenceId} data-is-header={section.isHeader || undefined} data-is-footer={section.isFooter || undefined}
     data-is-param-loop={section.isParameterLoop || undefined} data-is-param-loop-header={section.isParameterLoopHeader || undefined}
     className={`master-section ${section.parentColumnId ? 'sub-section' : 'base-section'} ${section.cssClass} param_table ${selected === id ? 'active' : ''} ${isEditing ? 'is-editing' : ''}`}
@@ -184,7 +188,7 @@ function renderSection(context, id, parentOccurrenceId, values, onlyOccurrenceId
       </div> : null}<div className="template-edit-toolbar__spacer" />
       <button type="button" className={`btn mb-1 btn-sm template-edit-button ${isEditing ? 'btn-light-success text-success template-edit-button--active' : 'btn-light'}`} onClick={(event) => { event.stopPropagation(); onToggleEdit(id); }}><AppIcon name="fa-edit" className="me-2" />Edit Mode {isEditing ? 'On' : 'Off'}</button>
     </div></div> : null}
-    {reportContexts.map((rowContext) => section.rowIds.map((rowId) => renderRow(rowContext, rowId, id, isEditing, rowContext.reportParameter?.id ?? activeOccurrenceId, values)))}
+    {reportContexts.map((rowContext) => section.rowIds.map((rowId) => renderRow(rowContext, rowId, id, isEditing, rowContext.reportParameter?.id ?? activeOccurrenceId, values, serials)))}
   </div>);
 }
 
@@ -195,8 +199,9 @@ export default function TemplateCanvas({ model, mode = 'plan', editing = empty, 
     assertCaptureSize(model, occurrences);
     return indexOccurrences(model, occurrences);
   }, [model, occurrences]);
-  const context = useMemo(() => ({ model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, onRefreshDetail, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources }),
-    [model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, onRefreshDetail, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources]);
+  const serialNumbers = useMemo(() => createSerialNumberIndex(model, runtime, plan ? undefined : report), [model, runtime, plan, report]);
+  const context = useMemo(() => ({ model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, onRefreshDetail, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources, serialNumbers }),
+    [model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, onRefreshDetail, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources, serialNumbers]);
   return <div id={canvasId ?? undefined} className="template-render-canvas">{sectionRoots
     ? sectionRoots.map((root) => renderSection(context, root.sectionId, root.parentOccurrenceId, values, root.occurrenceId))
     : model.rootSectionIds.map((id) => renderSection(context, id, runtime?.root.id ?? occurrenceId, values))}</div>;
