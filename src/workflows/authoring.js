@@ -6,6 +6,7 @@ import { fieldsOnly, uuid, revision, text, bool, requirePermission } from '../te
 import { insertBatch } from '../templates/authoring.js';
 import { workflowStateInput, workflowTransitionInput, stateRoles, stateLayoutDefaults } from './input.js';
 import { loadWorkflowDefinition } from './definition.js';
+import { buildWorkflowCloneRows } from './clone.js';
 import * as w from '../db/workflow-schema.js';
 
 const scope = (table, org, id) => and(eq(table.organizationId, org), eq(table.id, id));
@@ -184,16 +185,11 @@ export async function cloneWorkflowDraft(client, identity, versionId) {
     const versions = await client.query('SELECT number, status FROM workflow_versions WHERE organization_id=$1 AND workflow_id=$2', [org, current.workflow.id]);
     if (versions.rows.some((version) => version.status === 'draft')) throw new HttpError(409, 'workflow_draft_exists', 'This workflow already has an editable draft.');
     const [draft] = await db.insert(w.workflowVersions).values({ organizationId: org, workflowId: current.workflow.id, number: Math.max(...versions.rows.map((version) => version.number)) + 1, createdBy: identity.user_id, changeSummary: `Draft from version ${current.version.number}` }).returning();
-    const states = new Map(current.states.map((state) => [state.id, randomUUID()]));
-    await insertBatch(db, w.workflowStates, current.states.map(({ capabilityRoles: _capabilities, ...state }) => ({ ...state, id: states.get(state.id), workflowVersionId: draft.id })));
-    await insertBatch(db, w.workflowStateCapabilityRoles, current.states.flatMap((state) => state.capabilityRoles.map((role) => ({ ...role, organizationId: org, workflowStateId: states.get(state.id) }))));
-    for (const transition of current.transitions) {
-      const { creatorRoleIds, ccRoleIds, approverStages, conditions, checklist, ccEmails, ...metadata } = transition;
-      const id = randomUUID();
-      await db.insert(w.workflowTransitions).values({ ...metadata, id, workflowVersionId: draft.id, sourceStateId: states.get(transition.sourceStateId), targetStateId: states.get(transition.targetStateId) });
-      await writeTransitionDetails(client, org, id, { creatorRoleIds, ccRoleIds, approverStages, ccEmails,
-        conditions: conditions.map(({ id: _id, ...condition }) => ({ ...condition, transitionId: id })), checklist: checklist.map(({ id: _id, ...item }) => ({ ...item, transitionId: id })) }, false);
-    }
+    const rows = buildWorkflowCloneRows(current, draft.id);
+    for (const [table, records] of [[w.workflowStates, rows.states], [w.workflowStateCapabilityRoles, rows.stateRoles],
+      [w.workflowTransitions, rows.transitions], [w.workflowTransitionCreatorRoles, rows.creatorRoles], [w.workflowTransitionApproverRoles, rows.approverRoles],
+      [w.workflowTransitionCcRoles, rows.ccRoles], [w.workflowTransitionCcEmails, rows.emails], [w.workflowTransitionConditions, rows.conditions],
+      [w.workflowTransitionChecklistItems, rows.checklist]]) await insertBatch(db, table, records);
     return { workflowId: current.workflow.id, versionId: draft.id, revision: 1 };
   });
 }
