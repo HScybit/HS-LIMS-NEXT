@@ -21,7 +21,7 @@ function storedValues(identity, instance, versionId, nextRevision, values) {
 function defaults(model, occurrences) {
   const fieldsByGroup = new Map();
   for (const field of Object.values(model.fieldsById)) {
-    if (field.widget === 'formula_widget' || field.defaultState === 'absent') continue;
+    if (['formula_widget', 'product_detail_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
     const group = field.repeatGroupId ?? null;
     if (!fieldsByGroup.has(group)) fieldsByGroup.set(group, []);
     fieldsByGroup.get(group).push(field);

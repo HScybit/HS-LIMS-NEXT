@@ -100,8 +100,16 @@ async function configureField(db, base, model, command) {
     if (config.minimum !== null && config.maximum !== null && Number(config.minimum) > Number(config.maximum)) throw new HttpError(400, 'invalid_bounds', 'Minimum cannot exceed maximum.');
   }
   if (command.defaultValue !== undefined) {
-    if (field.widget !== 'result_widget') throw new HttpError(400, 'unsupported_default', 'Default configuration is not available for this widget.');
-    Object.assign(field, resultDefaultFields({ ...field, numeric: config }, command.defaultValue));
+    if (field.widget === 'product_detail_widget') {
+      const configured = text(command.defaultValue, 'Default Value', 16000, { optional: true });
+      if (configured.includes('\0')) throw new HttpError(400, 'invalid_input', 'Default Value cannot contain null characters.');
+      Object.assign(field, { defaultState: configured === '' ? 'absent' : 'present', defaultText: configured === '' ? null : configured });
+    } else {
+      if (field.widget !== 'result_widget') throw new HttpError(400, 'unsupported_default', 'Default configuration is not available for this widget.');
+      Object.assign(field, resultDefaultFields({ ...field, numeric: config }, command.defaultValue));
+    }
+  } else if (field.widget === 'product_detail_widget' && previous) {
+    Object.assign(field, { defaultState: previous.defaultState, defaultText: previous.defaultText });
   } else if (field.widget === 'result_widget' && previous?.defaultState === 'present') {
     // A bounds/precision edit cannot publish a default that the new field rejects.
     resultDefaultFields({ ...field, numeric: config }, fieldDefaultValue(previous));

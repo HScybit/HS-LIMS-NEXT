@@ -687,6 +687,34 @@
       "when": 1789282113487,
       "tag": "0097_sample_product_history",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1789284186501,
+      "tag": "0098_sample_product_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1789285082288,
+      "tag": "0099_product_detail_widget",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1789285959559,
+      "tag": "0100_report_product_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1789287075968,
+      "tag": "0101_product_detail_readonly",
+      "breakpoints": true
     }
   ]
 }

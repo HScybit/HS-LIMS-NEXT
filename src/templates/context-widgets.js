@@ -1,6 +1,9 @@
 // Source COA widgets read explicit domain fields. These names select typed
 // records, never arbitrary object paths, SQL identifiers, or stored scripts.
+import { productDetailSelector } from './product-context.js';
+
 export const contextWidgetFields = Object.freeze({
+  product_detail_widget: [],
   sample_details_widget_v2: ['sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'productName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference'],
   tr_data_widget: ['requestNumber', 'parameterName', 'productName', 'methodName', 'analystName', 'submittedAt', 'completedAt'],
   decision_rule_widget: ['specification', 'measurementUnit', 'parameterName', 'productName', 'methodName', 'decisionOutcome'],
@@ -9,6 +12,7 @@ export const contextWidgetFields = Object.freeze({
 });
 
 export const contextWidgetPreview = Object.freeze({
+  product_detail_widget: 'Product detail widget preview',
   sample_details_widget_v2: 'Sample details widget preview',
   tr_data_widget: 'TR data widget preview',
   decision_rule_widget: 'Decision rule widget preview',
@@ -27,6 +31,10 @@ export function contextWidgetValue(field, report, parameter, serialNumber = 0) {
   if (!isContextWidget(field.widget)) return '';
   if (field.widget === 'sno_widget') return String(serialNumber).padStart(Math.max(1, field.serialPadding ?? 0), '0');
   if (!report) return '';
+  if (field.widget === 'product_detail_widget') {
+    const lineId = parameter?.sampleProductId ?? report.productLineId ?? report.primaryProductLineId;
+    return own(own(report.productDetailsByLineId, lineId), productDetailSelector(field.alias)) ?? '';
+  }
   if (field.widget === 'tr_result_widget') return scalar(own(parameter, 'finalResult'));
   if (!contextWidgetFields[field.widget].includes(field.sourceField)) return '';
   if (field.widget === 'sample_details_widget_v2' && field.sourceField !== 'productName') return scalar(own(report.sample, field.sourceField));

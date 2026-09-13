@@ -11,9 +11,10 @@ import { saveCapture } from '../../src/templates/capture.js';
 import { loadWorkflowRun } from '../../src/workflows/load.js';
 import { submitDatasheetTransition } from '../../src/workflows/requests.js';
 
-export async function prepareReportFlow(owner, account, { complete = true, printRoleId, finalSection = false, finalContext = false, productLines = 1, sampleCanWork = true, cancelTestRequest = false, prepareDatasheet } = {}) {
+export async function prepareReportFlow(owner, account, { complete = true, printRoleId, finalSection = false, finalContext = false, productLines = null, sampleCanWork = true, cancelTestRequest = false, prepareDatasheet, prepareProduct } = {}) {
   const work = (callback, options) => withSession(account.token, callback, { csrfToken: account.csrfToken, ...options });
   const fixture = await createLaboratoryFixture(owner, account, { repeated: finalSection, printRoleId, sampleCanWork, cancelTestRequest });
+  if (prepareProduct) await work((client, identity) => prepareProduct(client, identity, fixture));
   let draft = await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 1,
     { type: 'configureColumn', id: fixture.template.records.columns.at(-1).id, span: 6, isFinalResult: true }));
   if (finalSection) draft = await work((client, identity) => editTemplate(client, identity, fixture.template.versionId, 2,
@@ -30,7 +31,7 @@ export async function prepareReportFlow(owner, account, { complete = true, print
   if (prepareDatasheet) await work((client, identity) => prepareDatasheet(client, identity, { ...fixture.template, revision: draft.model.version.revision }));
   const template = await work(createReportTemplate);
   const sample = await work((client, identity) => registerSample(client, identity, { ...fixture.registration,
-    products: Array.from({ length: productLines }, () => structuredClone(fixture.registration.products[0])) }));
+    products: productLines === null ? fixture.registration.products : Array.from({ length: productLines }, () => structuredClone(fixture.registration.products[0])) }));
   const requests = await work((client, identity) => generateTestRequests(client, identity, sample.id));
   const completed = [];
   for (const request of requests.items) {

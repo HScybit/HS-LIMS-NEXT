@@ -1,0 +1,96 @@
+import { test, expect } from '@playwright/test';
+import { createHash, randomUUID } from 'node:crypto';
+import { ownerPool, createAccount } from '../helpers/database.js';
+import { prepareProductContextFlow } from '../helpers/product-context.js';
+import { startReportWorker } from '../helpers/report-worker.js';
+import { signIn, withSession } from '../../src/auth/service.js';
+import { closePool } from '../../src/db/pool.js';
+import { saveProduct, retireProduct } from '../../src/masters/products.js';
+
+let owner;
+test.beforeAll(() => { owner = ownerPool(); });
+test.afterAll(async () => { await closePool(); await owner.end(); });
+
+test('Product Title/Key controls, distinct report lines and frozen nested values survive edits and print through the worker', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const user = await createAccount(owner, { permissions: ['masters.manage', 'samples.read', 'samples.create', 'samples.manage', 'templates.read', 'templates.manage', 'test_requests.allocate', 'datasheets.execute', 'settings.manage'] });
+  const account = { ...user, ...await signIn({ identifier: user.username, password: user.password }) };
+  const flow = await prepareProductContextFlow(owner, account);
+  const errors = []; page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const createElement = Document.prototype.createElement;
+    Document.prototype.createElement = function (...args) {
+      const element = createElement.apply(this, args);
+      if (String(args[0]).toLowerCase() === 'iframe') element.addEventListener('load', () => {
+        if (element.title === 'Report PDF print frame') element.contentWindow.print = () => {};
+      });
+      return element;
+    };
+  });
+  await page.goto('/login');
+  await page.getByLabel('Username', { exact: true }).fill(account.username); await page.getByLabel('Password', { exact: true }).fill(account.password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click(); await expect(page).toHaveURL(/\/me$/);
+  await page.goto(`/master_template_management/${flow.template.templateId}`);
+  const section = page.locator(`[data-section-id="${flow.template.records.sections.find((item) => item.isParameterLoop).id}"]`);
+  await expect(section.getByRole('button', { name: 'Edit Mode Off' })).toBeVisible();
+  await section.getByRole('button', { name: 'Edit Mode Off' }).click();
+  const column = page.locator(`[data-field-id="${flow.reportTemplate.fieldIds.name}"]`);
+  await expect(column.getByText('Product detail widget preview', { exact: true })).toBeVisible();
+  await column.locator('.action-dropdown-toggle').click(); await page.getByRole('menuitem', { name: 'Widget', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Widget Configuration' });
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Title for name');
+  await expect(dialog.getByLabel('Key', { exact: true })).toHaveValue('name');
+  await expect(dialog.getByLabel('Required', { exact: true })).toBeChecked();
+  await expect(dialog.getByLabel('Default Value', { exact: true })).toHaveValue('Configured default is not a captured Product value');
+  await dialog.getByLabel('Default Value', { exact: true }).fill('0');
+  await dialog.getByLabel('Title', { exact: true }).fill('Configured Product title');
+  await dialog.getByLabel('Key', { exact: true }).fill('key');
+  await dialog.getByRole('button', { name: 'Update data' }).click();
+  await expect(page.getByText('Key already exist!', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Configured Product title');
+  await dialog.getByLabel('Key', { exact: true }).fill('name');
+  await dialog.getByRole('button', { name: 'Update data' }).click(); await expect(dialog).toBeHidden();
+  await page.reload(); await section.getByRole('button', { name: 'Edit Mode Off' }).click();
+  await column.locator('.action-dropdown-toggle').click(); await page.getByRole('menuitem', { name: 'Widget', exact: true }).click();
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Configured Product title');
+  await expect(dialog.getByLabel('Key', { exact: true })).toHaveValue('name');
+  await expect(dialog.getByLabel('Default Value', { exact: true })).toHaveValue('0');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: testInfo.outputPath('product-widget-controls-mobile.png'), fullPage: true, animations: 'disabled' });
+  await page.goto(`/samples/${flow.sample.id}/coa`);
+  await page.getByRole('button', { name: /^Consolidated/ }).click();
+  await page.getByLabel('Consolidated Report template', { exact: true }).selectOption(flow.template.templateId);
+  const generation = page.waitForResponse((response) => response.url().endsWith(`/api/samples/${flow.sample.id}/reports`) && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  const generatedResponse = await generation; expect(generatedResponse.status()).toBe(201);
+  const reportId = (await generatedResponse.json()).items[0].id;
+  const preview = page.frameLocator('.finalised-report-preview__frame');
+  const values = (key) => preview.locator(`[data-field-id="${flow.reportTemplate.fieldIds[key]}"]`);
+  await expect(values('name')).toHaveText(['First captured Product', 'Second captured Product']);
+  await expect(values('project_field__splitter__amount')).toHaveText(['0', '12']);
+  await expect(values('project_field__splitter__flag')).toHaveText(['false', 'true']);
+  await expect(values('project_field__splitter__note')).toHaveText(['First, Note', 'Second, Note']);
+  await expect(preview.getByText('Configured Product title', { exact: true })).toHaveCount(0);
+  await expect(preview.locator(`[data-field-id="${flow.datasheetTemplate.fieldIds.description}"]`).first()).toHaveText('First master description');
+  const work = (action) => withSession(account.token, action, { csrfToken: account.csrfToken });
+  const saved = await work((client, identity) => saveProduct(client, identity, { ...flow.firstCommand, revision: 2, requestId: randomUUID(), name: 'Later Product', description: 'Later master description' }));
+  await work((client, identity) => retireProduct(client, identity, { id: saved.id, revision: saved.revision, requestId: randomUUID() }));
+  await owner.query('UPDATE sample_products SET display_order=display_order+10 WHERE organization_id=$1 AND sample_id=$2 AND product_id=$3', [account.organizationId, flow.sample.id, flow.firstCommand.id]);
+  await page.reload(); await expect(values('name')).toHaveText(['First captured Product', 'Second captured Product']);
+  await expect(values('description')).toHaveText(['First master description', 'Second master description']);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: testInfo.outputPath('product-report-desktop.png'), fullPage: true, animations: 'disabled' });
+  const stopWorker = await startReportWorker();
+  try {
+    const fileResponse = page.waitForResponse((response) => response.url().endsWith(`/api/reports/${reportId}/pdf/file`));
+    await page.getByRole('button', { name: 'Print', exact: true }).click();
+    const printed = await fileResponse; expect(printed.status()).toBe(200);
+    const file = await page.request.get(`/api/reports/${reportId}/pdf/file`); const bytes = await file.body();
+    expect(file.status()).toBe(200); expect(bytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(file.headers()['x-report-sha256']);
+    const state = await page.request.get(`/api/reports/${reportId}/pdf`).then((response) => response.json());
+    expect(state.job.status).toBe('succeeded');
+    await testInfo.attach('product-history-report.pdf', { body: bytes, contentType: 'application/pdf' });
+  } finally { await stopWorker(); }
+  expect(errors).toEqual([]);
+});

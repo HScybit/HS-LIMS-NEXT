@@ -15,6 +15,7 @@ import { datasheetTemplateView, datasheetCaptureView } from '../datasheets/trans
 import { finalResultSectionRoots } from '../datasheets/final-result.js';
 import { assertReportSize } from './render-model.js';
 import { loadReportAssets, loadReportAssetBatch } from './assets.js';
+import { loadSampleProductContext } from '../samples/product-context.js';
 
 const scope = (table, organizationId) => eq(table.organizationId, organizationId);
 const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, isFinalized: report.isFinalized, generatedAt: report.generatedAt });
@@ -214,9 +215,16 @@ export async function loadReport(client, identity, reportId) {
   const { finalCaptures, datasheetModels, metrics: captureMetrics } = await reportFinalSections(client, identity, results, loaded.definitions);
   const definition = loaded.definitions.get(report.templateVersionId);
   const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels);
+  const productSelectors = [...loaded.definitions.values()].flatMap(({ model }) => Object.values(model.fieldsById)
+    .filter((field) => field.widget === 'product_detail_widget').map((field) => field.alias));
+  const productLineId = report.productContextLineId ?? report.sampleProductId;
+  if (productSelectors.length && !productLineId) throw new HttpError(409, 'incomplete_sample_product_history', 'This report has no recorded Product context.');
+  const products = productSelectors.length ? await loadSampleProductContext(client, identity, report.sampleId, productSelectors,
+    { sampleProductIds: [...new Set([productLineId, ...results.map((result) => result.sampleProductId)])] }) : null;
   const branding = await loadReportAssets(client, identity.organization_id, reportId, size.imageCounts);
   return { report, sample: { sampleNumber: report.sampleNumber, sampleCategoryName: report.sampleCategoryName, customerName: report.customerName, customerAddress: report.customerAddress,
     customerReference: report.customerReference, receivedAt: report.receivedAt, registeredAt: report.registeredAt, dueAt: report.dueAt, description: report.description },
     results, printConfig, model: templateView(definition.model), finalCaptures, datasheetModels, assets: branding.assets,
-    metrics: { definition: loaded.metrics, capture: captureMetrics, assets: branding.metrics, ...size } };
+    ...(products ? { productDetailsByLineId: products.productDetailsByLineId, primaryProductLineId: productLineId, productLineId } : {}),
+    metrics: { definition: loaded.metrics, capture: captureMetrics, assets: branding.metrics, ...(products ? { products: products.metrics } : {}), ...size } };
 }

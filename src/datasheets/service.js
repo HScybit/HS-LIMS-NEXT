@@ -6,6 +6,7 @@ import { calculateCapture } from '../templates/calculations.js';
 import { isContextWidget } from '../templates/context-widgets.js';
 import { loadDatasheetContext, assembleDatasheetContext } from './context.js';
 import { withTemplateImages } from '../template-assets/service.js';
+import { loadSampleProductContext } from '../samples/product-context.js';
 
 export async function datasheetRecord(client, identity, datasheetId, sampleId) {
   uuid(datasheetId, 'Datasheet');
@@ -16,7 +17,7 @@ export async function datasheetRecord(client, identity, datasheetId, sampleId) {
   const result = await client.query(`SELECT sheet.id, sheet.test_request_id AS "testRequestId", sheet.template_instance_id AS "templateInstanceId",
     capture.version_id AS "templateVersionId",capture.revision AS "captureRevision",
     sheet.status, sheet.revision, sheet.attempt_number AS "attemptNumber", request.request_number AS "requestNumber", request.status AS "requestStatus",
-    sample.id AS "sampleId", sample.sample_number AS "sampleNumber", coalesce(specification.method_name,'Job') AS "methodName", sheet.specification_id AS "specificationId", request.is_job AS "isJob",
+    sample.id AS "sampleId",product.sample_product_id AS "sampleProductId", sample.sample_number AS "sampleNumber", coalesce(specification.method_name,'Job') AS "methodName", sheet.specification_id AS "specificationId", request.is_job AS "isJob",
     laboratory_request_can_work(sheet.test_request_id) AS "canWork",
     EXISTS (SELECT 1 FROM test_request_assignments assignment WHERE assignment.organization_id = sheet.organization_id
       AND assignment.test_request_id = sheet.test_request_id AND assignment.assignment_type = 'analyst'
@@ -41,15 +42,20 @@ export async function loadDatasheet(client, identity, datasheetId, { sampleId, a
   const definition = await loadDefinition(client, identity.organization_id, sheet.templateVersionId);
   const context = Object.values(definition.model.fieldsById).some((field) => isContextWidget(field.widget))
     ? await loadDatasheetContext(client, identity, sheet, captureRevision) : null;
+  const productSelectors = Object.values(definition.model.fieldsById).filter((field) => field.widget === 'product_detail_widget').map((field) => field.alias);
+  const products = productSelectors.length ? await loadSampleProductContext(client, identity, sheet.sampleId, productSelectors,
+    { sampleProductIds: [...new Set([sheet.sampleProductId, ...context.rows.map((row) => row.sampleProductId)])] }) : null;
   const capture = await loadCapture(client, identity.organization_id, sheet.templateInstanceId, captureRevision, { pinnedValues: context?.pinnedValues ?? [] });
   const calculation = calculateCapture(definition.model, capture.occurrences, capture.values);
   const withImages = await withTemplateImages(client, identity.organization_id, definition, capture);
   const projectionStart = performance.now();
   const modelView = datasheetTemplateView(withImages.model); const runtimeView = datasheetCaptureView(capture);
   const projectionMs = performance.now() - projectionStart;
-  return { datasheet: sheet, model: modelView, capture: runtimeView, dataContext: context ? assembleDatasheetContext(context, capture) : undefined, validation: calculation.validation,
+  const dataContext = context ? assembleDatasheetContext(context, capture) : undefined;
+  if (products) Object.assign(dataContext, { productDetailsByLineId: products.productDetailsByLineId, primaryProductLineId: products.primaryProductLineId, productLineId: sheet.sampleProductId });
+  return { datasheet: sheet, model: modelView, capture: runtimeView, dataContext, validation: calculation.validation,
     canExecute: atRevision === undefined && sheet.canWork && identity.permission_codes.includes('datasheets.execute') && sheet.assignedAnalyst
       && ['allocated', 'in_progress', 'rejected'].includes(sheet.requestStatus) && ['in_progress', 'rejected'].includes(sheet.status) && capture.instance.status === 'editing',
     metrics: { metadataQueryCount: context ? 2 : 1, metadataMs: metadataMs + (context?.databaseMs ?? 0), definition: definition.metrics, capture: capture.metrics,
-      ...(withImages.metrics.assets ? { assets: withImages.metrics.assets } : {}), calculationMs: calculation.durationMs, projectionMs } };
+      ...(products ? { products: products.metrics } : {}), ...(withImages.metrics.assets ? { assets: withImages.metrics.assets } : {}), calculationMs: calculation.durationMs, projectionMs } };
 }

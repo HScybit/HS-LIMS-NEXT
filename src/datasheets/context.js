@@ -11,7 +11,7 @@ export async function loadDatasheetContext(client, identity, sheet, captureRevis
     WHERE $3 AND entry.organization_id=$1 AND entry.datasheet_id=$4 AND entry.value_revision<=$6
     ORDER BY subject.test_request_id,entry.value_revision DESC,entry.position DESC
   ), members AS MATERIALIZED (
-    SELECT request.id AS "testRequestId",request.request_number AS "requestNumber",product.product_name AS "productName",
+    SELECT request.id AS "testRequestId",request.request_number AS "requestNumber",product.product_name AS "productName",product.sample_product_id AS "sampleProductId",
       specification.parameter_name AS "parameterName",specification.method_name AS "methodName",specification.unit_symbol AS "measurementUnit",specification.rule_name AS specification,
       submission.submitted_at AS "submittedAt",source_sheet.completed_at AS "completedAt",
       CASE WHEN selected.id IS NOT NULL THEN selected.recorded_by ELSE coalesce(submission.submitted_by,assignment.assigned_user_id) END AS analyst_id,
@@ -44,7 +44,7 @@ export async function loadDatasheetContext(client, identity, sheet, captureRevis
 export function assembleDatasheetContext(context, capture) {
   const first = context.rows[0];
   const sample = first ? Object.fromEntries(['sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference'].map((key) => [key, first[key]])) : {};
-  const results = context.rows.map((row, index) => ({ id: row.testRequestId, serialNumber: index + 1, ...Object.fromEntries(['testRequestId', 'requestNumber', 'productName', 'parameterName', 'methodName', 'measurementUnit', 'specification', 'analystName', 'submittedAt', 'completedAt', 'resultEntryId', 'resultDatasheetId', 'resultSavedAt'].map((key) => [key, row[key]])),
+  const results = context.rows.map((row, index) => ({ id: row.testRequestId, serialNumber: index + 1, ...Object.fromEntries(['testRequestId', 'requestNumber', 'productName', 'sampleProductId', 'parameterName', 'methodName', 'measurementUnit', 'specification', 'analystName', 'submittedAt', 'completedAt', 'resultEntryId', 'resultDatasheetId', 'resultSavedAt'].map((key) => [key, row[key]])),
     finalResult: row.resultEntryId ? valuePayload(capture.pinnedValues.get(`${row.resultInstanceId}:${row.resultFieldId}:${row.resultOccurrenceId}:${row.resultValueRevision}`))
       : row.result_type === 'numeric' ? row.number_value : row.result_type === 'boolean' ? row.boolean_value : row.text_value }));
   return { sample, results, parametersByRequestId: Object.fromEntries(results.map((row) => [row.testRequestId, row])) };

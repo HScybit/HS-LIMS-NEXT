@@ -23,6 +23,7 @@ import { loadSample } from '../src/samples/load.js';
 import { generateTestRequests } from '../src/test-requests/generate.js';
 import { allocateTestRequest } from '../src/test-requests/allocate.js';
 import { prepareReportFlow } from '../tests/helpers/report-flow.js';
+import { addProductWidgets } from '../tests/helpers/product-context.js';
 import { prepareSubjectJob } from '../tests/helpers/job-subjects.js';
 import { createReportTemplate } from '../tests/helpers/reports.js';
 import { createReportAssets } from '../tests/helpers/report-assets.js';
@@ -238,11 +239,20 @@ try {
     assert.equal(loaded.customerName, customer.name); assert.equal(loaded.products[0].tests[0].requestStatus, 'allocated');
   }, { csrfToken: session.csrfToken });
   const templateImage = { requestId: randomUUID(), originalName: 'Fresh animated template.png', mediaType: 'image/png', content: await animatedPng({ separateDefault: true }) };
-  const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true, prepareDatasheet: async (client, identity, template) => {
-    const result = await addImageWidget(client, identity, template, templateImage, { rowId: template.records.rows[0].id });
-    assert.equal(result.metrics.assets.queryCount, 1);
-    assert.equal((await uploadTemplateImage(client, identity, template.versionId, result.fieldId, result.model.version.revision - 1, templateImage)).replayed, true);
-  } });
+  const productContextField = await withSession(session.token, (client, identity) => saveCustomField(client, identity,
+    { id: randomUUID(), revision: 0, requestId: randomUUID(), label: 'Fresh Product flag', key: 'fresh_product_flag', associatedWith: 'product', fieldType: 'checkbox' }), { csrfToken: session.csrfToken });
+  const productContextSelector = 'project_field__splitter__fresh_product_flag';
+  const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true,
+    prepareProduct: async (client, identity, fixture) => {
+      await saveProduct(client, identity, { id: fixture.product.id, revision: 1, requestId: randomUUID(), key: fixture.product.code,
+        name: 'Fresh captured Product', description: 'Fresh immutable Product context',
+        customFields: [{ fieldId: productContextField.id, fieldRevision: 1, value: false }] });
+    }, prepareDatasheet: async (client, identity, template) => {
+      const result = await addImageWidget(client, identity, template, templateImage, { rowId: template.records.rows[0].id });
+      assert.equal(result.metrics.assets.queryCount, 1);
+      assert.equal((await uploadTemplateImage(client, identity, template.versionId, result.fieldId, result.model.version.revision - 1, templateImage)).replayed, true);
+      await addProductWidgets(client, identity, { ...template, revision: result.model.version.revision }, template.records.sections[0].id, ['description', productContextSelector]);
+    } });
   const assets = await withSession(session.token, async (client, identity) => {
     const created = await createReportAssets(client, identity);
     const vector = await uploadReportImage(client, identity, { requestId: randomUUID(), originalName: 'Fresh vector.svg', mediaType: 'image/svg+xml', content: reportSvg });
@@ -260,6 +270,8 @@ try {
     assert.equal((await saveCustomCss(client, identity, cssInput)).replayed, true);
     assert.equal((await loadCurrentCustomCss(client)).versionId, stylesheet.versionId);
     await editTemplate(client, identity, reportFlow.template.versionId, 1, created.command);
+    await addProductWidgets(client, identity, { ...reportFlow.template, revision: 2 },
+      reportFlow.template.records.sections.find((section) => section.name === 'Certificate Details').id, ['name', productContextSelector]);
     return { ...created, footer: footer.document, stylesheet };
   }, { csrfToken: session.csrfToken });
   const generationInput = { ...reportFlow.input, finalizeSample: true };
@@ -288,8 +300,18 @@ try {
   const queued = await withSession(session.token, (client, identity) => enqueueReportPdf(client, identity, reportId), { csrfToken: session.csrfToken });
   worker = createReportWorkerPool(workerUrl.href); await verifyReportWorkerRole(worker);
   assert.equal((await worker.query('SELECT id FROM sample_reports')).rowCount, 0);
-  const printed = await processNextReportJob({ pool: worker, renderer: await loadReportRenderer(), workerId: randomUUID() });
+  const renderer = await loadReportRenderer(); let checkedProductContext = false;
+  const printed = await processNextReportJob({ pool: worker, renderer: { ...renderer,
+    renderReportDocument(report, stylesheet) {
+      assert.deepEqual(report.productDetailsByLineId, captured.productDetailsByLineId);
+      const html = renderer.renderReportDocument(report, stylesheet);
+      assert.ok(html.includes('Fresh captured Product')); assert.ok(html.includes('Fresh immutable Product context'));
+      assert.ok(html.includes('>false</div>')); assert.ok(!html.includes('Configured default is not a captured Product value'));
+      checkedProductContext = true; return html;
+    },
+  }, workerId: randomUUID() });
   assert.deepEqual(printed, { jobId: queued.job.id, status: 'succeeded' });
+  assert.equal(checkedProductContext, true);
   const pdf = await withSession(session.token, (client, identity) => reportPdfFile(client, identity, reportId), { readOnly: true });
   assert.equal(pdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdf.byteLength > 5000);
   const signedAccount = { ...account, ...session };
