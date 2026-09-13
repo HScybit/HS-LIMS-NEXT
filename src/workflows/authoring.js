@@ -7,6 +7,7 @@ import { insertBatch } from '../templates/authoring.js';
 import { workflowStateInput, workflowTransitionInput, stateRoles, stateLayoutDefaults } from './input.js';
 import { loadWorkflowDefinition } from './definition.js';
 import { buildWorkflowCloneRows } from './clone.js';
+import { createWorkflowMaster } from './metadata.js';
 import * as w from '../db/workflow-schema.js';
 
 const scope = (table, org, id) => and(eq(table.organizationId, org), eq(table.id, id));
@@ -30,9 +31,10 @@ async function mutation(work) {
 }
 async function lockDraft(client, identity, versionId, expected) {
   requirePermission(identity, 'workflows.manage'); uuid(versionId, 'Workflow version'); revision(expected);
-  await client.query(`SELECT workflow.id FROM workflows workflow JOIN workflow_versions version
+  const workflow = await client.query(`SELECT workflow.id FROM workflows workflow JOIN workflow_versions version
     ON version.organization_id=workflow.organization_id AND version.workflow_id=workflow.id
-    WHERE version.organization_id=$1 AND version.id=$2 FOR UPDATE OF workflow`, [identity.organization_id, versionId]);
+    WHERE version.organization_id=$1 AND version.id=$2 AND workflow.active FOR UPDATE OF workflow`, [identity.organization_id, versionId]);
+  if (!workflow.rowCount) throw new HttpError(404, 'workflow_not_found', 'Workflow was not found.');
   const result = await client.query('SELECT * FROM workflow_versions WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, versionId]);
   const version = result.rows[0];
   if (!version) throw new HttpError(404, 'workflow_not_found', 'Workflow version was not found.');
@@ -52,12 +54,10 @@ async function requireRoles(client, org, roleIds) {
 export async function createWorkflow(client, identity, input) {
   requirePermission(identity, 'workflows.manage'); fieldsOnly(input, ['code', 'name', 'description', 'appliesTo', 'active']);
   if (!['sample', 'test_request'].includes(input.appliesTo)) throw new HttpError(400, 'invalid_workflow_type', 'Select a supported workflow type.');
-  const record = { organizationId: identity.organization_id, code: text(input.code, 'Code', 64), name: text(input.name, 'Name'),
-    description: text(input.description, 'Description', 10000, { optional: true }), appliesTo: input.appliesTo, active: bool(input.active ?? true, 'Active') };
   return mutation(async () => {
-    const db = database(client); const [workflow] = await db.insert(w.workflows).values(record).returning();
-    const [version] = await db.insert(w.workflowVersions).values({ organizationId: identity.organization_id, workflowId: workflow.id, number: 1, createdBy: identity.user_id, changeSummary: 'Initial draft' }).returning();
-    return { workflowId: workflow.id, versionId: version.id, revision: version.revision };
+    const saved = await createWorkflowMaster(client, identity, { ...input, id: randomUUID(), requestId: randomUUID(), metadataRevision: 0,
+      code: text(input.code, 'Code', 64), active: bool(input.active ?? true, 'Active') });
+    return { workflowId: saved.workflowId, versionId: saved.versionId, revision: saved.revision };
   });
 }
 
@@ -177,9 +177,10 @@ export async function cloneWorkflowDraft(client, identity, versionId) {
   requirePermission(identity, 'workflows.manage'); uuid(versionId, 'Workflow version');
   return mutation(async () => {
     const org = identity.organization_id; const db = database(client);
-    await client.query(`SELECT workflow.id FROM workflows workflow JOIN workflow_versions version
+    const workflow = await client.query(`SELECT workflow.id FROM workflows workflow JOIN workflow_versions version
       ON version.organization_id=workflow.organization_id AND version.workflow_id=workflow.id
-      WHERE version.organization_id=$1 AND version.id=$2 FOR UPDATE OF workflow`, [org, versionId]);
+      WHERE version.organization_id=$1 AND version.id=$2 AND workflow.active FOR UPDATE OF workflow`, [org, versionId]);
+    if (!workflow.rowCount) throw new HttpError(404, 'workflow_not_found', 'Workflow was not found.');
     await client.query('SELECT id FROM workflow_versions WHERE organization_id=$1 AND id=$2 FOR UPDATE', [org, versionId]);
     const current = await loadWorkflowDefinition(client, identity, versionId);
     const versions = await client.query('SELECT number, status FROM workflow_versions WHERE organization_id=$1 AND workflow_id=$2', [org, current.workflow.id]);

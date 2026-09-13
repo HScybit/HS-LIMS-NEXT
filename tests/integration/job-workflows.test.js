@@ -7,7 +7,9 @@ import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { loadDatasheet } from '../../src/datasheets/service.js';
 import { saveCapture } from '../../src/templates/capture.js';
-import { createWorkflow, saveWorkflowState, saveWorkflowTransition, publishWorkflow } from '../../src/workflows/authoring.js';
+import { createWorkflow, saveWorkflowState, saveWorkflowTransition, publishWorkflow, cloneWorkflowDraft } from '../../src/workflows/authoring.js';
+import { loadWorkflowMaster, retireWorkflowMaster, updateWorkflowMaster } from '../../src/workflows/metadata.js';
+import { loadLaboratorySettings, saveLaboratorySettings } from '../../src/organization-settings/service.js';
 import { submitDatasheetTransition, approveWorkflowAssignment, requestWorkflowTransition } from '../../src/workflows/requests.js';
 import { loadWorkflowRun } from '../../src/workflows/load.js';
 import { loadTestRequest } from '../../src/test-requests/load.js';
@@ -26,7 +28,7 @@ after(async () => { await closePool(); await owner.end(); });
 
 async function definition(mode = 'none', { intermediate = false } = {}) {
   const call = (callback) => work(creator, callback);
-  const workflow = await call((client, identity) => createWorkflow(client, identity, { code: randomUUID(), name: 'Synthetic independent job workflow', appliesTo: 'test_request' }));
+  const workflow = await call((client, identity) => createWorkflow(client, identity, { code: randomUUID(), name: `Synthetic independent job workflow ${randomUUID()}`, appliesTo: 'test_request' }));
   const initial = await call((client, identity) => saveWorkflowState(client, identity, workflow.versionId, 1, { code: 'initial', name: 'Summary review', stateType: 'initial', showAddResult: true }));
   const middle = intermediate ? await call((client, identity) => saveWorkflowState(client, identity, workflow.versionId, initial.revision,
     { code: 'reviewing', name: 'Job review in progress', stateType: 'normal' })) : null;
@@ -61,6 +63,35 @@ const submit = (flow, transitionId = flow.workflow.complete.id) => work(analyst,
   transition: { revision: flow.run.revision, transitionId, comment: 'Synthetic actual job decision', checklistItemIds: [] },
 }));
 const effects = async (flow) => (await owner.query('SELECT * FROM laboratory_job_workflow_effects WHERE organization_id=$1 AND parent_request_id=$2 ORDER BY test_request_id', [creator.organizationId, flow.job.id])).rows;
+
+test('a configured job workflow cannot be retired until the actual laboratory setting is cleared', async () => {
+  const workflow = await definition();
+  const current = await work(creator, loadLaboratorySettings, { readOnly: true });
+  const setting = { revision: current.settings.revision, autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: workflow.workflowId };
+  const saved = await work(creator, (client, identity) => saveLaboratorySettings(client, identity, setting));
+  const command = { id: workflow.workflowId, metadataRevision: 1, requestId: randomUUID() };
+  await assert.rejects(work(creator, (client, identity) => retireWorkflowMaster(client, identity, command)), { code: 'workflow_in_use' });
+  await work(creator, (client, identity) => saveLaboratorySettings(client, identity, { ...setting, revision: saved.revision, jobWorkflowId: null }));
+  assert.equal((await work(creator, (client, identity) => retireWorkflowMaster(client, identity, command))).metadataRevision, 2);
+  await assert.rejects(work(creator, (client, identity) => saveLaboratorySettings(client, identity, { ...setting, revision: saved.revision + 1 })), { code: 'invalid_job_workflow' });
+  await assert.rejects(work(creator, (client, identity) => cloneWorkflowDraft(client, identity, workflow.versionId)), { code: 'workflow_not_found' });
+});
+
+test('an actual job run protects its workflow after settings are cleared and permits an unchanged-type metadata edit', async () => {
+  const flow = await prepare();
+  const current = await work(creator, loadLaboratorySettings, { readOnly: true });
+  await work(creator, (client, identity) => saveLaboratorySettings(client, identity, { revision: current.settings.revision,
+    autoCreateJobs: false, resultSummaryTemplateId: current.settings.resultSummaryTemplateId, jobWorkflowId: null }));
+  assert.equal((await owner.query('SELECT count(*)::int n FROM sample_category_workflows WHERE organization_id=$1 AND workflow_id=$2', [creator.organizationId, flow.workflow.workflowId])).rows[0].n, 0);
+  assert.equal((await owner.query('SELECT count(*)::int n FROM workflow_runs WHERE organization_id=$1 AND workflow_version_id=$2', [creator.organizationId, flow.workflow.versionId])).rows[0].n, 1);
+  const master = await work(creator, (client, identity) => loadWorkflowMaster(client, identity, flow.workflow.workflowId), { readOnly: true });
+  const command = { id: master.id, metadataRevision: master.metadataRevision, requestId: randomUUID() };
+  await assert.rejects(work(creator, (client, identity) => retireWorkflowMaster(client, identity, command)), { code: 'workflow_in_use' });
+  await assert.rejects(work(creator, (client, identity) => updateWorkflowMaster(client, identity, { ...command, name: master.name, appliesTo: 'sample' })), { code: 'workflow_type_immutable' });
+  assert.equal((await work(creator, (client, identity) => updateWorkflowMaster(client, identity, { ...command, name: 'Renamed ' + master.name, appliesTo: 'test_request' }))).metadataRevision, 2);
+  const retained = await work(analyst, (client, identity) => loadWorkflowRun(client, identity, flow.run.id), { readOnly: true });
+  assert.equal(retained.versionId, flow.run.versionId); assert.equal(retained.status, 'active');
+});
 
 test('a job decision covers its child results while preserving their different workflow definitions and actual parent evidence', async () => {
   const flow = await prepare(); const completed = await submit(flow);

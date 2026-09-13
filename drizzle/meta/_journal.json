@@ -827,6 +827,13 @@
       "when": 1789329814434,
       "tag": "0117_workflow_canvas_layout",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1789332808662,
+      "tag": "0118_workflow_metadata_history",
+      "breakpoints": true
     }
   ]
 }

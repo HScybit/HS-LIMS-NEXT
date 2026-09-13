@@ -28,7 +28,7 @@ before(async () => {
 after(async () => { await closePool(); await owner.end(); });
 
 async function definition({ mode = 'none', stages, publish = true, targetFlags = {} } = {}) {
-  const workflow = await work(manager, (client, identity) => createWorkflow(client, identity, { code: randomUUID(), name: 'Synthetic approval workflow', appliesTo: 'sample' }));
+  const workflow = await work(manager, (client, identity) => createWorkflow(client, identity, { code: randomUUID(), name: `Synthetic approval workflow ${randomUUID()}`, appliesTo: 'sample' }));
   const initial = await work(manager, (client, identity) => saveWorkflowState(client, identity, workflow.versionId, 1,
     { code: 'initial', name: 'In Progress', stateType: 'initial', showSampleEdit: true, allocateRoleIds: [manager.roleId] }));
   const final = await work(manager, (client, identity) => saveWorkflowState(client, identity, workflow.versionId, initial.revision,

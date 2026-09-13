@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships, roles } from './schema.js';
 import { templates } from './template-schema.js';
 import { sampleCategories } from './master-schema.js';
@@ -10,11 +10,15 @@ const identity = () => ({ organizationId: tenant(), id: uuid('id').notNull().def
 const key = (t) => primaryKey({ columns: [t.organizationId, t.id] });
 const link = (t, column, target) => foreignKey({ columns: [t.organizationId, column], foreignColumns: [target.organizationId, target.id] });
 const actor = (t, column) => foreignKey({ columns: [t.organizationId, column], foreignColumns: [memberships.organizationId, memberships.userId] });
+const transactionId = customType({ dataType: () => 'xid8' });
 
 export const workflows = pgTable('workflows', {
   ...identity(), code: text('code').notNull(), name: text('name').notNull(), description: text('description').notNull().default(''),
   appliesTo: text('applies_to').notNull(), active: boolean('active').notNull().default(true), createdAt: time('created_at').notNull().defaultNow(),
-}, (t) => [key(t), uniqueIndex('workflow_code_key').on(t.organizationId, sql`lower(${t.code})`), unique('workflow_entity_type_key').on(t.organizationId, t.id, t.appliesTo),
+  // Zero and NULL distinguish metadata that predates recorded edit history.
+  metadataRevision: integer('metadata_revision').notNull().default(0), createdBy: uuid('created_by'), updatedBy: uuid('updated_by'), updatedAt: time('updated_at'),
+}, (t) => [key(t), actor(t, t.createdBy), actor(t, t.updatedBy), uniqueIndex('workflow_code_key').on(t.organizationId, sql`lower(${t.code})`), unique('workflow_entity_type_key').on(t.organizationId, t.id, t.appliesTo),
+  index('workflow_active_name').on(t.organizationId, t.name).where(sql`${t.active}`), check('workflow_metadata_revision', sql`${t.metadataRevision}>=0`),
   check('workflow_metadata', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 200 and ${t.appliesTo} in ('sample', 'test_request')`)]);
 
 export const workflowVersions = pgTable('workflow_versions', {
@@ -27,6 +31,25 @@ export const workflowVersions = pgTable('workflow_versions', {
   check('workflow_version_status', sql`(${t.status} = 'draft' and ${t.publishedBy} is null and ${t.publishedAt} is null and ${t.retiredAt} is null)
     or (${t.status} = 'published' and ${t.publishedBy} is not null and ${t.publishedAt} is not null and ${t.retiredAt} is null)
     or (${t.status} = 'retired' and ${t.publishedBy} is not null and ${t.publishedAt} is not null and ${t.retiredAt} is not null and ${t.retiredAt} >= ${t.publishedAt})`)]);
+
+export const workflowMetadataVersions = pgTable('workflow_metadata_versions', {
+  organizationId: tenant(), workflowId: uuid('workflow_id').notNull(), revision: integer('revision').notNull(), requestId: uuid('request_id').notNull(),
+  previousRevision: integer('previous_revision'), operation: text('operation').notNull(), initialVersionId: uuid('initial_version_id'),
+  code: text('code').notNull(), name: text('name').notNull(), description: text('description').notNull(), appliesTo: text('applies_to').notNull(), active: boolean('active').notNull(),
+  requestedCode: text('requested_code'), generatedCode: boolean('generated_code').notNull(), descriptionProvided: boolean('description_provided').notNull(),
+  requestedAppliesTo: text('requested_applies_to'), requestedActive: boolean('requested_active'),
+  savedBy: uuid('saved_by').notNull(), savedAt: time('saved_at').notNull().defaultNow(),
+  createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, (t) => [primaryKey({ name: 'workflow_metadata_version_pk', columns: [t.organizationId, t.workflowId, t.revision] }),
+  unique('workflow_metadata_request_key').on(t.organizationId, t.requestId), link(t, t.workflowId, workflows), link(t, t.initialVersionId, workflowVersions), actor(t, t.savedBy),
+  check('workflow_metadata_history_revision', sql`(${t.operation}='create' and ${t.previousRevision} is null and ${t.revision}=1 and ${t.initialVersionId} is not null)
+    or (${t.operation} in ('update','retire') and ${t.previousRevision} is not null and ${t.previousRevision}>=0 and ${t.revision}=${t.previousRevision}+1 and ${t.initialVersionId} is null)`),
+  check('workflow_metadata_history_fields', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 200
+    and ${t.appliesTo} in ('sample','test_request') and (${t.requestedAppliesTo} is null or ${t.requestedAppliesTo} in ('sample','test_request'))
+    and (not ${t.generatedCode} or (${t.operation}='create' and ${t.requestedCode} is not null))
+    and (${t.operation}<>'retire' or (not ${t.active} and not ${t.descriptionProvided} and not ${t.generatedCode}
+      and num_nonnulls(${t.requestedCode},${t.requestedAppliesTo},${t.requestedActive})=0))`),
+]);
 
 export const workflowStates = pgTable('workflow_states', {
   ...identity(), workflowVersionId: uuid('workflow_version_id').notNull(), code: text('code').notNull(), name: text('name').notNull(),

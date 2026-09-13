@@ -7,7 +7,7 @@ import * as w from '../../src/db/workflow-schema.js';
 
 // Explicit synthetic graph, written outside benchmark timing through the app role.
 export async function createWorkflowCloneFixture(client, identity, { edges = 1, roleId, templateId = null, details = true } = {}) {
-  const workflow = await createWorkflow(client, identity, { code: randomUUID(), name: 'Synthetic workflow clone', appliesTo: 'sample' });
+  const workflow = await createWorkflow(client, identity, { code: randomUUID(), name: `Synthetic workflow clone ${randomUUID()}`, appliesTo: 'sample' });
   const db = database(client); const organizationId = identity.organization_id;
   const states = Array.from({ length: edges + 1 }, (_, index) => ({
     organizationId, id: randomUUID(), workflowVersionId: workflow.versionId, code: `state-${index}`, name: `Synthetic state ${index}`,

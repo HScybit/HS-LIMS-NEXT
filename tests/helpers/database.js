@@ -4,7 +4,11 @@ import { hashPassword } from '../../src/auth/passwords.js';
 
 export function ownerPool() {
   const url = new URL(process.env.MIGRATION_DATABASE_URL);
-  if (url.hostname !== '127.0.0.1' || url.port !== '55442' || url.pathname !== '/sampleify_local') {
+  const databaseName = process.env.SAMPLEIFY_TEST_DATABASE_NAME ?? 'sampleify_local';
+  const app = new URL(process.env.DATABASE_URL);
+  if (databaseName !== 'sampleify_local' && !/^sampleify_verify_[a-f0-9]{32}$/.test(databaseName)
+    || url.hostname !== '127.0.0.1' || url.port !== '55442' || url.pathname !== `/${databaseName}`
+    || app.hostname !== url.hostname || app.port !== url.port || app.pathname !== url.pathname) {
     throw new Error('Integration fixtures require the dedicated local synthetic database.');
   }
   return new pg.Pool({ connectionString: url.href, max: 4 });

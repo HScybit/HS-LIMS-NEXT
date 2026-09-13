@@ -49,6 +49,7 @@ import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
 import { createWorkflow, saveWorkflowState, saveWorkflowTransition, publishWorkflow, cloneWorkflowDraft } from '../src/workflows/authoring.js';
 import { loadWorkflowDefinition } from '../src/workflows/definition.js';
+import { loadWorkflowMaster, updateWorkflowMaster, retireWorkflowMaster } from '../src/workflows/metadata.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
 import { generateReports, loadReport } from '../src/reports/service.js';
 import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
@@ -114,6 +115,14 @@ try {
     await saveWorkflowState(client, identity, copy.versionId, 1, { ...initialInput, outputCount: 1 }, first.id);
     assert.equal((await loadWorkflowDefinition(client, identity, copy.versionId)).transitions.length, 0);
     assert.deepEqual(await loadWorkflowDefinition(client, identity, workflow.versionId), original);
+    const metadata = await loadWorkflowMaster(client, identity, workflow.workflowId);
+    assert.equal(metadata.metadataRevision, 1); assert.equal(metadata.createdBy, identity.user_id);
+    const input = { id: workflow.workflowId, requestId: randomUUID(), metadataRevision: 1, name: 'Fresh workflow metadata edit' };
+    const changed = await updateWorkflowMaster(client, identity, input);
+    assert.deepEqual(await updateWorkflowMaster(client, identity, input), changed);
+    assert.equal((await loadWorkflowMaster(client, identity, workflow.workflowId, { atRevision: 1 })).name, 'Fresh workflow layout');
+    await retireWorkflowMaster(client, identity, { id: workflow.workflowId, requestId: randomUUID(), metadataRevision: changed.metadataRevision });
+    await assert.rejects(loadWorkflowMaster(client, identity, workflow.workflowId), { code: 'workflow_not_found' });
   }, { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
     const command = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh role history', description: '0',

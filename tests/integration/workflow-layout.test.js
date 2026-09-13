@@ -19,7 +19,7 @@ before(async () => {
 after(async () => { await closePool(); await owner.end(); });
 
 async function graph() {
-  const workflow = await work((client, identity) => createWorkflow(client, identity, { code: randomUUID(), name: 'Synthetic layout workflow', appliesTo: 'sample' }));
+  const workflow = await work((client, identity) => createWorkflow(client, identity, { code: randomUUID(), name: `Synthetic layout workflow ${randomUUID()}`, appliesTo: 'sample' }));
   const initialInput = { code: 'initial', name: 'In progress', stateType: 'initial', canvasX: 0, canvasY: 0, inputCount: 0, outputCount: 8, badgeStyle: 'dark' };
   const finalInput = { code: 'final', name: 'Complete', stateType: 'final', canvasX: 100000, canvasY: 100000, inputCount: 8, outputCount: 0, badgeStyle: 'light' };
   const initial = await work((client, identity) => saveWorkflowState(client, identity, workflow.versionId, 1, initialInput));
