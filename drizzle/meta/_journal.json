@@ -680,6 +680,13 @@
       "when": 1789275083171,
       "tag": "0096_product_custom_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1789282113487,
+      "tag": "0097_sample_product_history",
+      "breakpoints": true
     }
   ]
 }

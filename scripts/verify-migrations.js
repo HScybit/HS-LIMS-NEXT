@@ -203,6 +203,8 @@ try {
     assert.equal(Object.keys(listed.rows[0].customFields).length, 16);
   }, true);
   const productJobSample = await withSession(session.token, (client, identity) => registerSample(client, identity, laboratory.registration), { csrfToken: session.csrfToken });
+  assert.equal((await owner.query('SELECT product_revision FROM sample_products WHERE organization_id=$1 AND sample_id=$2',
+    [account.organizationId, productJobSample.id])).rows[0].product_revision, 3);
   await withSession(session.token, async (client, identity) => {
     const generated = await generateTestRequests(client, identity, productJobSample.id);
     const created = await createTestRequestJobs(client, identity, { requestIds: generated.items.map((row) => row.id), analystUserId: account.userId });

@@ -4,6 +4,7 @@ import { organizations, memberships } from './schema.js';
 import { templates, templateInstances, templateOccurrences, templateValues } from './template-schema.js';
 import { sampleCategories, products, productSampleCategories, customers, customerQuotations, laboratories, measurementUnits, testParameters, methodsOfAnalysis, parameterMethods, decisionRules, tags } from './master-schema.js';
 import { workflowVersions, workflowStates, workflowTransitions } from './workflow-schema.js';
+import { productVersions } from './product-history-schema.js';
 
 const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
 const tenant = () => uuid('organization_id').notNull().references(() => organizations.id);
@@ -51,11 +52,13 @@ export const samples = pgTable('samples', {
 
 export const sampleProducts = pgTable('sample_products', {
   ...identity(), sampleId: uuid('sample_id').notNull(), productId: uuid('product_id').notNull(), sampleCategoryId: uuid('sample_category_id').notNull(),
+  productRevision: integer('product_revision'),
   productCode: text('product_code').notNull(), productName: text('product_name').notNull(), categoryCode: text('category_code').notNull(), categoryName: text('category_name').notNull(),
   quantity: numeric('quantity').notNull().default('1'), customerReference: text('customer_reference'), description: text('description'), displayOrder: integer('display_order').notNull(),
   sampleSize: text('sample_size'), quality: text('quality'), identificationMark: text('identification_mark'), receivedCondition: text('received_condition'),
   measurementUnitId: uuid('measurement_unit_id'), unitCode: text('unit_code'), unitSymbol: text('unit_symbol'), tag: text('tag'), tagId: uuid('tag_id'),
 }, (t) => [key(t), link(t, t.sampleId, samples), link(t, t.productId, products), link(t, t.sampleCategoryId, sampleCategories), link(t, t.measurementUnitId, measurementUnits),
+  foreignKey({ name: 'sample_product_history_fk', columns: [t.organizationId, t.productId, t.productRevision], foreignColumns: [productVersions.organizationId, productVersions.productId, productVersions.revision] }),
   link(t, t.tagId, tags), check('sample_product_tag', sql`${t.tagId} is null or (${t.tag} is not null and length(trim(${t.tag})) between 1 and 250)`),
   foreignKey({ columns: [t.organizationId, t.productId, t.sampleCategoryId], foreignColumns: [productSampleCategories.organizationId, productSampleCategories.productId, productSampleCategories.sampleCategoryId] }),
   unique('sample_product_order_key').on(t.organizationId, t.sampleId, t.displayOrder),
