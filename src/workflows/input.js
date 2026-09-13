@@ -5,6 +5,7 @@ export const stateFlags = ['showSampleEdit', 'showSampleRetest', 'showSampleReis
   'showAddResult', 'generateTestRequests', 'requireAllTestRequestsAllocated', 'requireAllTestRequestsApproved', 'fetchEnvironmentData', 'canWorkOnTestRequest', 'isPositiveTermination', 'enableJobCard'];
 export const stateRoles = { accessRoleIds: 'view', editRoleIds: 'edit', allocateRoleIds: 'allocate', addResultRoleIds: 'execute', printCoaRoleIds: 'download_report' };
 export const conditionOperators = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'in', 'is_null', 'is_not_null'];
+export const stateLayoutDefaults = Object.freeze({ canvasX: 120, canvasY: 120, inputCount: 1, outputCount: 1, badgeStyle: 'light' });
 
 function choice(value, choices, label) {
   if (!choices.includes(value)) throw new HttpError(400, 'invalid_workflow_input', `Select a valid ${label}.`);
@@ -20,17 +21,22 @@ export function roleIds(value, label = 'Roles') {
   return result;
 }
 export function workflowStateInput(input) {
-  fieldsOnly(input, ['code', 'name', 'description', 'stateType', 'color', 'templateId', 'displayOrder', ...stateFlags, ...Object.keys(stateRoles)]);
+  fieldsOnly(input, ['code', 'name', 'description', 'stateType', 'color', 'templateId', 'displayOrder', ...Object.keys(stateLayoutDefaults), ...stateFlags, ...Object.keys(stateRoles)]);
   const result = { code: text(input.code, 'Code', 64), name: text(input.name, 'Name', 150), description: text(input.description, 'Description', 10000, { optional: true }),
     stateType: choice(input.stateType ?? 'normal', ['initial', 'normal', 'final', 'cancelled'], 'state type'),
     color: input.color == null ? null : text(input.color, 'Color', 20, { optional: true }), templateId: input.templateId == null ? null : uuid(input.templateId, 'Template'),
     ...(input.displayOrder === undefined ? {} : { displayOrder: integer(input.displayOrder, 'Position', 0, 100000) }) };
   for (const field of stateFlags) result[field] = bool(input[field] ?? false, field);
   for (const field of Object.keys(stateRoles)) result[field] = roleIds(input[field], field);
+  // Omitted layout fields must survive edits from clients that predate the canvas.
+  for (const [field, maximum] of [['canvasX', 100000], ['canvasY', 100000], ['inputCount', 8], ['outputCount', 8]]) {
+    if (input[field] !== undefined) result[field] = integer(input[field], field, 0, maximum);
+  }
+  if (input.badgeStyle !== undefined) result.badgeStyle = choice(input.badgeStyle, ['light', 'dark'], 'badge style');
   return result;
 }
 export function workflowTransitionInput(input) {
-  fieldsOnly(input, ['code', 'name', 'sourceStateId', 'targetStateId', 'approvalMode', 'autoExecute', 'requireComment', 'displayOrder', 'creatorRoleIds', 'ccRoleIds', 'ccEmails', 'approverStages', 'checklist', 'conditions']);
+  fieldsOnly(input, ['code', 'name', 'sourceStateId', 'targetStateId', 'sourcePort', 'targetPort', 'approvalMode', 'autoExecute', 'requireComment', 'displayOrder', 'creatorRoleIds', 'ccRoleIds', 'ccEmails', 'approverStages', 'checklist', 'conditions']);
   const sourceStateId = uuid(input.sourceStateId, 'Source state').toLowerCase(); const targetStateId = uuid(input.targetStateId, 'Target state').toLowerCase();
   if (sourceStateId === targetStateId) throw new HttpError(400, 'invalid_workflow_input', 'Source and target states must differ.');
   const approvalMode = choice(input.approvalMode ?? 'none', ['none', 'any', 'all', 'sequential'], 'approval mode');
@@ -68,6 +74,8 @@ export function workflowTransitionInput(input) {
     if (new Set(ids).size !== ids.length) throw new HttpError(400, 'invalid_workflow_input', `${label} must have distinct identities.`);
   }
   return { code: text(input.code, 'Code', 64), name: text(input.name, 'Name', 150), sourceStateId, targetStateId, approvalMode,
+    ...(input.sourcePort === undefined ? {} : { sourcePort: integer(input.sourcePort, 'Source port', 1, 8) }),
+    ...(input.targetPort === undefined ? {} : { targetPort: integer(input.targetPort, 'Target port', 1, 8) }),
     autoExecute: bool(input.autoExecute ?? false, 'Automatic transition'), requireComment: bool(input.requireComment ?? false, 'Required comment'),
     ...(input.displayOrder === undefined ? {} : { displayOrder: integer(input.displayOrder, 'Position', 0, 100000) }),
     creatorRoleIds: roleIds(input.creatorRoleIds), ccRoleIds: roleIds(input.ccRoleIds), ccEmails, approverStages, checklist, conditions };

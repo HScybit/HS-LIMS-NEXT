@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, check, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
 import { organizations, memberships, roles } from './schema.js';
 import { templates } from './template-schema.js';
 import { sampleCategories } from './master-schema.js';
@@ -31,6 +31,8 @@ export const workflowVersions = pgTable('workflow_versions', {
 export const workflowStates = pgTable('workflow_states', {
   ...identity(), workflowVersionId: uuid('workflow_version_id').notNull(), code: text('code').notNull(), name: text('name').notNull(),
   description: text('description').notNull().default(''), stateType: text('state_type').notNull().default('normal'), displayOrder: integer('display_order').notNull().default(0), color: text('color'),
+  // Earlier definitions did not record canvas layout. Preserve that absence in history and copies.
+  canvasX: integer('canvas_x'), canvasY: integer('canvas_y'), inputCount: integer('input_count'), outputCount: integer('output_count'), badgeStyle: text('badge_style'),
   templateId: uuid('template_id'), showSampleEdit: boolean('show_sample_edit').notNull().default(false), showSampleRetest: boolean('show_sample_retest').notNull().default(false),
   showSampleReissue: boolean('show_sample_reissue').notNull().default(false), enableTemplateValidation: boolean('enable_template_validation').notNull().default(false),
   enableCriticalParametersValidation: boolean('enable_critical_parameters_validation').notNull().default(false), showAddResult: boolean('show_add_result').notNull().default(false),
@@ -41,6 +43,9 @@ export const workflowStates = pgTable('workflow_states', {
 }, (t) => [key(t), link(t, t.workflowVersionId, workflowVersions), link(t, t.templateId, templates),
   unique('workflow_state_version_key').on(t.organizationId, t.workflowVersionId, t.id), unique('workflow_state_code_key').on(t.organizationId, t.workflowVersionId, t.code),
   uniqueIndex('workflow_single_state_type_key').on(t.organizationId, t.workflowVersionId, t.stateType).where(sql`${t.stateType} in ('initial', 'final', 'cancelled')`),
+  check('workflow_state_layout', sql`(${t.canvasX} is null or ${t.canvasX} between 0 and 100000) and (${t.canvasY} is null or ${t.canvasY} between 0 and 100000)
+    and (${t.inputCount} is null or ${t.inputCount} between 0 and 8) and (${t.outputCount} is null or ${t.outputCount} between 0 and 8)
+    and (${t.badgeStyle} is null or ${t.badgeStyle} in ('light','dark'))`),
   check('workflow_state_details', sql`${t.stateType} in ('initial', 'normal', 'final', 'cancelled') and ${t.displayOrder} >= 0 and length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 150`)]);
 
 export const workflowStateCapabilityRoles = pgTable('workflow_state_capability_roles', {
@@ -51,9 +56,13 @@ export const workflowStateCapabilityRoles = pgTable('workflow_state_capability_r
 export const workflowTransitions = pgTable('workflow_transitions', {
   ...identity(), workflowVersionId: uuid('workflow_version_id').notNull(), code: text('code').notNull(), name: text('name').notNull(),
   sourceStateId: uuid('source_state_id').notNull(), targetStateId: uuid('target_state_id').notNull(), approvalMode: text('approval_mode').notNull().default('none'),
+  sourcePort: integer('source_port'), targetPort: integer('target_port'),
   autoExecute: boolean('auto_execute').notNull().default(false), requireComment: boolean('require_comment').notNull().default(false), displayOrder: integer('display_order').notNull().default(0),
 }, (t) => [key(t), link(t, t.workflowVersionId, workflowVersions), unique('workflow_transition_code_key').on(t.organizationId, t.workflowVersionId, t.code),
   unique('workflow_transition_version_key').on(t.organizationId, t.workflowVersionId, t.id),
+  index('workflow_transition_source').on(t.organizationId, t.workflowVersionId, t.sourceStateId),
+  index('workflow_transition_target').on(t.organizationId, t.workflowVersionId, t.targetStateId),
+  check('workflow_transition_ports', sql`(${t.sourcePort} is null or ${t.sourcePort} between 1 and 8) and (${t.targetPort} is null or ${t.targetPort} between 1 and 8)`),
   foreignKey({ name: 'workflow_transition_source_state_fk', columns: [t.organizationId, t.workflowVersionId, t.sourceStateId], foreignColumns: [workflowStates.organizationId, workflowStates.workflowVersionId, workflowStates.id] }),
   foreignKey({ name: 'workflow_transition_target_state_fk', columns: [t.organizationId, t.workflowVersionId, t.targetStateId], foreignColumns: [workflowStates.organizationId, workflowStates.workflowVersionId, workflowStates.id] }),
   check('workflow_transition_details', sql`${t.sourceStateId} <> ${t.targetStateId} and ${t.approvalMode} in ('none', 'any', 'all', 'sequential') and ${t.displayOrder} >= 0 and length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 150`)]);

@@ -47,6 +47,8 @@ import { generateProductCustomFields } from '../src/masters/product-custom-field
 import { createTestRequestJobs } from '../src/test-requests/jobs.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
+import { createWorkflow, saveWorkflowState, saveWorkflowTransition, publishWorkflow, cloneWorkflowDraft } from '../src/workflows/authoring.js';
+import { loadWorkflowDefinition } from '../src/workflows/definition.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
 import { generateReports, loadReport } from '../src/reports/service.js';
 import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
@@ -92,8 +94,27 @@ try {
   const role = (await getPool().query('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')).rows[0];
   assert.deepEqual(role, { rolsuper: false, rolbypassrls: false });
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
-  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage', 'roles.manage'] });
+  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage', 'roles.manage', 'workflows.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
+  await withSession(session.token, async (client, identity) => {
+    const workflow = await createWorkflow(client, identity, { code: randomUUID(), name: 'Fresh workflow layout', appliesTo: 'sample' });
+    const initialInput = { code: 'initial', name: 'Initial', stateType: 'initial', canvasX: 0, canvasY: 0, inputCount: 0, outputCount: 8, badgeStyle: 'dark' };
+    const initial = await saveWorkflowState(client, identity, workflow.versionId, 1, initialInput);
+    const final = await saveWorkflowState(client, identity, workflow.versionId, initial.revision,
+      { code: 'final', name: 'Final', stateType: 'final', inputCount: 8, outputCount: 0, canvasX: 100000, canvasY: 100000 });
+    const edge = await saveWorkflowTransition(client, identity, workflow.versionId, final.revision,
+      { code: 'finish', name: 'Finish', sourceStateId: initial.id, targetStateId: final.id, sourcePort: 8, targetPort: 8 });
+    await publishWorkflow(client, identity, workflow.versionId, edge.revision, 'Fresh layout publication');
+    const original = await loadWorkflowDefinition(client, identity, workflow.versionId);
+    const copy = await cloneWorkflowDraft(client, identity, workflow.versionId);
+    const cloned = await loadWorkflowDefinition(client, identity, copy.versionId);
+    const first = cloned.states.find((state) => state.code === 'initial');
+    assert.equal(first.canvasX, 0); assert.equal(first.inputCount, 0); assert.equal(first.badgeStyle, 'dark');
+    assert.equal(cloned.transitions[0].sourcePort, 8); assert.equal(cloned.transitions[0].targetPort, 8);
+    await saveWorkflowState(client, identity, copy.versionId, 1, { ...initialInput, outputCount: 1 }, first.id);
+    assert.equal((await loadWorkflowDefinition(client, identity, copy.versionId)).transitions.length, 0);
+    assert.deepEqual(await loadWorkflowDefinition(client, identity, workflow.versionId), original);
+  }, { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
     const command = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh role history', description: '0',
       defaultPath: '/samples', permissionCodes: ['templates.read'], capabilityKeys: ['can_self_allocate', 'can_create_sample'] };
@@ -469,7 +490,7 @@ try {
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, template capture, typed parameter uncertainty, method/user and Product/tag history/retry/retirement, Product job fallback, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, role history/settings, workflow layout/ports/cloning, template capture, typed parameter uncertainty, method/user and Product/tag history/retry/retirement, Product job fallback, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

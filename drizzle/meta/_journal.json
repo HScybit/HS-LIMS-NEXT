@@ -820,6 +820,13 @@
       "when": 1789325776797,
       "tag": "0116_role_master_history",
       "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1789329814434,
+      "tag": "0117_workflow_canvas_layout",
+      "breakpoints": true
     }
   ]
 }
