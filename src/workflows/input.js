@@ -36,7 +36,7 @@ export function workflowStateInput(input) {
   return result;
 }
 export function workflowTransitionInput(input) {
-  fieldsOnly(input, ['code', 'name', 'sourceStateId', 'targetStateId', 'sourcePort', 'targetPort', 'approvalMode', 'autoExecute', 'requireComment', 'displayOrder', 'creatorRoleIds', 'ccRoleIds', 'ccEmails', 'approverStages', 'checklist', 'conditions']);
+  fieldsOnly(input, ['code', 'name', 'sourceStateId', 'targetStateId', 'sourcePort', 'targetPort', 'approvalMode', 'autoExecute', 'requireComment', 'displayOrder', 'creatorRoleIds', 'ccRoleIds', 'ccEmails', 'approverStages', 'checklistMasterId', 'checklist', 'conditions']);
   const sourceStateId = uuid(input.sourceStateId, 'Source state').toLowerCase(); const targetStateId = uuid(input.targetStateId, 'Target state').toLowerCase();
   if (sourceStateId === targetStateId) throw new HttpError(400, 'invalid_workflow_input', 'Source and target states must differ.');
   const approvalMode = choice(input.approvalMode ?? 'none', ['none', 'any', 'all', 'sequential'], 'approval mode');
@@ -56,7 +56,7 @@ export function workflowTransitionInput(input) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result)) throw new HttpError(400, 'invalid_email', 'Enter a valid CC email address.');
     return result;
   }))];
-  const checklist = boundedList(input.checklist, 'Checklist').map((item, displayOrder) => {
+  const checklist = boundedList(input.checklist, 'Checklist', 200).map((item, displayOrder) => {
     fieldsOnly(item, ['id', 'prompt', 'isRequired']);
     return { ...(item.id ? { id: uuid(item.id, 'Checklist item').toLowerCase() } : {}), prompt: text(item.prompt, 'Checklist prompt', 500), isRequired: bool(item.isRequired ?? true, 'Required'), displayOrder };
   });
@@ -74,6 +74,7 @@ export function workflowTransitionInput(input) {
     if (new Set(ids).size !== ids.length) throw new HttpError(400, 'invalid_workflow_input', `${label} must have distinct identities.`);
   }
   return { code: text(input.code, 'Code', 64), name: text(input.name, 'Name', 150), sourceStateId, targetStateId, approvalMode,
+    ...(input.checklistMasterId === undefined ? {} : { checklistMasterId: input.checklistMasterId === null ? null : uuid(input.checklistMasterId, 'Checklist master').toLowerCase() }),
     ...(input.sourcePort === undefined ? {} : { sourcePort: integer(input.sourcePort, 'Source port', 1, 8) }),
     ...(input.targetPort === undefined ? {} : { targetPort: integer(input.targetPort, 'Target port', 1, 8) }),
     autoExecute: bool(input.autoExecute ?? false, 'Automatic transition'), requireComment: bool(input.requireComment ?? false, 'Required comment'),

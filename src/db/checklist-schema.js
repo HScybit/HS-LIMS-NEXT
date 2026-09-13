@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, integer, boolean, timestamp, primaryKey, unique, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
+import { pgTable, pgView, uuid, text, integer, boolean, timestamp, primaryKey, unique, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 
 const transactionId = customType({ dataType: () => 'xid8' });
@@ -56,3 +56,12 @@ export const checklistVersionItems = pgTable('checklist_version_items', {
   unique('checklist_version_item_order').on(...versionKey(table), table.displayOrder),
   check('checklist_version_item_position', sql`${table.displayOrder}>=0`),
 ]);
+
+// Workflow selectors need labels without granting Checklist Master/history access.
+export const workflowChecklistLabels = pgView('workflow_checklist_labels', {
+  organizationId: uuid('organization_id'), id: uuid('id'), name: text('name'), isActive: boolean('is_active'), revision: integer('revision'),
+}).with({ securityBarrier: true, securityInvoker: false }).as(sql`
+  SELECT organization_id,id,name,is_active,revision FROM public.checklists
+  WHERE retired_at is null AND organization_id=nullif(current_setting('app.organization_id',true),'')::uuid
+    AND (SELECT public.app_has_permission('workflows.read') OR public.app_has_permission('workflows.manage'))
+`);

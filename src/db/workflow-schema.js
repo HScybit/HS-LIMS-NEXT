@@ -3,6 +3,7 @@ import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primar
 import { organizations, memberships, roles } from './schema.js';
 import { templates } from './template-schema.js';
 import { sampleCategories } from './master-schema.js';
+import { checklists, checklistVersions } from './checklist-schema.js';
 
 const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
 const tenant = () => uuid('organization_id').notNull().references(() => organizations.id);
@@ -101,11 +102,16 @@ export const workflowTransitions = pgTable('workflow_transitions', {
   ...identity(), workflowVersionId: uuid('workflow_version_id').notNull(), code: text('code').notNull(), name: text('name').notNull(),
   sourceStateId: uuid('source_state_id').notNull(), targetStateId: uuid('target_state_id').notNull(), approvalMode: text('approval_mode').notNull().default('none'),
   sourcePort: integer('source_port'), targetPort: integer('target_port'),
+  checklistMasterId: uuid('checklist_master_id'), checklistMasterRevision: integer('checklist_master_revision'),
   autoExecute: boolean('auto_execute').notNull().default(false), requireComment: boolean('require_comment').notNull().default(false), displayOrder: integer('display_order').notNull().default(0),
 }, (t) => [key(t), link(t, t.workflowVersionId, workflowVersions), unique('workflow_transition_code_key').on(t.organizationId, t.workflowVersionId, t.code),
   unique('workflow_transition_version_key').on(t.organizationId, t.workflowVersionId, t.id),
   index('workflow_transition_source').on(t.organizationId, t.workflowVersionId, t.sourceStateId),
   index('workflow_transition_target').on(t.organizationId, t.workflowVersionId, t.targetStateId),
+  index('workflow_transition_checklist_master').on(t.organizationId, t.checklistMasterId).where(sql`${t.checklistMasterId} is not null`),
+  foreignKey({ name: 'workflow_transition_checklist_master_fk', columns: [t.organizationId, t.checklistMasterId], foreignColumns: [checklists.organizationId, checklists.id] }),
+  foreignKey({ name: 'workflow_transition_checklist_version_fk', columns: [t.organizationId, t.checklistMasterId, t.checklistMasterRevision], foreignColumns: [checklistVersions.organizationId, checklistVersions.checklistId, checklistVersions.revision] }),
+  check('workflow_transition_checklist_binding', sql`${t.checklistMasterRevision} is null or (${t.checklistMasterId} is not null and ${t.checklistMasterRevision}>0)`),
   check('workflow_transition_ports', sql`(${t.sourcePort} is null or ${t.sourcePort} between 1 and 8) and (${t.targetPort} is null or ${t.targetPort} between 1 and 8)`),
   foreignKey({ name: 'workflow_transition_source_state_fk', columns: [t.organizationId, t.workflowVersionId, t.sourceStateId], foreignColumns: [workflowStates.organizationId, workflowStates.workflowVersionId, workflowStates.id] }),
   foreignKey({ name: 'workflow_transition_target_state_fk', columns: [t.organizationId, t.workflowVersionId, t.targetStateId], foreignColumns: [workflowStates.organizationId, workflowStates.workflowVersionId, workflowStates.id] }),

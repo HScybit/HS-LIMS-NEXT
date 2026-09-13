@@ -80,7 +80,7 @@ test('Checklist Master enforces tenant access, manage-only editing and read-only
     assert.equal((await owner.query('SELECT has_table_privilege($1,$2,$3) AS allowed', ['sampleify_report_worker', table, 'SELECT'])).rows[0].allowed, false);
   }
   const functions = (await owner.query("SELECT proname,has_function_privilege('sampleify_app',oid,'EXECUTE') AS app,has_function_privilege('sampleify_report_worker',oid,'EXECUTE') AS worker,EXISTS(SELECT 1 FROM aclexplode(coalesce(proacl,acldefault('f',proowner))) acl WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') AS public FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE 'checklists_%'")).rows;
-  assert.equal(functions.length, 7);
+  assert.equal(functions.length, 8);
   for (const fn of functions) { assert.equal(fn.app, fn.proname === 'checklists_write'); assert.equal(fn.worker, false); assert.equal(fn.public, false); }
 });
 

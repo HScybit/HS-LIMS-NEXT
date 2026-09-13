@@ -16,6 +16,7 @@ function graph() {
     const id = randomUUID(); const base = { organizationId: org, transitionId: id };
     return { organizationId: org, workflowVersionId: version, id, sourceStateId: states[index].id, targetStateId: states[1 - index].id,
       sourcePort: index ? null : 8, targetPort: 1, code: `edge-${index}`, name: 'Move', approvalMode: 'sequential', requireComment: false,
+      checklistMasterId: randomUUID(), checklistMasterRevision: index ? null : 4,
       creatorRoleIds: [role], ccRoleIds: [role], approverStages: [{ stageNumber: 1, roleIds: [role] }, { stageNumber: 3, roleIds: [role] }],
       ccEmails: ['review@example.invalid'], conditions: [
         { ...base, id: randomUUID(), comparisonText: '', comparisonNumber: null, comparisonBoolean: null, comparisonDate: null },
@@ -37,6 +38,10 @@ test('workflow clone assembly preserves typed values and shared references while
   assert.equal(rows.transitions[0].sourceStateId, rows.states[0].id); assert.equal(rows.transitions[0].targetStateId, rows.states[1].id);
   assert.equal(rows.transitions[1].sourceStateId, rows.states[1].id); assert.equal(rows.transitions[1].targetStateId, rows.states[0].id);
   assert.equal(rows.transitions[0].sourcePort, 8); assert.equal(rows.transitions[1].sourcePort, null);
+  for (const [index, edge] of rows.transitions.entries()) {
+    assert.equal(edge.checklistMasterId, source.transitions[index].checklistMasterId);
+    assert.equal(edge.checklistMasterRevision, source.transitions[index].checklistMasterRevision);
+  }
   assert.deepEqual(rows.approverRoles.map((item) => item.stageNumber), [1, 3, 1, 3]);
   assert.equal(rows.conditions[0].comparisonText, ''); assert.equal(rows.conditions[1].comparisonNumber, '0.000000000000000000000001');
   assert.equal(rows.conditions[2].comparisonBoolean, false); assert.equal(rows.conditions[3].comparisonDate, '2024-02-29');

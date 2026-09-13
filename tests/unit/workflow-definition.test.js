@@ -5,6 +5,18 @@ import { workflowStateInput, workflowTransitionInput, workflowCommand, approvalD
 import { conditionValue, matchesCondition, workflowConditionsMatch } from '../../src/workflows/conditions.js';
 
 const input = () => ({ code: 'review', name: 'Review', sourceStateId: randomUUID(), targetStateId: randomUUID() });
+test('workflow checklist selection distinguishes omission and detachment and accepts all 200 master prompts', () => {
+  const id = randomUUID();
+  assert.equal(Object.hasOwn(workflowTransitionInput(input()), 'checklistMasterId'), false);
+  assert.equal(workflowTransitionInput({ ...input(), checklistMasterId: null }).checklistMasterId, null);
+  assert.equal(workflowTransitionInput({ ...input(), checklistMasterId: id.toUpperCase() }).checklistMasterId, id);
+  const checklist = Array.from({ length: 200 }, (_, index) => ({ prompt: `Check ${index}`, isRequired: false }));
+  assert.equal(workflowTransitionInput({ ...input(), checklistMasterId: id, checklist }).checklist.length, 200);
+  assert.equal(workflowTransitionInput({ ...input(), checklistMasterId: null, checklist }).checklist[199].isRequired, false);
+  assert.throws(() => workflowTransitionInput({ ...input(), checklistMasterId: '' }), { code: 'invalid_id' });
+  assert.throws(() => workflowTransitionInput({ ...input(), checklistMasterRevision: 1 }), { code: 'invalid_input' });
+  assert.throws(() => workflowTransitionInput({ ...input(), checklist: [...checklist, { prompt: 'Too many' }] }), { code: 'invalid_workflow_input' });
+});
 test('workflow approval modes require distinct, bounded stages and preserve any/all/sequential definitions', () => {
   assert.equal(workflowTransitionInput(input()).approvalMode, 'none');
   const roleId = randomUUID();

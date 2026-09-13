@@ -8,6 +8,7 @@ import { workflowStateInput, workflowTransitionInput, stateRoles, stateLayoutDef
 import { loadWorkflowDefinition } from './definition.js';
 import { buildWorkflowCloneRows } from './clone.js';
 import { createWorkflowMaster } from './metadata.js';
+import { transitionChecklist } from './checklists.js';
 import * as w from '../db/workflow-schema.js';
 
 const scope = (table, org, id) => and(eq(table.organizationId, org), eq(table.id, id));
@@ -128,9 +129,12 @@ export async function saveWorkflowTransition(client, identity, versionId, expect
       throw new HttpError(422, 'invalid_workflow_port', 'Select an available input and output port.');
     }
     await requireRoles(client, org, [...value.creatorRoleIds, ...value.ccRoleIds, ...value.approverStages.flatMap((stage) => stage.roleIds)]);
+    const selectedChecklist = await transitionChecklist(client, identity, existing, value, input);
+    value.checklist = selectedChecklist.checklist;
     const id = transitionId ?? randomUUID();
     const metadata = { code: value.code, name: value.name, sourceStateId: value.sourceStateId, targetStateId: value.targetStateId,
       sourcePort, targetPort,
+      checklistMasterId: selectedChecklist.checklistMasterId, checklistMasterRevision: selectedChecklist.checklistMasterRevision,
       approvalMode: value.approvalMode, autoExecute: value.autoExecute, requireComment: value.requireComment,
       displayOrder: value.displayOrder ?? existing?.displayOrder ?? (await client.query('SELECT coalesce(max(display_order), -1)+1 AS position FROM workflow_transitions WHERE organization_id=$1 AND workflow_version_id=$2', [org, versionId])).rows[0].position };
     if (existing) await db.update(w.workflowTransitions).set(metadata).where(scope(w.workflowTransitions, org, id));

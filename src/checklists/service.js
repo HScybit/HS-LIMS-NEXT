@@ -16,6 +16,7 @@ const commandErrors = {
   checklist_request_reused: [409, 'save_request_reused', 'This request was already used for a different checklist change.'],
   checklist_save_request_key: [409, 'save_request_reused', 'This request was already used for a different checklist change.'],
   checklist_stale: [409, 'stale_checklist', 'The checklist changed in another session. Reload before saving.'],
+  checklist_in_use: [409, 'checklist_in_use', 'This checklist is used by a workflow and cannot be deleted.'],
 };
 
 async function writeChecklist(client, identity, operation, input) {

@@ -848,6 +848,13 @@
       "when": 1789339151114,
       "tag": "0120_checklist_master_history",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1789341600417,
+      "tag": "0121_workflow_checklist_bindings",
+      "breakpoints": true
     }
   ]
 }
