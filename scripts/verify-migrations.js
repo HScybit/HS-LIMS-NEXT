@@ -35,6 +35,7 @@ import { emptyUncertaintyGrid, updateUncertaintyGrid } from '../src/masters/para
 import { loadTestParameter, saveTestParameter, retireTestParameter } from '../src/masters/test-parameters.js';
 import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
 import { loadProduct, saveProduct, retireProduct, listProducts } from '../src/masters/products.js';
+import { loadCustomField, saveCustomField, retireCustomField, listCustomFields } from '../src/masters/custom-fields.js';
 import { createTestRequestJobs } from '../src/test-requests/jobs.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
@@ -153,6 +154,20 @@ try {
     assert.equal((await retireProduct(client, identity, removal)).revision, 2); assert.equal((await retireProduct(client, identity, removal)).revision, 2);
     assert.deepEqual((await loadProduct(client, identity, standalone.id, { atRevision: 2 })).tagIds, standalone.tagIds);
     await assert.rejects(loadProduct(client, identity, standalone.id), { code: 'product_not_found' });
+  }, { csrfToken: session.csrfToken });
+  await withSession(session.token, async (client, identity) => {
+    const command = { id: randomUUID(), revision: 0, requestId: randomUUID(), label: 'Fresh custom field', key: 'MiXeD_Field', associatedWith: 'product',
+      fieldType: 'select', displayOrder: 0, roleIdsCanEdit: [account.roleId], associatedWithRoleId: account.roleId,
+      options: [{ id: randomUUID(), key: 'A', label: 'Upper' }, { id: randomUUID(), key: 'a', label: 'Lower' }] };
+    const first = await saveCustomField(client, identity, command); assert.equal(first.key, 'mixed_field'); assert.equal(first.displayOrder, 0);
+    assert.deepEqual(first.options, command.options); assert.deepEqual(first.roleIdsCanEdit, [account.roleId]);
+    await saveCustomField(client, identity, { ...command, revision: 1, requestId: randomUUID(), fieldType: 'date_time', datetimeFormat: 'MMMM Do YYYY | hh:mm A', options: command.options.toReversed() });
+    assert.deepEqual(await loadCustomField(client, identity, command.id, { atRevision: 1 }), first);
+    assert.deepEqual(await saveCustomField(client, identity, command), first);
+    const removal = { id: command.id, revision: 2, requestId: randomUUID() };
+    assert.equal((await retireCustomField(client, identity, removal)).revision, 3); assert.equal((await retireCustomField(client, identity, removal)).revision, 3);
+    assert.deepEqual((await loadCustomField(client, identity, command.id, { atRevision: 3 })).options, command.options.toReversed());
+    assert.equal((await listCustomFields(client, identity)).totalCount, 0);
   }, { csrfToken: session.csrfToken });
   const productJobSample = await withSession(session.token, (client, identity) => registerSample(client, identity, laboratory.registration), { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
