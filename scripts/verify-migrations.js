@@ -10,7 +10,7 @@ import { startMfaSetup, verifyMfaSetup, disableMfa, loadMfaStatus } from '../src
 import { totpAt } from '../src/auth/totp.js';
 import { closePool, getPool } from '../src/db/pool.js';
 import { createAnalyticalTemplate } from '../tests/helpers/templates.js';
-import { addImageWidget } from '../tests/helpers/template-image-fixture.js';
+import { addImageWidget, createImageTemplate } from '../tests/helpers/template-image-fixture.js';
 import { animatedPng } from '../tests/helpers/template-images.js';
 import { uploadTemplateImage } from '../src/template-assets/service.js';
 import { freezeTemplate, editTemplate } from '../src/templates/authoring.js';
@@ -239,6 +239,22 @@ try {
     assert.equal(loaded.customerName, customer.name); assert.equal(loaded.products[0].tests[0].requestStatus, 'allocated');
   }, { csrfToken: session.csrfToken });
   const templateImage = { requestId: randomUUID(), originalName: 'Fresh animated template.png', mediaType: 'image/png', content: await animatedPng({ separateDefault: true }) };
+  const registrationImageFixture = await createLaboratoryFixture(owner, account);
+  const registrationImage = { ...templateImage, requestId: randomUUID(), originalName: 'Fresh registration image.png' };
+  const registrationTemplate = await withSession(session.token, async (client, identity) => {
+    const created = await createImageTemplate(client, identity, { kind: 'sample', repeated: true });
+    await uploadTemplateImage(client, identity, created.versionId, created.fieldId, 1, registrationImage);
+    await freezeTemplate(client, identity, created.versionId, 2);
+    await client.query("INSERT INTO sample_category_templates(organization_id,sample_category_id,template_id,purpose,is_default) VALUES($1,$2,$3,'sample',true)",
+      [identity.organization_id, registrationImageFixture.category.id, created.templateId]);
+    return created;
+  }, { csrfToken: session.csrfToken });
+  const registrar = await createAccount(owner, { organizationId: account.organizationId, permissions: ['samples.create'] });
+  const registrarSession = await signIn({ identifier: registrar.username, password: registrar.password });
+  const imageSample = await withSession(registrarSession.token, (client, identity) => registerSample(client, identity, registrationImageFixture.registration), { csrfToken: registrarSession.csrfToken });
+  const initializedImages = (await owner.query('SELECT version_id,image_id,origin,saved_by FROM template_values WHERE instance_id=$1', [imageSample.templateInstanceId])).rows;
+  assert.deepEqual(initializedImages, Array.from({ length: 2 }, () => ({ version_id: registrationTemplate.versionId, image_id: registrationImage.requestId, origin: 'default', saved_by: registrar.userId })));
+  await assert.rejects(withSession(registrarSession.token, (client, identity) => loadCapture(client, identity.organization_id, imageSample.templateInstanceId), { readOnly: true }), { code: 'capture_not_found' });
   const productContextField = await withSession(session.token, (client, identity) => saveCustomField(client, identity,
     { id: randomUUID(), revision: 0, requestId: randomUUID(), label: 'Fresh Product flag', key: 'fresh_product_flag', associatedWith: 'product', fieldType: 'checkbox' }), { csrfToken: session.csrfToken });
   const productContextSelector = 'project_field__splitter__fresh_product_flag';

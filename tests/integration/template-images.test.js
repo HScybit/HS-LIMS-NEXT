@@ -43,6 +43,10 @@ test('template image replacement is atomic, actor-bound and safe to retry after 
   await upload(created, replacement, 2);
   await assert.rejects(upload(created, image), { code: 'stale_template' });
   assert.equal((await owner.query('SELECT count(*)::int n FROM template_image_assets WHERE organization_id=$1 AND id=ANY($2::uuid[])', [account.organizationId, [image.requestId, replacement.requestId]])).rows[0].n, 2);
+  const registrar = await createAccount(owner, { organizationId: account.organizationId, permissions: ['samples.create'] });
+  const session = await signIn({ identifier: registrar.username, password: registrar.password });
+  const visible = await withSession(session.token, (client) => client.query('SELECT id FROM template_image_assets WHERE id=ANY($1::uuid[])', [[image.requestId, replacement.requestId]]), { readOnly: true });
+  assert.deepEqual(visible.rows, [{ id: replacement.requestId }]);
 });
 
 test('frozen captures, runtime snapshots, draft clones and layout clones retain exact image references', async () => {
@@ -99,7 +103,7 @@ test('image configuration uses source layout values and remains immutable in fro
 test('image read/write policies, immutable bytes, tenant foreign keys and direct capture writes enforce boundaries', async () => {
   const created = await fixture(); const image = await input(); await upload(created, image);
   assert.equal((await getPool().query('SELECT id FROM template_image_assets')).rowCount, 0);
-  for (const [sameOrganization, permissions] of [[true, ['templates.read']], [true, []], [false, ['templates.read', 'templates.manage']]]) {
+  for (const [sameOrganization, permissions] of [[true, ['templates.read']], [true, ['samples.create']], [true, []], [false, ['templates.read', 'templates.manage']]]) {
     const user = await createAccount(owner, { organizationId: sameOrganization ? account.organizationId : undefined, permissions });
     const session = await signIn({ identifier: user.username, password: user.password });
     const run = (action) => withSession(session.token, action, { csrfToken: session.csrfToken });
@@ -132,4 +136,44 @@ test('definition and capture image reads use one counted batch and reject excess
     const largeSources = { ...definition, model: { ...definition.model, fieldsById: Object.fromEntries(Array.from({ length: 400 }, (_, index) => [index, definition.model.fieldsById[created.fieldId]])) } };
     await assert.rejects(withTemplateImages(client, identity.organization_id, largeSources), { code: 'template_image_batch_size_limit' });
   }, { readOnly: true });
+});
+
+async function boundaryFixture(overflow = false) {
+  const created = await fixture({ repeated: true });
+  const image = { ...await input(), content: await sharp(randomBytes(512 * 512 * 3), { raw: { width: 512, height: 512, channels: 3 } }).png().toBuffer() };
+  const loaded = await upload(created, image); const sources = loaded.model.imageSources[image.requestId];
+  const limit = Math.floor(32 * 1024 * 1024 / (sources.src.length + sources.printSrc.length));
+  assert.ok(limit > 2 && limit < 1000);
+  await work((client) => client.query('UPDATE template_repeat_groups SET minimum=$3 WHERE organization_id=$1 AND id=$2', [account.organizationId, created.groupId, overflow ? limit + 1 : 2]));
+  await work((client, identity) => freezeTemplate(client, identity, created.versionId, 2));
+  return { ...created, limit, image };
+}
+
+test('capture initialization rejects excessive image repeats without persisting an unusable instance', async () => {
+  const created = await boundaryFixture(true);
+  await assert.rejects(work((client, identity) => createCapture(client, identity, created.versionId)), { code: 'template_image_batch_size_limit' });
+  assert.equal((await owner.query('SELECT count(*)::int n FROM template_instances WHERE organization_id=$1 AND version_id=$2', [account.organizationId, created.versionId])).rows[0].n, 0);
+});
+
+test('image repeat limits reject both clone modes atomically and permit deleting then restoring a row', async () => {
+  const created = await boundaryFixture();
+  const capture = await work((client, identity) => createCapture(client, identity, created.versionId));
+  const original = await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId));
+  const occurrenceId = original.values[0].occurrenceId;
+  let current = original;
+  while (current.values.length < created.limit) current = await work((client, identity) => changeRepeat(client, identity, capture.instanceId, current.revision, { type: 'clone', occurrenceId, withData: true }));
+  const boundary = await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId));
+  const loaded = await definition(created.versionId);
+  const rendered = await work((client, identity) => withTemplateImages(client, identity.organization_id, loaded, boundary));
+  assert.equal(boundary.values.length, created.limit); assert.ok(rendered.metrics.assets.renderedBytes <= 32 * 1024 * 1024);
+  for (const withData of [false, true]) {
+    await assert.rejects(work((client, identity) => changeRepeat(client, identity, capture.instanceId, boundary.revision, { type: 'clone', occurrenceId, withData })), { code: 'template_image_batch_size_limit' });
+    const unchanged = await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId));
+    assert.equal(unchanged.revision, boundary.revision); assert.deepEqual(unchanged.occurrences, boundary.occurrences); assert.deepEqual(unchanged.values, boundary.values);
+  }
+  const removed = await work((client, identity) => changeRepeat(client, identity, capture.instanceId, boundary.revision, { type: 'remove', occurrenceId }));
+  const restored = await work((client, identity) => changeRepeat(client, identity, capture.instanceId, removed.revision,
+    { type: 'clone', occurrenceId: removed.occurrences.find((row) => row.groupId).id, withData: true }));
+  assert.equal(restored.values.length, created.limit); assert.ok(restored.values.every((value) => value.imageId === created.image.requestId && value.origin === 'default'));
+  assert.deepEqual((await work((client, identity) => loadCapture(client, identity.organization_id, capture.instanceId, 1))).values, original.values);
 });

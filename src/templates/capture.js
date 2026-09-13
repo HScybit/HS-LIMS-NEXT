@@ -12,6 +12,7 @@ import { setCaptureContext, requireCaptureWrite } from './access.js';
 import { assertCaptureSize } from './runtime-limits.js';
 import { agreedResultNumber, agreedResultValue, recordJobResultEntries } from '../datasheets/job-results.js';
 import { resolveResultInput } from './defaults.js';
+import { assertTemplateImageBudget } from '../template-assets/service.js';
 
 function storedValues(identity, instance, versionId, nextRevision, values) {
   return values.map((value) => ({ ...value, organizationId: identity.organization_id, instanceId: instance.id, versionId,
@@ -52,6 +53,7 @@ async function initializeCapture(client, identity, versionId, { subjects = [] } 
   const { occurrences, bindings } = initialOccurrences(model, { rootId: randomUUID(), newId: randomUUID, revision: 1, subjects });
   assertCaptureSize(model, occurrences);
   const initialValues = defaults(model, occurrences);
+  await assertTemplateImageBudget(client, identity.organization_id, model, { occurrences, values: initialValues });
   const calculation = calculateCapture(model, occurrences, initialValues);
   const db = database(client);
   await setCaptureContext(client, instance.id);
@@ -194,6 +196,8 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
     const removed = new Set(subtree.map((row) => row.id));
     occurrences = capture.occurrences.filter((row) => !removed.has(row.id));
   }
+  // Deletion can only reduce the budget, including for older oversized captures.
+  if (command.type === 'clone') await assertTemplateImageBudget(client, identity.organization_id, model, { occurrences, values: [...capture.values, ...additions] });
   const calculation = calculateCapture(model, occurrences, [...capture.values, ...additions]);
   await insertBatch(db, templateValues, storedValues(identity, { id: instanceId }, versionId, nextRevision, [...additions, ...calculation.calculated]));
   return { instanceId, versionId, revision: nextRevision, occurrences, values: calculation.values, validation: calculation.validation };

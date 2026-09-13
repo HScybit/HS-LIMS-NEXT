@@ -722,6 +722,13 @@
       "when": 1789291249628,
       "tag": "0102_vertical_text_widget",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1789294375809,
+      "tag": "0103_template_image_registration_access",
+      "breakpoints": true
     }
   ]
 }

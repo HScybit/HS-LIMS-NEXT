@@ -11,6 +11,8 @@ import { analyticalRecords } from '../helpers/templates.js';
 import { createTemplate, copyDefinition, freezeTemplate } from '../../src/templates/authoring.js';
 import { loadCapture } from '../../src/templates/loader.js';
 import { setCaptureContext } from '../../src/templates/access.js';
+import { addImageWidget } from '../helpers/template-image-fixture.js';
+import { animatedPng } from '../helpers/template-images.js';
 
 const owner = ownerPool();
 let author; let registrar; let allocator; let reader; let manager; let foreign;
@@ -140,11 +142,14 @@ test('a create-only registrar initializes the frozen sample capture but cannot l
   const source = await fixture({ generateTestRequests: true });
   const template = await work(author, async (client, identity) => {
     const created = await createTemplate(client, identity, { name: 'Synthetic sample registration template', kind: 'sample' });
-    await copyDefinition(database(client), analyticalRecords({ rowCount: 1, repeated: true }), identity.organization_id, created.versionId);
-    await freezeTemplate(client, identity, created.versionId, 1);
+    const records = analyticalRecords({ rowCount: 1, repeated: true });
+    await copyDefinition(database(client), records, identity.organization_id, created.versionId);
+    const image = { requestId: randomUUID(), originalName: 'Synthetic registration image.png', mediaType: 'image/png', content: await animatedPng() };
+    const withImage = await addImageWidget(client, identity, created, image, { rowId: records.rows[0].id });
+    await freezeTemplate(client, identity, created.versionId, withImage.model.version.revision);
     await client.query(`INSERT INTO sample_category_templates(organization_id,sample_category_id,template_id,purpose,is_default)
       VALUES($1,$2,$3,'sample',true)`, [identity.organization_id, source.category.id, created.templateId]);
-    return created;
+    return { ...created, imageId: image.requestId };
   });
   const sample = await register(source);
   assert.ok(sample.templateInstanceId); assert.equal(sample.testRequests.length, 1);
@@ -153,6 +158,7 @@ test('a create-only registrar initializes the frozen sample capture but cannot l
   assert.equal(capture.instance.created_by, registrar.userId);
   assert.equal(capture.occurrences.length, 3);
   assert.equal(capture.values.filter((value) => value.origin === 'calculated').length, 2);
+  assert.equal(capture.values.filter((value) => value.origin === 'default' && value.imageId === template.imageId).length, 2);
   await assert.rejects(work(registrar, (client, identity) => loadCapture(client, identity.organization_id, sample.templateInstanceId)), { code: 'capture_not_found' });
   await work(registrar, async (client) => {
     await setCaptureContext(client, sample.templateInstanceId);

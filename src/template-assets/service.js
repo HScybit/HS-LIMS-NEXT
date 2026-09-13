@@ -16,10 +16,10 @@ export function templateImageSources(row) {
   return { src: `data:${row.media_type};base64,${row.content.toString('base64')}`, printSrc: `data:image/png;base64,${row.print_content.toString('base64')}` };
 }
 
-export async function withTemplateImages(client, organizationId, loaded, capture) {
+function imageOccurrences(model, capture) {
   const imageCounts = new Map();
   const add = (id) => { if (id) imageCounts.set(id, (imageCounts.get(id) ?? 0) + 1); };
-  const fields = Object.values(loaded.model.fieldsById).filter((field) => field.widget === 'template_image_widget');
+  const fields = Object.values(model.fieldsById).filter((field) => field.widget === 'template_image_widget');
   if (capture) {
     const values = new Map(capture.values.map((value) => [`${value.fieldId}:${value.occurrenceId}`, value]));
     const groups = new Map();
@@ -29,22 +29,45 @@ export async function withTemplateImages(client, organizationId, loaded, capture
       add(value?.state === 'present' && value.imageId ? value.imageId : field.defaultImageId);
     }
   } else for (const field of fields) add(field.defaultImageId);
+  return imageCounts;
+}
+
+function imageBudget(imageCounts, rows) {
+  if (rows.length !== imageCounts.size) throw new HttpError(409, 'template_image_history_unavailable', 'A stored template image is unavailable.');
+  const bytes = rows.reduce((sum, row) => sum + row.byte_length + row.print_byte_length, 0);
+  if (bytes > 24 * 1024 * 1024) throw new HttpError(422, 'template_image_batch_size_limit', 'The template images exceed 24 MiB.');
+  const uriLength = (mediaType, length) => `data:${mediaType};base64,`.length + 4 * Math.ceil(length / 3);
+  const renderedBytes = rows.reduce((sum, row) => sum + imageCounts.get(row.id)
+    * (uriLength(row.media_type, row.byte_length) + uriLength('image/png', row.print_byte_length)), 0);
+  if (renderedBytes > 32 * 1024 * 1024) throw new HttpError(422, 'template_image_batch_size_limit', 'The expanded template images exceed 32 MiB.');
+  return { bytes, renderedBytes };
+}
+
+// Admission uses immutable lengths only; a repeated image is fetched once and
+// its rendered appearances are counted without transferring or encoding bytes.
+export async function assertTemplateImageBudget(client, organizationId, model, capture) {
+  const imageCounts = imageOccurrences(model, capture);
+  if (!imageCounts.size) return;
+  const rows = (await client.query(`SELECT id,media_type,byte_length,print_byte_length FROM template_image_assets
+    WHERE organization_id=$1 AND id=ANY($2::uuid[])`, [organizationId, [...imageCounts.keys()]])).rows;
+  imageBudget(imageCounts, rows);
+}
+
+export async function withTemplateImages(client, organizationId, loaded, capture) {
+  const imageCounts = imageOccurrences(loaded.model, capture);
   const ids = [...imageCounts.keys()];
   if (!ids.length) return loaded;
   const started = performance.now();
   const rows = (await client.query(`WITH images AS MATERIALIZED (SELECT id,media_type,byte_length,print_byte_length,content,print_content,sha256,print_sha256
     FROM template_image_assets WHERE organization_id=$1 AND id=ANY($2::uuid[])), size AS (SELECT coalesce(sum(byte_length::bigint+print_byte_length),0) AS bytes FROM images)
-    SELECT id,media_type,sha256,print_sha256,(SELECT bytes FROM size) AS bytes,
+    SELECT id,media_type,byte_length,print_byte_length,sha256,print_sha256,
       CASE WHEN (SELECT bytes FROM size)<=25165824 THEN content END AS content,
       CASE WHEN (SELECT bytes FROM size)<=25165824 THEN print_content END AS print_content FROM images`, [organizationId, ids])).rows;
   const databaseMs = performance.now() - started;
-  if (rows.some((row) => Number(row.bytes) > 24 * 1024 * 1024)) throw new HttpError(422, 'template_image_batch_size_limit', 'The template images exceed 24 MiB.');
-  if (rows.length !== ids.length) throw new HttpError(409, 'template_image_history_unavailable', 'A stored template image is unavailable.');
+  const { bytes, renderedBytes } = imageBudget(imageCounts, rows);
   const imageSources = Object.fromEntries(rows.map((row) => [row.id, templateImageSources(row)]));
-  const renderedBytes = ids.reduce((sum, id) => sum + imageCounts.get(id) * (imageSources[id].src.length + imageSources[id].printSrc.length), 0);
-  if (renderedBytes > 32 * 1024 * 1024) throw new HttpError(422, 'template_image_batch_size_limit', 'The expanded template images exceed 32 MiB.');
   return { ...loaded, model: { ...loaded.model, imageSources }, metrics: { ...loaded.metrics,
-    assets: { queryCount: 1, databaseMs, images: rows.length, bytes: Number(rows[0]?.bytes ?? 0), renderedBytes } } };
+    assets: { queryCount: 1, databaseMs, images: rows.length, bytes, renderedBytes } } };
 }
 
 export async function uploadTemplateImage(client, identity, versionId, fieldId, expectedRevision, input) {

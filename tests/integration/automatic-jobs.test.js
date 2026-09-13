@@ -1,5 +1,6 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { ownerPool, createAccount } from '../helpers/database.js';
 import { createLaboratoryFixture } from '../helpers/laboratory.js';
 import { prepareSubjectJob } from '../helpers/job-subjects.js';
@@ -10,6 +11,8 @@ import { generateTestRequests } from '../../src/test-requests/generate.js';
 import { allocateTestRequest, initializeGeneratedRequest } from '../../src/test-requests/allocate.js';
 import { loadLaboratorySettings, saveLaboratorySettings } from '../../src/organization-settings/service.js';
 import { resolveCaptureVersion } from '../../src/templates/snapshots.js';
+import { addImageWidget } from '../helpers/template-image-fixture.js';
+import { animatedPng } from '../helpers/template-images.js';
 
 const owner = ownerPool(); let admin; let creator; let manager; let foreign;
 const work = (user, callback) => withSession(user.token, callback, { csrfToken: user.csrfToken });
@@ -40,6 +43,8 @@ const records = async (sampleId) => (await owner.query(`SELECT request.*,context
 
 test('registration-only actors initialize their new children while automatic jobs await explicit allocation', async () => {
   const configured = await prepareSubjectJob(owner, admin, admin);
+  const image = { requestId: randomUUID(), originalName: 'Synthetic automatic child image.png', mediaType: 'image/png', content: await animatedPng() };
+  await work(admin, (client, identity) => addImageWidget(client, identity, configured.template, image, { rowId: configured.template.records.rows[0].id }));
   const source = await createLaboratoryFixture(owner, admin, { generateTestRequests: true, repeated: false, template: configured.template });
   await configure(source.template.templateId);
   const fallbackProduct = structuredClone(source.registration.products[0]);
@@ -55,6 +60,8 @@ test('registration-only actors initialize their new children while automatic job
     assert.ok(sample.testRequests.some((request) => request.id === row.id && request.datasheetId === row.datasheet_id));
     const subject = (await owner.query('SELECT test_request_id,specification_id,created_by FROM datasheet_subjects WHERE organization_id=$1 AND datasheet_id=$2', [admin.organizationId, row.datasheet_id])).rows;
     assert.equal(subject.length, 1); assert.equal(subject[0].test_request_id, row.id); assert.equal(subject[0].specification_id, row.specification_id); assert.equal(subject[0].created_by, creator.userId);
+    const images = (await owner.query("SELECT image_id,origin FROM template_values WHERE organization_id=$1 AND instance_id=$2 AND value_type='image'", [admin.organizationId, row.template_instance_id])).rows;
+    assert.deepEqual(images, [{ image_id: image.requestId, origin: 'default' }]);
   }
   for (const row of jobs) {
     assert.equal(row.is_auto_created, true); assert.equal(row.status, 'created'); assert.equal(row.revision, 1);
