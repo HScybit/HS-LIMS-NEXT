@@ -13,9 +13,10 @@ import { fieldDefaultValue } from '../../templates/defaults.js';
 import TemplateImageWidget from './TemplateImageWidget.jsx';
 import TextWidget from './TextWidget.jsx';
 import ParameterDetailWidget from './ParameterDetailWidget.jsx';
+import SampleLineWidget from './SampleLineWidget.jsx';
 import { resolveParameterTitle, verticalTitleValue } from '../../templates/parameter-title.js';
 
-export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, onBeginEdit, onRefreshDetail, captured = false, occurrenceId, validation, disabled = false, report, parameter, serialNumber, imageSources, onUploadImage, showImagePlaceholder }) {
+export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, onBeginEdit, onRefreshDetail, onCommand, captured = false, occurrenceId, validation, disabled = false, report, parameter, serialNumber, imageSources, onUploadImage, showImagePlaceholder }) {
   const plan = mode === 'plan';
   const edit = mode === 'edit';
   const shown = displayValue(field, value);
@@ -23,6 +24,7 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
   if (field.widget === 'template_image_widget') return <TemplateImageWidget field={field} value={value} mode={mode} sources={imageSources} onUpload={onUploadImage} disabled={disabled} showPlaceholder={showImagePlaceholder} />;
   if (field.widget === 'parameter_detail_widget') return <ParameterDetailWidget field={field} mode={mode} value={value} captured={captured}
     parameter={parameter ?? report?.parameterDetailFallback} onRefresh={onRefreshDetail} occurrenceId={occurrenceId} disabled={disabled} />;
+  if (field.widget === 'sample_line_item_data_widget') return <SampleLineWidget field={field} mode={mode} lineItem={report?.lineItem} onCommand={onCommand} disabled={disabled} />;
   if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} serialNumber={serialNumber} />;
   if (isContextWidget(field.widget)) return <div className={plan ? 'text-muted small' : 'text-break'}>{plan ? contextWidgetPreview[field.widget] : contextWidgetValue(field, report, parameter, serialNumber)}</div>;
   if (field.widget === 'text_widget') return <TextWidget field={field} mode={mode} value={value} parameter={parameter?.parameterTitleValues} occurrenceId={occurrenceId} disabled={disabled} onBeginEdit={onBeginEdit} onChange={onChange} onCommit={onCommit} />;
@@ -71,9 +73,9 @@ function FrozenResultSections({ report, parameter, serialNumber }) {
   // displays its scalar; it must not recursively expand the same sections.
   const dataContext = useMemo(() => {
     const result = { ...parameter, serialNumber };
-    return { sample: report.sample, results: [result], parametersByRequestId: { [parameter.testRequestId]: result },
+    return { sample: report.sample, lineItem: report.lineItem, results: [result], parametersByRequestId: { [parameter.testRequestId]: result },
       productDetailsByLineId: report.productDetailsByLineId, primaryProductLineId: report.primaryProductLineId, productLineId: parameter.sampleProductId };
-  }, [report.sample, report.productDetailsByLineId, report.primaryProductLineId, parameter, serialNumber]);
+  }, [report.sample, report.lineItem, report.productDetailsByLineId, report.primaryProductLineId, parameter, serialNumber]);
   return <TemplateCanvas model={model} mode="view" occurrences={capture.occurrences} values={values} dataContext={dataContext} sectionRoots={capture.sectionRoots} imageSources={report.assets?.templateImages} canvasId={null} idPrefix={`${report.report.id}-${parameter.id}-`} />;
 }
 
@@ -110,7 +112,7 @@ function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId,
     </div> : null}
     {isEditing && field?.widget !== 'text_widget' && !field?.alias ? <div className="template-column-warning">Missing key</div> : null}
     <div className="row1">{field ? <TemplateWidget field={field} mode={widgetMode} value={values[key]} validation={validation[key]} onChange={onChange} onCommit={onCommit} onBeginEdit={onBeginEdit} occurrenceId={activeOccurrenceId} disabled={busy}
-      onRefreshDetail={context.onRefreshDetail} captured={Boolean(context.runtime)}
+      onRefreshDetail={context.onRefreshDetail} onCommand={onCommand} captured={Boolean(context.runtime)}
       imageSources={context.imageSources ?? context.report?.assets?.templateImages ?? model.imageSources} onUploadImage={context.onUploadImage} showImagePlaceholder={context.showImagePlaceholder || plan}
       report={context.report ?? context.dataContext} parameter={parameter} serialNumber={parameter?.serialNumber ?? context.reportSerialNumber ?? model.rowsById[column.rowId].serialNumber ?? 0} /> : null}
       {column.childSectionIds.map((childId) => renderSection(context, childId, activeOccurrenceId, values))}

@@ -26,6 +26,7 @@ import { allocateTestRequest } from '../src/test-requests/allocate.js';
 import { prepareReportFlow } from '../tests/helpers/report-flow.js';
 import { prepareParameterTitleRegistration } from '../tests/helpers/parameter-title-fields.js';
 import { addProductWidgets } from '../tests/helpers/product-context.js';
+import { addSampleLineWidgets } from '../tests/helpers/sample-lines.js';
 import { prepareSubjectJob } from '../tests/helpers/job-subjects.js';
 import { createReportTemplate } from '../tests/helpers/reports.js';
 import { createReportAssets } from '../tests/helpers/report-assets.js';
@@ -282,6 +283,7 @@ try {
   let verticalTextFieldId; let parameterDetailFieldId;
   const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true,
     prepareProduct: async (client, identity, fixture) => {
+      fixture.registration.products[0].description = 'Fresh captured line-item description';
       await saveProduct(client, identity, { id: fixture.product.id, revision: 1, requestId: randomUUID(), key: fixture.product.code,
         name: 'Fresh captured Product', description: 'Fresh immutable Product context',
         customFields: [{ fieldId: productContextField.id, fieldRevision: 1, value: false }] });
@@ -313,8 +315,9 @@ try {
       const detail = await editTemplate(client, identity, template.versionId, detailColumn.model.version.revision,
         { type: 'configureField', columnId: detailColumn.model.rowsById[rowId].columnIds.at(-1), widget: 'parameter_detail_widget', alias: 'fresh_parameter_methods', label: 'moa_applicable' });
       parameterDetailFieldId = detail.model.columnsById[detailColumn.model.rowsById[rowId].columnIds.at(-1)].fieldId;
-      await editTemplate(client, identity, template.versionId, detail.model.version.revision,
+      const loop = await editTemplate(client, identity, template.versionId, detail.model.version.revision,
         { type: 'configureSection', id: template.records.sections[0].id, name: 'Final parameter results', isFinalResult: true, isParameterLoop: true });
+      await addSampleLineWidgets(client, identity, { ...template, revision: loop.model.version.revision }, template.records.sections[0].id, ['custom_description']);
     } });
   const verticalCapture = await withSession(session.token, (client, identity) => loadCapture(client, identity.organization_id, reportFlow.sheet.template_instance_id), { readOnly: true });
   assert.equal(verticalCapture.values.some((value) => value.fieldId === verticalTextFieldId), false);
@@ -379,7 +382,10 @@ try {
       assert.deepEqual(report.productDetailsByLineId, captured.productDetailsByLineId);
       assert.deepEqual(report.results.map((result) => result.parameterTitleValues), captured.results.map((result) => result.parameterTitleValues));
       assert.deepEqual(report.finalCaptures, captured.finalCaptures);
+      assert.equal(report.lineItem.description, 'Fresh captured line-item description');
+      assert.deepEqual(report.lineItem, captured.lineItem);
       const html = renderer.renderReportDocument(report, stylesheet);
+      assert.ok(html.includes('Fresh captured line-item description'));
       assert.ok(html.includes('Fresh captured Product')); assert.ok(html.includes('Fresh immutable Product context'));
       assert.ok(html.includes('>false</div>')); assert.ok(!html.includes('Configured default is not a captured Product value'));
       assert.ok(html.includes('Fresh vertical &lt;b&gt;title&lt;/b&gt;'));

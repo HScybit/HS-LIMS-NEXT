@@ -16,6 +16,7 @@ export function endpoint(work) {
     try { return await work(request, context); }
     catch (error) {
       if (error instanceof HttpError) return json({ error: { code: error.code, message: error.message } }, error.status);
+      if (error.code === '23514' && error.constraint === 'sample_line_size_limit') return json({ error: { code: 'sample_line_size_limit', message: 'The repeated line-item values exceed the supported document size. Reduce the template or repeat count.' } }, 422);
       console.error('Request failed.', { code: /^[A-Z0-9_]{3,30}$/.test(error.code ?? '') ? error.code : 'internal_error' });
       return json({ error: { code: 'internal_error', message: 'The request could not be completed. Please try again.' } }, 500);
     }

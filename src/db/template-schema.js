@@ -113,7 +113,7 @@ export const templateFields = pgTable('template_fields', {
   widget: text('widget').notNull(), valueType: text('value_type').notNull(), alias: text('alias').notNull().default(''),
   label: text('label').notNull().default(''), placeholder: text('placeholder').notNull().default(''), required: boolean('required').notNull().default(false),
   editable: boolean('editable').notNull().default(false), defaultState: text('default_state').notNull().default('absent'),
-  sourceField: text('source_field'), serialPadding: integer('serial_padding'),
+  sourceField: text('source_field'), serialPadding: integer('serial_padding'), attributeKey: text('attribute_key'),
   defaultText: text('default_text'), defaultNumber: numeric('default_number'), defaultBoolean: boolean('default_boolean'), defaultDate: date('default_date', { mode: 'string' }), defaultLexical: text('default_lexical'),
   defaultImageId: uuid('default_image_id'),
 }, (t) => [versionKey(t), versionLink(t), logicalLink(t, t.columnId, templateColumns), logicalLink(t, t.repeatGroupId, templateRepeatGroups),
@@ -124,16 +124,18 @@ export const templateFields = pgTable('template_fields', {
   check('template_field_alias', sql`${t.alias} ~ '^[A-Za-z0-9_]*$' and length(${t.alias}) <= 200`),
   check('template_default_lexical', sql`${t.defaultLexical} is null or (${t.widget} = 'result_widget' and ${t.defaultState} = 'present' and ${t.defaultNumber} is not null and length(${t.defaultLexical}) between 1 and 1000
     and case when ${t.defaultLexical} ~ '^-?[0-9]+([.][0-9]+)?$' then ${t.defaultNumber} = ${t.defaultLexical}::numeric else false end)`),
-  check('template_widget_type', sql`(${t.widget} in ('text_widget', 'vertical_text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'product_detail_widget', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'result_widget' and ${t.valueType} in ('numeric', 'result')) or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option') or (${t.widget} = 'template_image_widget' and ${t.valueType} = 'image') or (${t.widget}='parameter_detail_widget' and ${t.valueType}='parameter_detail')`),
+  check('template_widget_type', sql`(${t.widget} in ('text_widget', 'vertical_text_widget', 'input_widget', 'paragraph_widget', 'sample_details_widget_v2', 'product_detail_widget', 'sample_line_item_data_widget', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') and ${t.valueType} = 'text') or (${t.widget} in ('number_widget', 'formula_widget') and ${t.valueType} = 'numeric') or (${t.widget} = 'result_widget' and ${t.valueType} in ('numeric', 'result')) or (${t.widget} = 'checkbox_widget' and ${t.valueType} = 'boolean') or (${t.widget} = 'datepicker_widget' and ${t.valueType} = 'date') or (${t.widget} = 'dropdown_widget' and ${t.valueType} = 'option') or (${t.widget} = 'template_image_widget' and ${t.valueType} = 'image') or (${t.widget}='parameter_detail_widget' and ${t.valueType}='parameter_detail')`),
   check('template_image_readonly', sql`${t.widget}<>'template_image_widget' or not ${t.editable}`),
   check('template_vertical_text_readonly', sql`${t.widget}<>'vertical_text_widget' or not ${t.editable}`),
   check('template_parameter_detail_readonly', sql`${t.widget}<>'parameter_detail_widget' or not ${t.editable}`),
+  check('template_attribute_key', sql`${t.attributeKey} is null or (${t.widget}='sample_line_item_data_widget' and length(${t.attributeKey})<=16000)`),
   check('template_field_context', sql`(${t.sourceField} is null or
+    (${t.widget} = 'sample_line_item_data_widget' and ${t.sourceField} in ('custom_category','custom_product','custom_description','custom_sample_quantity','custom_sample_size','custom_quality','custom_indentification_mark','custom_condition')) or
     (${t.widget} = 'sample_details_widget_v2' and ${t.sourceField} in ('sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'productName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference')) or
     (${t.widget} = 'tr_data_widget' and ${t.sourceField} in ('requestNumber', 'parameterName', 'productName', 'methodName', 'analystName', 'submittedAt', 'completedAt')) or
     (${t.widget} = 'decision_rule_widget' and ${t.sourceField} in ('specification', 'measurementUnit', 'parameterName', 'productName', 'methodName', 'decisionOutcome')))
     and (${t.serialPadding} is null or (${t.widget} = 'sno_widget' and ${t.serialPadding} between 0 and 100))
-    and (${t.widget} not in ('sample_details_widget_v2', 'product_detail_widget', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') or not ${t.editable})`),
+    and (${t.widget} not in ('sample_details_widget_v2', 'product_detail_widget', 'sample_line_item_data_widget', 'tr_data_widget', 'decision_rule_widget', 'tr_result_widget', 'sno_widget') or not ${t.editable})`),
   check('template_field_default', sql`(${t.defaultState} in ('absent', 'empty') and num_nonnulls(${t.defaultText}, ${t.defaultNumber}, ${t.defaultBoolean}, ${t.defaultDate}, ${t.defaultImageId}) = 0) or (${t.defaultState} = 'present' and num_nonnulls(${t.defaultText}, ${t.defaultNumber}, ${t.defaultBoolean}, ${t.defaultDate}, ${t.defaultImageId}) = 1 and ((${t.valueType} in ('text', 'result', 'parameter_detail') and ${t.defaultText} is not null) or (${t.valueType} in ('numeric', 'result') and ${t.defaultNumber} is not null and ${t.defaultNumber}::text not in ('NaN', 'Infinity', '-Infinity')) or (${t.valueType} = 'boolean' and ${t.defaultBoolean} is not null) or (${t.valueType} = 'date' and ${t.defaultDate} is not null) or (${t.valueType} = 'image' and ${t.defaultImageId} is not null)))`),
 ]);
 

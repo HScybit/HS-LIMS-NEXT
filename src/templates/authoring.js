@@ -11,6 +11,7 @@ import { widgetTypes, requirePermission, uuid, revision, text, integer, bool, de
 import { contextWidgetFields, isContextWidget } from './context-widgets.js';
 import { fieldDefaultValue, resultDefaultFields } from './defaults.js';
 import { imageLayout, imageLayoutLabels } from './image-config.js';
+import { sampleLineSelection } from './sample-line.js';
 
 const scope = (table, org, versionId) => and(eq(table.organizationId, org), eq(table.versionId, versionId));
 const identityColumns = (identity, versionId) => ({ organizationId: identity.organization_id, versionId });
@@ -70,14 +71,17 @@ async function saveExpression(db, base, model, field, purpose, formula) {
 }
 
 async function configureField(db, base, model, command) {
-  fieldsOnly(command, ['type', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'sourceField', 'serialPadding', 'defaultValue', 'image']);
+  fieldsOnly(command, ['type', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'sourceField', 'serialPadding', 'attributeKey', 'defaultValue', 'image']);
   const column = ownRecord(model.columnsById, command.columnId, 'Column');
   if (column.childSectionIds.length) throw new HttpError(400, 'column_has_children', 'Remove the nested container before adding a widget.');
   if (!Object.hasOwn(widgetTypes, command.widget)) throw new HttpError(400, 'unsupported_widget', 'This widget type is not supported.');
   const previous = model.fieldsById[column.fieldId];
   if (previous && previous.widget !== command.widget) throw new HttpError(400, 'widget_type_change', 'Remove the current widget before changing its type.');
   const contextual = isContextWidget(command.widget);
-  const sourceField = command.sourceField === undefined ? previous?.sourceField ?? null : command.sourceField === '' ? null : command.sourceField;
+  let sourceField = command.sourceField === undefined ? previous?.sourceField ?? null : command.sourceField === '' ? null : command.sourceField;
+  if (command.widget === 'sample_line_item_data_widget') sourceField = sampleLineSelection(sourceField);
+  const attributeKey = command.attributeKey === undefined ? previous?.attributeKey ?? null : command.attributeKey === null ? null : text(command.attributeKey, 'Attribute Name/Key', 16000, { optional: true });
+  if (attributeKey !== null && (command.widget !== 'sample_line_item_data_widget' || attributeKey.includes('\0'))) throw new HttpError(400, 'invalid_attribute_key', 'Attribute Name/Key belongs to a line-item widget and cannot contain null characters.');
   const serialPadding = command.serialPadding === undefined ? previous?.serialPadding ?? null : command.serialPadding;
   if (sourceField !== null && (!contextual || !contextWidgetFields[command.widget].includes(sourceField))) throw new HttpError(400, 'invalid_context_field', 'Select a supported data field for this widget.');
   if (serialPadding !== null && (command.widget !== 'sno_widget' || !Number.isSafeInteger(serialPadding) || serialPadding < 0 || serialPadding > 100)) throw new HttpError(400, 'invalid_serial_padding', 'Serial number padding must be between 0 and 100.');
@@ -93,7 +97,7 @@ async function configureField(db, base, model, command) {
     ...base, id: previous?.id ?? randomUUID(), columnId: column.id, repeatGroupId: model.rowsById[column.rowId].repeatGroupId,
     widget: command.widget, valueType: previous?.valueType ?? widgetTypes[command.widget], alias, label: text(command.label, 'Title', 16000, { optional: true }),
     placeholder: text(command.placeholder, 'Placeholder', 1000, { optional: true }), required: bool(command.required ?? false, 'Required'), editable: bool(command.editable ?? false, 'Editable'),
-    sourceField, serialPadding,
+    sourceField, serialPadding, attributeKey,
   };
   let config;
   if (['numeric', 'result'].includes(field.valueType)) {
@@ -102,7 +106,7 @@ async function configureField(db, base, model, command) {
     if (config.minimum !== null && config.maximum !== null && Number(config.minimum) > Number(config.maximum)) throw new HttpError(400, 'invalid_bounds', 'Minimum cannot exceed maximum.');
   }
   if (command.defaultValue !== undefined) {
-    if (['product_detail_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget)) {
+    if (['product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget)) {
       const configured = text(command.defaultValue, 'Default Value', 16000, { optional: true });
       if (configured.includes('\0')) throw new HttpError(400, 'invalid_input', 'Default Value cannot contain null characters.');
       Object.assign(field, { defaultState: configured === '' ? 'absent' : 'present', defaultText: configured === '' ? null : configured });
@@ -110,7 +114,7 @@ async function configureField(db, base, model, command) {
       if (field.widget !== 'result_widget') throw new HttpError(400, 'unsupported_default', 'Default configuration is not available for this widget.');
       Object.assign(field, resultDefaultFields({ ...field, numeric: config }, command.defaultValue));
     }
-  } else if (['product_detail_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) && previous) {
+  } else if (['product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) && previous) {
     Object.assign(field, { defaultState: previous.defaultState, defaultText: previous.defaultText });
   } else if (field.widget === 'result_widget' && previous?.defaultState === 'present') {
     // A bounds/precision edit cannot publish a default that the new field rejects.
@@ -185,7 +189,7 @@ async function changeRepeatGroup(client, db, base, records, model, { kind, id, e
 }
 
 export async function editTemplate(client, identity, versionId, expectedRevision, command) {
-  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'isParameterLoop', 'isParameterLoopHeader', 'headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId', 'defaultValue', 'image']);
+  fieldsOnly(command, ['type', 'parentColumnId', 'sectionId', 'rowId', 'columnId', 'fieldId', 'widget', 'alias', 'label', 'placeholder', 'required', 'editable', 'displayScale', 'padDecimals', 'minimum', 'maximum', 'formula', 'visibleFormula', 'requiredFormula', 'options', 'kind', 'id', 'direction', 'name', 'description', 'cssClass', 'visible', 'isHeader', 'isFooter', 'isFinalResult', 'span', 'enabled', 'sourceField', 'serialPadding', 'attributeKey', 'isParameterLoop', 'isParameterLoopHeader', 'headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId', 'defaultValue', 'image']);
   if (command.type === 'setReportAssets') {
     requirePermission(identity, 'templates.manage'); uuid(versionId, 'Template version'); revision(expectedRevision);
     const keys = ['headerDocumentId', 'footerDocumentId', 'nablHeaderDocumentId', 'nablFooterDocumentId'];
@@ -256,6 +260,12 @@ export async function editTemplate(client, identity, versionId, expectedRevision
       visible: bool(command.visible ?? true, 'Visible'), isHeader: bool(command.isHeader ?? false, 'Header'), isFooter: bool(command.isFooter ?? false, 'Footer'), isFinalResult: bool(command.isFinalResult ?? false, 'Final result'),
       isParameterLoop: bool(command.isParameterLoop ?? section.isParameterLoop ?? false, 'Parameter loop'), isParameterLoopHeader: bool(command.isParameterLoopHeader ?? section.isParameterLoopHeader ?? false, 'Parameter loop header') })
       .where(and(scope(t.templateSections, base.organizationId, versionId), eq(t.templateSections.id, section.id)));
+  } else if (command.type === 'selectSampleLineAttribute') {
+    fieldsOnly(command, ['type', 'fieldId', 'sourceField']);
+    const field = ownRecord(model.fieldsById, command.fieldId, 'Field');
+    if (field.widget !== 'sample_line_item_data_widget') throw new HttpError(400, 'invalid_context_field', 'This field is not a line-item widget.');
+    await db.update(t.templateFields).set({ sourceField: sampleLineSelection(command.sourceField) })
+      .where(and(scope(t.templateFields, base.organizationId, versionId), eq(t.templateFields.id, field.id)));
   } else if (command.type === 'configureColumn') {
     fieldsOnly(command, ['type', 'id', 'span', 'cssClass', 'widget', 'isFinalResult']);
     const column = ownRecord(model.columnsById, command.id, 'Column');

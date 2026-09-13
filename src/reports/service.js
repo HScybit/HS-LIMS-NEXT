@@ -20,6 +20,8 @@ import { parameterTitleProjection } from '../templates/parameter-title.js';
 import { parameterTitleRequests } from '../templates/parameter-title-requests.js';
 import { loadParameterTitleFields, requestedParameterTitles } from '../datasheets/parameter-title-fields.js';
 import { reportParameterDetailFallback, reportParameterDetailRequests, reportParameterDetails } from './parameter-details.js';
+import { loadSampleLineContexts } from '../samples/line-context.js';
+import { hasSampleLineWidget, assertSampleLineCounts } from '../templates/sample-line.js';
 
 const scope = (table, organizationId) => eq(table.organizationId, organizationId);
 const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, isFinalized: report.isFinalized, generatedAt: report.generatedAt });
@@ -143,8 +145,10 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
   const detailRequests = new Map();
   for (const group of groups) reportParameterDetailRequests(models.get(group.templateId), group.results, reportParameterDetailFallback(group.results), detailRequests);
   await reportParameterDetails(client, identity, selectedResults, detailRequests);
-  const imageCounts = new Map(groups.map((group) => [group.key, assertReportSize(models.get(group.templateId), group.results, history.finalCaptures, history.datasheetModels,
-    { parameterDetailFallback: reportParameterDetailFallback(group.results) }).imageCounts ?? {}]));
+  const sizes = new Map(groups.map((group) => [group.key, assertReportSize(models.get(group.templateId), group.results, history.finalCaptures, history.datasheetModels,
+    { parameterDetailFallback: reportParameterDetailFallback(group.results) })]));
+  const lineGroups = new Set(groups.filter((group) => hasSampleLineWidget(models.get(group.templateId))
+    || group.results.some((result) => result.source === 'section' && hasSampleLineWidget(history.datasheetModels[result.versionId]))).map((group) => group.key));
   const titleRequests = new Map();
   for (const group of groups) parameterTitleRequests(models.get(group.templateId), group.results, history, titleRequests);
   await requestedParameterTitles(client, identity, new Map(selectedResults.map((result) => [result.testRequestId, result])), titleRequests);
@@ -178,9 +182,15 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
     await db.insert(sampleReportPrintSettings).values({ organizationId: identity.organization_id, reportId: id, ...input.printConfig });
     reports.push(report);
   }
+  const lineReportIds = reports.filter((report) => lineGroups.has(report.groupKey)).map((report) => report.id);
+  if (lineReportIds.length) {
+    await client.query('SELECT sample_line_snapshot_reports($1::uuid[])', [lineReportIds]);
+    const lines = await loadSampleLineContexts(client, identity.organization_id, { reportIds: lineReportIds });
+    for (const report of reports) if (lineGroups.has(report.groupKey)) assertSampleLineCounts(sizes.get(report.groupKey).lineItemCounts ?? {}, lines.byOwnerId.get(report.id));
+  }
   // Validate the actual captured assets for all groups before this transaction
   // can complete. No per-report/field content query or partial finalisation.
-  await loadReportAssetBatch(client, identity.organization_id, reports.map((report) => report.id), Object.fromEntries(reports.map((report) => [report.id, imageCounts.get(report.groupKey)])));
+  await loadReportAssetBatch(client, identity.organization_id, reports.map((report) => report.id), Object.fromEntries(reports.map((report) => [report.id, sizes.get(report.groupKey).imageCounts ?? {}])));
   const sampleRevision = input.finalizeSample
     ? (await client.query('SELECT report_finalize_sample($1) AS revision', [input.requestId])).rows[0].revision : sample.revision;
   return { items: reports, replayed: false, sample: { id: sample.id, revision: sampleRevision, status: input.finalizeSample ? 'completed' : sample.status } };
@@ -236,7 +246,10 @@ export async function loadReport(client, identity, reportId) {
   const detailFallback = reportParameterDetailFallback(results);
   const detailRequests = reportParameterDetailRequests(definition.model, results, detailFallback);
   await reportParameterDetails(client, identity, results, detailRequests, { rows: results });
-  const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels, { parameterDetailFallback: detailFallback });
+  const lines = [...loaded.definitions.values()].some(({ model }) => hasSampleLineWidget(model))
+    ? await loadSampleLineContexts(client, identity.organization_id, { reportIds: [reportId] }) : null;
+  const lineItem = lines?.byOwnerId.get(report.id);
+  const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels, { parameterDetailFallback: detailFallback, lineItem });
   const parameterRequests = parameterTitleRequests(definition.model, results, { finalCaptures, datasheetModels });
   const parameters = parameterRequests.size ? await loadParameterTitleFields(client, identity, results, parameterRequests) : null;
   for (const result of results) {
@@ -254,8 +267,10 @@ export async function loadReport(client, identity, reportId) {
   return { report, sample: { sampleNumber: report.sampleNumber, sampleCategoryName: report.sampleCategoryName, customerName: report.customerName, customerAddress: report.customerAddress,
     customerReference: report.customerReference, receivedAt: report.receivedAt, registeredAt: report.registeredAt, dueAt: report.dueAt, description: report.description },
     results, printConfig, model: templateView(definition.model), finalCaptures, datasheetModels, assets: branding.assets,
+    ...(lines ? { lineItem } : {}),
     ...(detailFallback?.parameterDetailValues ? { parameterDetailFallback: { parameterDetailValues: detailFallback.parameterDetailValues } } : {}),
     ...(products ? { productDetailsByLineId: products.productDetailsByLineId, primaryProductLineId: productLineId, productLineId } : {}),
     metrics: { definition: loaded.metrics, capture: captureMetrics, assets: branding.metrics, ...(products ? { products: products.metrics } : {}),
+      ...(lines ? { lineItems: lines.metrics } : {}),
       ...(parameters ? { parameters: parameters.metrics } : {}), ...size } };
 }

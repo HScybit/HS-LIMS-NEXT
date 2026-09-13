@@ -9,6 +9,8 @@ import { withTemplateImages } from '../template-assets/service.js';
 import { loadSampleProductContext } from '../samples/product-context.js';
 import { parameterTitleRequests } from '../templates/parameter-title-requests.js';
 import { loadParameterTitleFields } from './parameter-title-fields.js';
+import { loadSampleLineContexts } from '../samples/line-context.js';
+import { hasSampleLineWidget, assertSampleLineCaptureSize } from '../templates/sample-line.js';
 
 export async function datasheetRecord(client, identity, datasheetId, sampleId) {
   uuid(datasheetId, 'Datasheet');
@@ -43,13 +45,16 @@ export async function loadDatasheet(client, identity, datasheetId, { sampleId, a
   const captureRevision = atRevision ?? sheet.captureRevision;
   const definition = await loadDefinition(client, identity.organization_id, sheet.templateVersionId);
   const hasParameterLoop = Object.values(definition.model.groupsById).some((group) => group.source === 'test_requests');
-  const context = Object.values(definition.model.fieldsById).some((field) => isContextWidget(field.widget)
+  const context = Object.values(definition.model.fieldsById).some((field) => isContextWidget(field.widget) && field.widget !== 'sample_line_item_data_widget'
     || hasParameterLoop && ['text_widget', 'vertical_text_widget'].includes(field.widget))
     ? await loadDatasheetContext(client, identity, sheet, captureRevision) : null;
   const productSelectors = Object.values(definition.model.fieldsById).filter((field) => field.widget === 'product_detail_widget').map((field) => field.alias);
   const products = productSelectors.length ? await loadSampleProductContext(client, identity, sheet.sampleId, productSelectors,
     { sampleProductIds: [...new Set([sheet.sampleProductId, ...context.rows.map((row) => row.sampleProductId)])] }) : null;
   const capture = await loadCapture(client, identity.organization_id, sheet.templateInstanceId, captureRevision, { pinnedValues: context?.pinnedValues ?? [] });
+  const lines = hasSampleLineWidget(definition.model) ? await loadSampleLineContexts(client, identity.organization_id, { datasheetId }) : null;
+  const lineItem = lines?.byOwnerId.get(sheet.id);
+  if (lines) assertSampleLineCaptureSize(definition.model, capture.occurrences, lineItem);
   const calculation = calculateCapture(definition.model, capture.occurrences, capture.values);
   const parameterRequests = context ? parameterTitleRequests(definition.model, context.rows, { capture, validation: calculation.validation }) : new Map();
   const parameters = parameterRequests.size ? await loadParameterTitleFields(client, identity, context.rows, parameterRequests) : null;
@@ -57,12 +62,15 @@ export async function loadDatasheet(client, identity, datasheetId, { sampleId, a
   const projectionStart = performance.now();
   const modelView = datasheetTemplateView(withImages.model); const runtimeView = datasheetCaptureView(capture);
   const projectionMs = performance.now() - projectionStart;
-  const dataContext = context ? assembleDatasheetContext(context, capture, parameters?.fieldsByRequestId) : undefined;
+  const dataContext = context ? assembleDatasheetContext(context, capture, parameters?.fieldsByRequestId)
+    : lines ? { sample: {}, results: [], parametersByRequestId: {} } : undefined;
+  if (lines) dataContext.lineItem = lineItem;
   if (products) Object.assign(dataContext, { productDetailsByLineId: products.productDetailsByLineId, primaryProductLineId: products.primaryProductLineId, productLineId: sheet.sampleProductId });
   return { datasheet: sheet, model: modelView, capture: runtimeView, dataContext, validation: calculation.validation,
     canExecute: atRevision === undefined && sheet.canWork && identity.permission_codes.includes('datasheets.execute') && sheet.assignedAnalyst
       && ['allocated', 'in_progress', 'rejected'].includes(sheet.requestStatus) && ['in_progress', 'rejected'].includes(sheet.status) && capture.instance.status === 'editing',
     metrics: { metadataQueryCount: context ? 2 : 1, metadataMs: metadataMs + (context?.databaseMs ?? 0), definition: definition.metrics, capture: capture.metrics,
       ...(products ? { products: products.metrics } : {}), ...(parameters ? { parameters: parameters.metrics } : {}),
+      ...(lines ? { lineItems: lines.metrics } : {}),
       ...(withImages.metrics.assets ? { assets: withImages.metrics.assets } : {}), calculationMs: calculation.durationMs, projectionMs } };
 }

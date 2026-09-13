@@ -129,7 +129,8 @@ export function assembleDefinition(records, { forFreeze = false } = {}) {
     field.options.sort(byPosition);
     if (forFreeze && isContextWidget(field.widget)) {
       if (!['report', 'datasheet'].includes(version.kind)) invalid('Data widgets require a report or datasheet template.');
-      if (contextWidgetFields[field.widget].length && !contextWidgetFields[field.widget].includes(field.sourceField)) invalid('Select a data field for every report data widget.');
+      if (contextWidgetFields[field.widget].length && !(field.widget === 'sample_line_item_data_widget' && field.sourceField == null)
+        && !contextWidgetFields[field.widget].includes(field.sourceField)) invalid('Select a data field for every report data widget.');
     }
     if (forFreeze && field.alias && aliases.has(field.alias)) invalid('Identifiers must be unique across the template. Rename duplicate keys before using this version.');
     if (field.alias) aliases.add(field.alias);

@@ -34,7 +34,7 @@ async function appendCaptureValues(client, identity, instanceId, versionId, next
 function defaults(model, occurrences) {
   const fieldsByGroup = new Map();
   for (const field of Object.values(model.fieldsById)) {
-    if (['formula_widget', 'product_detail_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
+    if (['formula_widget', 'product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
     const group = field.repeatGroupId ?? null;
     if (!fieldsByGroup.has(group)) fieldsByGroup.set(group, []);
     fieldsByGroup.get(group).push(field);

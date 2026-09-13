@@ -3,6 +3,7 @@ import { HttpError, requireText } from '../auth/errors.js';
 export const widgetTypes = Object.freeze({
   template_image_widget: 'image',
   parameter_detail_widget: 'parameter_detail',
+  sample_line_item_data_widget: 'text',
   text_widget: 'text', vertical_text_widget: 'text', input_widget: 'text', paragraph_widget: 'text', number_widget: 'numeric',
   formula_widget: 'numeric', result_widget: 'result', checkbox_widget: 'boolean', datepicker_widget: 'date', dropdown_widget: 'option',
   sample_details_widget_v2: 'text', product_detail_widget: 'text', tr_data_widget: 'text', decision_rule_widget: 'text', tr_result_widget: 'text', sno_widget: 'text',
