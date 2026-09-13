@@ -346,6 +346,8 @@ try {
     return { ...created, footer: footer.document, stylesheet };
   }, { csrfToken: session.csrfToken });
   const generationInput = { ...reportFlow.input, finalizeSample: true };
+  await owner.query('UPDATE sample_products SET description=$3 WHERE organization_id=$1 AND sample_id=$2',
+    [account.organizationId, reportFlow.sample.id, 'Later line observed by the report']);
   const generated = await withSession(session.token, (client, identity) => generateReports(client, identity, reportFlow.sample.id, generationInput), { csrfToken: session.csrfToken });
   assert.equal(generated.items[0].isFinalized, true);
   assert.equal(generated.sample.status, 'completed'); assert.equal(generated.sample.revision, 2);
@@ -382,8 +384,9 @@ try {
       assert.deepEqual(report.productDetailsByLineId, captured.productDetailsByLineId);
       assert.deepEqual(report.results.map((result) => result.parameterTitleValues), captured.results.map((result) => result.parameterTitleValues));
       assert.deepEqual(report.finalCaptures, captured.finalCaptures);
-      assert.equal(report.lineItem.description, 'Fresh captured line-item description');
+      assert.equal(report.lineItem.description, 'Later line observed by the report');
       assert.deepEqual(report.lineItem, captured.lineItem);
+      assert.ok(Object.values(report.finalCaptures).every((capture) => capture.lineItem.description === 'Fresh captured line-item description'));
       const html = renderer.renderReportDocument(report, stylesheet);
       assert.ok(html.includes('Fresh captured line-item description'));
       assert.ok(html.includes('Fresh captured Product')); assert.ok(html.includes('Fresh immutable Product context'));

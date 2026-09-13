@@ -47,7 +47,11 @@ export function assertSampleLineBytes(bytes) {
 }
 
 export function assertSampleLineCounts(counts, lineItem) {
-  return assertSampleLineBytes(Object.entries(counts).reduce((bytes, [sourceField, count]) => bytes + sampleLineBytes({ sourceField }, lineItem) * count, 0));
+  return assertSampleLineBytes(sampleLineCountsBytes(counts, lineItem));
+}
+
+export function sampleLineCountsBytes(counts, lineItem) {
+  return Object.entries(counts).reduce((bytes, [sourceField, count]) => bytes + sampleLineBytes({ sourceField }, lineItem) * count, 0);
 }
 
 export function assertSampleLineCaptureSize(model, occurrences, lineItem) {

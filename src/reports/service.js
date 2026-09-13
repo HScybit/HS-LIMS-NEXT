@@ -13,15 +13,15 @@ import { requireWorkflowAction } from '../workflows/access.js';
 import { reportGenerationInput, reportGroups } from './input.js';
 import { datasheetTemplateView, datasheetCaptureView } from '../datasheets/transport.js';
 import { finalResultSectionRoots } from '../datasheets/final-result.js';
-import { assertReportSize } from './render-model.js';
+import { assertReportSize, assertReportLineSize } from './render-model.js';
 import { loadReportAssets, loadReportAssetBatch } from './assets.js';
 import { loadSampleProductContext } from '../samples/product-context.js';
 import { parameterTitleProjection } from '../templates/parameter-title.js';
 import { parameterTitleRequests } from '../templates/parameter-title-requests.js';
 import { loadParameterTitleFields, requestedParameterTitles } from '../datasheets/parameter-title-fields.js';
 import { reportParameterDetailFallback, reportParameterDetailRequests, reportParameterDetails } from './parameter-details.js';
-import { loadSampleLineContexts } from '../samples/line-context.js';
-import { hasSampleLineWidget, assertSampleLineCounts } from '../templates/sample-line.js';
+import { loadSampleLineContexts, loadReportFinalLineContexts } from '../samples/line-context.js';
+import { hasSampleLineWidget } from '../templates/sample-line.js';
 
 const scope = (table, organizationId) => eq(table.organizationId, organizationId);
 const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, isFinalized: report.isFinalized, generatedAt: report.generatedAt });
@@ -186,7 +186,9 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
   if (lineReportIds.length) {
     await client.query('SELECT sample_line_snapshot_reports($1::uuid[])', [lineReportIds]);
     const lines = await loadSampleLineContexts(client, identity.organization_id, { reportIds: lineReportIds });
-    for (const report of reports) if (lineGroups.has(report.groupKey)) assertSampleLineCounts(sizes.get(report.groupKey).lineItemCounts ?? {}, lines.byOwnerId.get(report.id));
+    const finalLineReportIds = reports.filter((report) => sizes.get(report.groupKey).finalLineItemCounts).map((report) => report.id);
+    const finalLines = finalLineReportIds.length ? await loadReportFinalLineContexts(client, identity.organization_id, finalLineReportIds) : null;
+    for (const report of reports) if (lineGroups.has(report.groupKey)) assertReportLineSize(sizes.get(report.groupKey), lines.byOwnerId.get(report.id), finalLines?.byReportId.get(report.id));
   }
   // Validate the actual captured assets for all groups before this transaction
   // can complete. No per-report/field content query or partial finalisation.
@@ -249,6 +251,12 @@ export async function loadReport(client, identity, reportId) {
   const lines = [...loaded.definitions.values()].some(({ model }) => hasSampleLineWidget(model))
     ? await loadSampleLineContexts(client, identity.organization_id, { reportIds: [reportId] }) : null;
   const lineItem = lines?.byOwnerId.get(report.id);
+  const lineCaptures = Object.entries(finalCaptures).filter(([, capture]) => hasSampleLineWidget(datasheetModels[capture.versionId]));
+  const finalLines = lineCaptures.length ? await loadReportFinalLineContexts(client, identity.organization_id, [report.id]) : null;
+  for (const [instanceId, capture] of lineCaptures) {
+    capture.lineItem = finalLines.byReportId.get(report.id)?.[instanceId];
+    if (!capture.lineItem) throw new HttpError(409, 'incomplete_sample_line_history', 'The submitted line-item context is unavailable.');
+  }
   const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels, { parameterDetailFallback: detailFallback, lineItem });
   const parameterRequests = parameterTitleRequests(definition.model, results, { finalCaptures, datasheetModels });
   const parameters = parameterRequests.size ? await loadParameterTitleFields(client, identity, results, parameterRequests) : null;
@@ -272,5 +280,6 @@ export async function loadReport(client, identity, reportId) {
     ...(products ? { productDetailsByLineId: products.productDetailsByLineId, primaryProductLineId: productLineId, productLineId } : {}),
     metrics: { definition: loaded.metrics, capture: captureMetrics, assets: branding.metrics, ...(products ? { products: products.metrics } : {}),
       ...(lines ? { lineItems: lines.metrics } : {}),
+      ...(finalLines ? { finalLineItems: finalLines.metrics } : {}),
       ...(parameters ? { parameters: parameters.metrics } : {}), ...size } };
 }

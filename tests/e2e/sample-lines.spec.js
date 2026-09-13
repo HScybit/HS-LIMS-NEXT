@@ -88,3 +88,30 @@ test('datasheet line values survive source edits, cloning, reload and read-only 
   await expect(page.getByRole('link', { name: 'Clone row with data', exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('generated COAs retain submitted datasheet lines alongside the child report line', async ({ page }, testInfo) => {
+  const user = await account(); const flow = await prepareSampleLineFlow(owner, user);
+  await owner.query('UPDATE sample_products SET description=$3 WHERE organization_id=$1 AND sample_id=$2',
+    [user.organizationId, flow.sample.id, 'Line observed at report generation']);
+  const errors = []; page.on('pageerror', (error) => errors.push(error.message));
+  await login(page, user); await page.goto(`/samples/${flow.sample.id}/coa`);
+  await page.getByRole('button', { name: /^Consolidated/ }).click();
+  await page.getByLabel('Consolidated Report template', { exact: true }).selectOption(flow.template.templateId);
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  const report = page.frameLocator('.finalised-report-preview__frame').getByRole('article');
+  const submitted = report.locator(`[data-field-id="${flow.datasheetTemplate.fieldIds.custom_description}"]`);
+  const direct = report.locator(`[data-field-id="${flow.reportTemplate.fieldIds.custom_description}"]`);
+  await expect(submitted).toHaveText(['First captured line', 'Second captured line']);
+  await expect(direct).toHaveText(['Line observed at report generation', 'Line observed at report generation']);
+  await owner.query('UPDATE sample_products SET description=$3 WHERE organization_id=$1 AND sample_id=$2',
+    [user.organizationId, flow.sample.id, 'Later sample line']);
+  await page.reload();
+  await expect(submitted).toHaveText(['First captured line', 'Second captured line']);
+  await expect(direct).toHaveText(['Line observed at report generation', 'Line observed at report generation']);
+  await page.screenshot({ path: testInfo.outputPath('submitted-lines-report-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.lims-main')).toHaveCSS('margin-left', '0px');
+  await expect(submitted).toHaveText(['First captured line', 'Second captured line']);
+  await page.screenshot({ path: testInfo.outputPath('submitted-lines-report-mobile.png'), fullPage: true });
+  expect(errors).toEqual([]);
+});

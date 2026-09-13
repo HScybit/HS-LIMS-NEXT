@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { sampleLineAttributes, sampleLineSelection, sampleLineValue, assertSampleLineCaptureSize, assertSampleLineCounts, MAX_SAMPLE_LINE_BYTES } from '../../src/templates/sample-line.js';
 import { contextWidgetValue } from '../../src/templates/context-widgets.js';
 import { assembleDefinition } from '../../src/templates/model.js';
-import { assertReportSize } from '../../src/reports/render-model.js';
+import { assertReportSize, assertReportLineSize } from '../../src/reports/render-model.js';
 import { reportRecords } from '../helpers/reports.js';
 import { analyticalRecords } from '../helpers/templates.js';
 import { finalResultSectionRoots } from '../../src/datasheets/final-result.js';
@@ -43,7 +43,7 @@ test('line-item byte admission counts Unicode, only matching occurrences and the
   assert.throws(() => assertSampleLineCounts({ custom_description: MAX_SAMPLE_LINE_BYTES / 4 + 1 }, { description: '😀' }), { code: 'sample_line_size_limit' });
 });
 
-test('report line admission includes repeated final sections and uses the report context throughout', () => {
+test('report line admission counts repeated final sections using each submitted datasheet context', () => {
   const records = reportRecords();
   const loopField = records.fields.find((field) => field.alias === 'moa');
   Object.assign(loopField, { widget: 'sample_line_item_data_widget', sourceField: 'custom_description' });
@@ -56,8 +56,20 @@ test('report line admission includes repeated final sections and uses the report
   const captures = { capture: { versionId: 'sheet', occurrences, sectionRoots: finalResultSectionRoots(capturedModel, occurrences) } };
   const results = [1, 2].map((id) => ({ id, source: 'section', instanceId: 'capture' }));
   const size = assertReportSize(model, results, captures, { sheet: capturedModel });
-  assert.deepEqual(size.lineItemCounts, { custom_description: 14 });
-  assert.throws(() => assertReportSize(model, results, captures, { sheet: capturedModel }, { lineItem: { description: 'x'.repeat(Math.floor(MAX_SAMPLE_LINE_BYTES / 14) + 1) } }), { code: 'sample_line_size_limit' });
+  assert.deepEqual(size.lineItemCounts, { custom_description: 2 });
+  assert.deepEqual(size.finalLineItemCounts, { capture: { custom_description: 12 } });
+  assert.throws(() => assertReportLineSize(size, { description: 'Report line' }), { code: 'incomplete_sample_line_history' });
+  captures.capture.lineItem = { description: 'x'.repeat(Math.floor(MAX_SAMPLE_LINE_BYTES / 12) + 1) };
+  assert.throws(() => assertReportSize(model, results, captures, { sheet: capturedModel }, { lineItem: { description: 'Short report line' } }), { code: 'sample_line_size_limit' });
+  captures.capture.lineItem = { description: 'x'.repeat(100) };
+  assert.throws(() => assertReportSize(model, results, captures, { sheet: capturedModel }, { lineItem: { description: 'x'.repeat(MAX_SAMPLE_LINE_BYTES / 2 + 1) } }), { code: 'sample_line_size_limit' });
   capturedModel.sectionsById[captured.sections[0].id].visible = false;
   assert.deepEqual(assertReportSize(model, results, captures, { sheet: capturedModel }).lineItemCounts, { custom_description: 2 });
+});
+
+test('direct and submitted line text share one exact UTF-8 budget', () => {
+  const size = { lineItemCounts: { custom_description: 1 }, finalLineItemCounts: { a: { custom_quality: 1 }, b: { custom_description: 2 } } };
+  const finalLines = { a: { quality: '😀' }, b: { description: 'x'.repeat(1000) } };
+  assert.equal(assertReportLineSize(size, { description: 'x'.repeat(MAX_SAMPLE_LINE_BYTES - 2004) }, finalLines), MAX_SAMPLE_LINE_BYTES);
+  assert.throws(() => assertReportLineSize(size, { description: 'x'.repeat(MAX_SAMPLE_LINE_BYTES - 2003) }, finalLines), { code: 'sample_line_size_limit' });
 });

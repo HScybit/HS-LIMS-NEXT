@@ -17,3 +17,18 @@ export async function loadSampleLineContexts(client, organizationId, { datasheet
   if (ids.some((id) => !byOwnerId.has(id))) throw new HttpError(409, 'incomplete_sample_line_history', 'The recorded line-item context is unavailable.');
   return { byOwnerId, metrics: { queryCount: 1, rowCount: result.rowCount, databaseMs: performance.now() - started } };
 }
+
+// The projection grants only section submissions selected by these reports;
+// the PDF role still cannot read base datasheet line contexts.
+export async function loadReportFinalLineContexts(client, organizationId, reportIds) {
+  if (!Array.isArray(reportIds) || !reportIds.length || reportIds.length > 1000) throw new HttpError(400, 'invalid_line_consumer', 'Select a batch of reports.');
+  const ids = [...new Set(reportIds.map((id) => uuid(id, 'Report').toLowerCase()))];
+  const started = performance.now();
+  const result = await client.query(`SELECT instance_id AS "instanceId",${columns} FROM report_final_line_contexts($2::uuid[]) WHERE organization_id=$1`, [organizationId, ids]);
+  const byReportId = new Map();
+  for (const { reportId, instanceId, datasheetId: _datasheetId, ...lineItem } of result.rows) {
+    if (!byReportId.has(reportId)) byReportId.set(reportId, {});
+    byReportId.get(reportId)[instanceId] = lineItem;
+  }
+  return { byReportId, metrics: { queryCount: 1, rowCount: result.rowCount, databaseMs: performance.now() - started } };
+}

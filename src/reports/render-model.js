@@ -2,7 +2,17 @@ import { HttpError } from '../auth/errors.js';
 import { indexOccurrences } from '../templates/occurrences.js';
 import { MAX_CAPTURE_CELLS, MAX_CAPTURE_LAYOUT_NODES } from '../templates/runtime-limits.js';
 import { parameterDetailBytes, parameterDetailValue } from '../templates/parameter-detail.js';
-import { assertSampleLineCounts } from '../templates/sample-line.js';
+import { assertSampleLineBytes, sampleLineCountsBytes } from '../templates/sample-line.js';
+
+export function assertReportLineSize(size, lineItem, finalLineItems = {}) {
+  let bytes = sampleLineCountsBytes(size.lineItemCounts ?? {}, lineItem);
+  for (const [instanceId, counts] of Object.entries(size.finalLineItemCounts ?? {})) {
+    const captured = finalLineItems[instanceId];
+    if (!captured) throw new HttpError(409, 'incomplete_sample_line_history', 'The submitted line-item context is unavailable.');
+    bytes += sampleLineCountsBytes(counts, captured);
+  }
+  return assertSampleLineBytes(bytes);
+}
 
 // Bound the expanded document, including every repeated final-result section,
 // before React allocates it. Repeated report widgets count their content again.
@@ -10,12 +20,12 @@ export function assertReportSize(model, results, finalCaptures = {}, datasheetMo
   let cells = 0; let layoutNodes = 0;
   const imageCounts = {}; const capturedValues = new Map();
   const details = [];
-  const lineItemCounts = {};
+  const lineItemCounts = {}; const finalLineItemCounts = {};
   function add(nextCells, nextNodes) {
     cells += nextCells; layoutNodes += nextNodes;
     if (cells > MAX_CAPTURE_CELLS || layoutNodes > MAX_CAPTURE_LAYOUT_NODES) throw new HttpError(422, 'report_size_limit', 'This report exceeds the supported document size. Select fewer parameters or reduce the template.');
   }
-  function visitSection(definition, sectionId, parentId, runtime, parameter, onlyOccurrenceId, values) {
+  function visitSection(definition, sectionId, parentId, runtime, parameter, onlyOccurrenceId, values, instanceId) {
     const section = definition.sectionsById[sectionId];
     if (section.visible === false) return;
     const occurrences = runtime && section.ownRepeatGroupId ? runtime.forGroup(parentId, section.ownRepeatGroupId) : [{ id: parentId }];
@@ -32,7 +42,10 @@ export function assertReportSize(model, results, finalCaptures = {}, datasheetMo
             const column = definition.columnsById[columnId];
             const field = definition.fieldsById[column.fieldId];
             if (field) add(1, 0);
-            if (field?.widget === 'sample_line_item_data_widget' && field.sourceField) lineItemCounts[field.sourceField] = (lineItemCounts[field.sourceField] ?? 0) + 1;
+            if (field?.widget === 'sample_line_item_data_widget' && field.sourceField) {
+              const counts = instanceId ? (finalLineItemCounts[instanceId] ??= {}) : lineItemCounts;
+              counts[field.sourceField] = (counts[field.sourceField] ?? 0) + 1;
+            }
             if (field?.widget === 'parameter_detail_widget') {
               const value = runtime ? values?.get(`${field.id}:${rowOccurrence.id}`)
                 : parameterDetailValue((selected ?? parameterDetailFallback)?.parameterDetailValues?.[field.label]);
@@ -50,10 +63,10 @@ export function assertReportSize(model, results, finalCaptures = {}, datasheetMo
                 const capturedModel = datasheetModels[capture.versionId];
                 const capturedRuntime = indexOccurrences(capturedModel, capture.occurrences);
                 if (!capturedValues.has(result.instanceId)) capturedValues.set(result.instanceId, new Map((capture.values ?? []).map((value) => [`${value.fieldId}:${value.occurrenceId}`, value])));
-                for (const root of capture.sectionRoots) visitSection(capturedModel, root.sectionId, root.parentOccurrenceId, capturedRuntime, null, root.occurrenceId, capturedValues.get(result.instanceId));
+                for (const root of capture.sectionRoots) visitSection(capturedModel, root.sectionId, root.parentOccurrenceId, capturedRuntime, null, root.occurrenceId, capturedValues.get(result.instanceId), result.instanceId);
               }
             }
-            for (const child of column.childSectionIds) visitSection(definition, child, rowOccurrence.id, runtime, selected, undefined, values);
+            for (const child of column.childSectionIds) visitSection(definition, child, rowOccurrence.id, runtime, selected, undefined, values, instanceId);
           }
         }
       }
@@ -61,6 +74,8 @@ export function assertReportSize(model, results, finalCaptures = {}, datasheetMo
   }
   for (const sectionId of model.rootSectionIds) visitSection(model, sectionId, null, null, null);
   parameterDetailBytes(details);
-  if (lineItem) assertSampleLineCounts(lineItemCounts, lineItem);
-  return { cells, layoutNodes, ...(Object.keys(imageCounts).length ? { imageCounts } : {}), ...(Object.keys(lineItemCounts).length ? { lineItemCounts } : {}) };
+  const size = { cells, layoutNodes, ...(Object.keys(imageCounts).length ? { imageCounts } : {}),
+    ...(Object.keys(lineItemCounts).length ? { lineItemCounts } : {}), ...(Object.keys(finalLineItemCounts).length ? { finalLineItemCounts } : {}) };
+  if (lineItem) assertReportLineSize(size, lineItem, Object.fromEntries(Object.entries(finalCaptures).map(([id, capture]) => [id, capture.lineItem])));
+  return size;
 }

@@ -60,9 +60,11 @@ test('line widgets retain creation observations and report child selection acros
   assert.equal(original.lineItem.productName, 'Product observed at report generation');
   assert.equal(original.lineItem.categoryName, 'Category observed at report generation');
   assert.equal(original.metrics.lineItems.queryCount, 1);
+  assert.equal(original.metrics.finalLineItems.queryCount, 1);
+  for (const sheet of sheets) assert.deepEqual(original.finalCaptures[sheet.capture.instance.id].lineItem, sheet.dataContext.lineItem);
   const renderer = await loadReportRenderer(); const html = renderer.renderReportDocument(original, renderer.stylesheet);
   assert.match(html, /First captured line/); assert.match(html, /Product observed at report generation/);
-  assert.equal(html.includes('Second captured line'), false, 'Nested final sections use the child report line, not their original datasheet line');
+  assert.equal(html.includes('Second captured line'), true, 'A submitted final section retains its own datasheet line');
   assert.equal(html.includes('Unused source'), false);
   for (const type of ['product_wise', 'parameter_wise']) {
     const generated = await work(user, (client, identity) => generateReports(client, identity, flow.sample.id, { ...flow.input, requestId: randomUUID(), reportType: type,
@@ -198,12 +200,18 @@ test('job summaries use their actual job product line independently of bound par
 
 test('typed line contexts require active consumer authority and a worker can read only its leased report', async () => {
   const user = await account(); const flow = await prepareSampleLineFlow(owner, user);
-  const reportId = (await work(user, (client, identity) => generateReports(client, identity, flow.sample.id, flow.input))).items[0].id;
+  const reportId = (await work(user, (client, identity) => generateReports(client, identity, flow.sample.id,
+    { ...flow.input, selectedSampleTestIds: [flow.completed[0].sampleTestId] }))).items[0].id;
   const secondReportId = (await work(user, (client, identity) => generateReports(client, identity, flow.sample.id, { ...flow.input, requestId: randomUUID() }))).items[0].id;
   const denied = await account({ organizationId: user.organizationId, permissions: ['samples.create'] });
   const foreign = await account({ permissions: ['samples.manage'] });
   assert.equal((await getPool().query('SELECT * FROM sample_line_contexts')).rowCount, 0);
-  for (const actor of [denied, foreign]) assert.equal((await work(actor, (client) => client.query('SELECT * FROM sample_line_contexts'))).rowCount, 0);
+  assert.equal((await getPool().query('SELECT * FROM report_final_line_contexts($1::uuid[])', [[reportId]])).rowCount, 0);
+  for (const actor of [denied, foreign]) {
+    assert.equal((await work(actor, (client) => client.query('SELECT * FROM sample_line_contexts'))).rowCount, 0);
+    assert.equal((await work(actor, (client) => client.query('SELECT * FROM report_final_line_contexts($1::uuid[])', [[reportId]]))).rowCount, 0);
+  }
+  for (const ids of [null, [], [null], Array(1001).fill(reportId)]) await assert.rejects(work(user, (client) => client.query('SELECT * FROM report_final_line_contexts($1::uuid[])', [ids])), { code: '22023' });
   await assert.rejects(work(user, (client) => client.query('DELETE FROM sample_line_contexts WHERE report_id=$1', [reportId])), { code: '42501' });
   await assert.rejects(work(user, (client, identity) => loadSampleLineContexts(client, identity.organization_id, { reportIds: [randomUUID()] })), { code: 'incomplete_sample_line_history' });
   const rendererId = createHash('sha256').update(randomUUID()).digest('hex');
@@ -211,6 +219,7 @@ test('typed line contexts require active consumer authority and a worker can rea
   process.loadEnvFile('.env.worker.local'); const worker = createReportWorkerPool(); let job;
   try {
     assert.equal((await worker.query('SELECT * FROM sample_line_contexts')).rowCount, 0);
+    assert.equal((await worker.query('SELECT * FROM report_final_line_contexts($1::uuid[])', [[reportId]])).rowCount, 0);
     job = await transaction(async (client) => (await client.query('SELECT * FROM report_pdf_claim($1,$2)', [rendererId, randomUUID()])).rows[0], { pool: worker });
     await transaction(async (client) => {
       const identity = (await client.query('SELECT * FROM report_pdf_begin_read($1,$2,$3)', [job.organization_id, job.job_id, job.lease_token])).rows[0];
@@ -218,8 +227,14 @@ test('typed line contexts require active consumer authority and a worker can rea
       assert.equal((await client.query('SELECT * FROM sample_line_contexts WHERE datasheet_id IS NOT NULL')).rowCount, 0);
       assert.equal((await client.query('SELECT * FROM sample_line_contexts WHERE report_id=$1', [secondReportId])).rowCount, 0);
       assert.equal((await client.query('SELECT * FROM sample_line_contexts')).rowCount, 1);
+      const finalLines = await client.query('SELECT * FROM report_final_line_contexts($1::uuid[])', [[reportId, secondReportId]]);
+      assert.equal(finalLines.rowCount, 1);
+      assert.equal(finalLines.rows[0].report_id, reportId);
+      assert.equal(finalLines.rows[0].datasheet_id, flow.completed[0].sheet.id);
+      assert.equal(finalLines.rows[0].description, 'First captured line');
       await owner.query('UPDATE memberships SET active=false WHERE organization_id=$1 AND user_id=$2', [user.organizationId, user.userId]);
       assert.equal((await client.query('SELECT * FROM sample_line_contexts')).rowCount, 0, 'Revoking the actor invalidates the line read inside an existing lease');
+      assert.equal((await client.query('SELECT * FROM report_final_line_contexts($1::uuid[])', [[reportId]])).rowCount, 0);
       await owner.query('UPDATE memberships SET active=true WHERE organization_id=$1 AND user_id=$2', [user.organizationId, user.userId]);
     }, { pool: worker });
     await assert.rejects(worker.query('SELECT sample_line_snapshot_reports($1::uuid[])', [[reportId]]), { code: '42501' });

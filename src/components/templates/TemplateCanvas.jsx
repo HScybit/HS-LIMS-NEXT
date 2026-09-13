@@ -73,9 +73,9 @@ function FrozenResultSections({ report, parameter, serialNumber }) {
   // displays its scalar; it must not recursively expand the same sections.
   const dataContext = useMemo(() => {
     const result = { ...parameter, serialNumber };
-    return { sample: report.sample, lineItem: report.lineItem, results: [result], parametersByRequestId: { [parameter.testRequestId]: result },
+    return { sample: report.sample, lineItem: capture.lineItem, results: [result], parametersByRequestId: { [parameter.testRequestId]: result },
       productDetailsByLineId: report.productDetailsByLineId, primaryProductLineId: report.primaryProductLineId, productLineId: parameter.sampleProductId };
-  }, [report.sample, report.lineItem, report.productDetailsByLineId, report.primaryProductLineId, parameter, serialNumber]);
+  }, [report.sample, capture.lineItem, report.productDetailsByLineId, report.primaryProductLineId, parameter, serialNumber]);
   return <TemplateCanvas model={model} mode="view" occurrences={capture.occurrences} values={values} dataContext={dataContext} sectionRoots={capture.sectionRoots} imageSources={report.assets?.templateImages} canvasId={null} idPrefix={`${report.report.id}-${parameter.id}-`} />;
 }
 
