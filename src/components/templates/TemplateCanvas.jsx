@@ -12,6 +12,7 @@ import { contextWidgetPreview, contextWidgetValue, isContextWidget } from '../..
 import { fieldDefaultValue } from '../../templates/defaults.js';
 import TemplateImageWidget from './TemplateImageWidget.jsx';
 import TextWidget from './TextWidget.jsx';
+import { resolveParameterTitle, verticalTitleValue } from '../../templates/parameter-title.js';
 
 export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, onBeginEdit, occurrenceId, validation, disabled = false, report, parameter, serialNumber, imageSources, onUploadImage, showImagePlaceholder }) {
   const plan = mode === 'plan';
@@ -21,8 +22,8 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
   if (field.widget === 'template_image_widget') return <TemplateImageWidget field={field} value={value} mode={mode} sources={imageSources} onUpload={onUploadImage} disabled={disabled} showPlaceholder={showImagePlaceholder} />;
   if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} serialNumber={serialNumber} />;
   if (isContextWidget(field.widget)) return <div className={plan ? 'text-muted small' : 'text-break'}>{plan ? contextWidgetPreview[field.widget] : contextWidgetValue(field, report, parameter, serialNumber)}</div>;
-  if (field.widget === 'text_widget') return <TextWidget field={field} mode={mode} value={value} occurrenceId={occurrenceId} disabled={disabled} onBeginEdit={onBeginEdit} onChange={onChange} onCommit={onCommit} />;
-  if (field.widget === 'vertical_text_widget') return <div className="d-flex align-items-center justify-content-center h-100"><p className="text-center mb-0" style={{ transform: 'rotate(180deg)', writingMode: 'vertical-rl' }}>{field.label}</p></div>;
+  if (field.widget === 'text_widget') return <TextWidget field={field} mode={mode} value={value} parameter={parameter?.parameterTitleValues} occurrenceId={occurrenceId} disabled={disabled} onBeginEdit={onBeginEdit} onChange={onChange} onCommit={onCommit} />;
+  if (field.widget === 'vertical_text_widget') return <div className="d-flex align-items-center justify-content-center h-100"><p className="text-center mb-0" style={{ transform: 'rotate(180deg)', writingMode: 'vertical-rl' }}>{verticalTitleValue(resolveParameterTitle(field.label, plan ? null : parameter?.parameterTitleValues))}</p></div>;
   if (field.widget === 'formula_widget') return plan ? <p className="text-break mb-0">{field.formula}</p> : <><div className={edit ? 'formulaWidgetInput' : undefined} aria-label={label}>{shown}</div>{value?.state === 'invalid' ? <div className="text-danger small" role="status">{value.errorMessage}</div> : null}</>;
   if (field.widget === 'checkbox_widget') return <Checkbox checked={Boolean(shown)} disabled={!edit || disabled} aria-label={label} onChange={edit ? (next) => { onChange?.(field.id, occurrenceId, next); onCommit?.(field.id, occurrenceId, next); } : undefined} />;
   if (!plan && !edit) return <div>{String(shown ?? '')}</div>;

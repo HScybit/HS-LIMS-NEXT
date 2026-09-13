@@ -1,5 +1,6 @@
 import { HttpError } from '../auth/errors.js';
 import { reportContentHtml } from '../report-assets/markup.js';
+import { resolveParameterTitle } from './parameter-title.js';
 
 // Null preserves the existing literal display. Inline images require their own
 // immutable history bindings before this widget can render them as markup.
@@ -14,10 +15,11 @@ export function formattedTextTitle(title) {
   }
 }
 
-export function textWidgetTitle(field, value) {
+export function textWidgetTitle(field, value, parameter) {
   // Source Text displays Title independently of initialized key defaults.
   // Explicit runtime title edits use entered history on an editable field.
-  return field.editable && value?.state === 'present' && value.origin === 'entered' ? value.textValue : field.label;
+  const title = field.editable && value?.state === 'present' && value.origin === 'entered' ? value.textValue : field.label;
+  return resolveParameterTitle(title, parameter);
 }
 
 // The source title editor trims on commit and leaves blank or unchanged

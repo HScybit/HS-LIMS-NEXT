@@ -40,7 +40,9 @@ export async function loadDatasheet(client, identity, datasheetId, { sampleId, a
   const metadataMs = performance.now() - started;
   const captureRevision = atRevision ?? sheet.captureRevision;
   const definition = await loadDefinition(client, identity.organization_id, sheet.templateVersionId);
-  const context = Object.values(definition.model.fieldsById).some((field) => isContextWidget(field.widget))
+  const hasParameterLoop = Object.values(definition.model.groupsById).some((group) => group.source === 'test_requests');
+  const context = Object.values(definition.model.fieldsById).some((field) => isContextWidget(field.widget)
+    || hasParameterLoop && ['text_widget', 'vertical_text_widget'].includes(field.widget))
     ? await loadDatasheetContext(client, identity, sheet, captureRevision) : null;
   const productSelectors = Object.values(definition.model.fieldsById).filter((field) => field.widget === 'product_detail_widget').map((field) => field.alias);
   const products = productSelectors.length ? await loadSampleProductContext(client, identity, sheet.sampleId, productSelectors,

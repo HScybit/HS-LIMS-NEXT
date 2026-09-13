@@ -729,6 +729,13 @@
       "when": 1789294375809,
       "tag": "0103_template_image_registration_access",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1789297829101,
+      "tag": "0104_parameter_title_context",
+      "breakpoints": true
     }
   ]
 }

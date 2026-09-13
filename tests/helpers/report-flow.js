@@ -6,7 +6,7 @@ import { editTemplate } from '../../src/templates/authoring.js';
 import { registerSample } from '../../src/samples/register.js';
 import { generateTestRequests } from '../../src/test-requests/generate.js';
 import { allocateTestRequest } from '../../src/test-requests/allocate.js';
-import { loadCapture } from '../../src/templates/loader.js';
+import { loadCapture, loadDefinition } from '../../src/templates/loader.js';
 import { saveCapture } from '../../src/templates/capture.js';
 import { loadWorkflowRun } from '../../src/workflows/load.js';
 import { submitDatasheetTransition } from '../../src/workflows/requests.js';
@@ -41,7 +41,8 @@ export async function prepareReportFlow(owner, account, { complete = true, print
     let submission;
     if (complete) {
       const capture = await work((client, identity) => loadCapture(client, identity.organization_id, sheet.template_instance_id), { readOnly: true });
-      const inputs = fixture.template.records.fields.filter((field) => field.widget === 'number_widget')
+      const definition = await work((client, identity) => loadDefinition(client, identity.organization_id, capture.instance.version_id), { readOnly: true });
+      const inputs = Object.values(definition.model.fieldsById).filter((field) => field.widget === 'number_widget')
         .flatMap((field) => capture.occurrences.filter((row) => row.groupId === field.repeatGroupId).map((row) => ({ fieldId: field.id, occurrenceId: row.id, state: 'present', value: '0' })));
       const saved = await work((client, identity) => saveCapture(client, identity, sheet.template_instance_id, capture.revision, inputs));
       const run = await work((client, identity) => loadWorkflowRun(client, identity, allocation.workflowRunId), { readOnly: true });

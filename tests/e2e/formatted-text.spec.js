@@ -74,6 +74,7 @@ test('formatted titles retain raw editing, scientific markup, safe fallback and 
   await expect(titleCells.first().locator('em')).toHaveText('Edited H2O');
   await page.screenshot({ path: testInfo.outputPath('formatted-text-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.lims-main')).toHaveCSS('margin-left', '0px');
   await page.screenshot({ path: testInfo.outputPath('formatted-text-mobile.png'), fullPage: true });
   await titleCells.first().getByRole('button', { name: 'Edit formatted_title', exact: true }).click(); await input.fill(unbound);
   const fallbackSave = page.waitForResponse((response) => response.url().endsWith(`${api}/values`) && response.request().method() === 'PATCH');

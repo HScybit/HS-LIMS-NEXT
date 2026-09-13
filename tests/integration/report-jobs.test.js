@@ -27,7 +27,7 @@ before(async () => {
   account = { ...user, ...await signIn({ identifier: user.username, password: user.password }) };
   await verifyReportWorkerRole(worker);
   const functions = await worker.query("SELECT proc.proname FROM pg_proc proc JOIN pg_namespace ns ON ns.oid=proc.pronamespace WHERE ns.nspname='public' AND proc.prosecdef AND has_function_privilege(current_user,proc.oid,'EXECUTE') ORDER BY proc.proname");
-  assert.deepEqual(functions.rows.map((row) => row.proname), ['laboratory_product_context_scope', 'report_pdf_begin_read', 'report_pdf_claim', 'report_pdf_complete', 'report_pdf_context_org', 'report_pdf_fail']);
+  assert.deepEqual(functions.rows.map((row) => row.proname), ['laboratory_parameter_context_scope', 'laboratory_product_context_scope', 'report_pdf_begin_read', 'report_pdf_claim', 'report_pdf_complete', 'report_pdf_context_org', 'report_pdf_fail']);
 });
 after(async () => { await closePool(); await worker.end(); await owner.end(); });
 

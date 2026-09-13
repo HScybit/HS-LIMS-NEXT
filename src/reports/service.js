@@ -16,6 +16,7 @@ import { finalResultSectionRoots } from '../datasheets/final-result.js';
 import { assertReportSize } from './render-model.js';
 import { loadReportAssets, loadReportAssetBatch } from './assets.js';
 import { loadSampleProductContext } from '../samples/product-context.js';
+import { parameterTitleProjection } from '../templates/parameter-title.js';
 
 const scope = (table, organizationId) => eq(table.organizationId, organizationId);
 const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, isFinalized: report.isFinalized, generatedAt: report.generatedAt });
@@ -203,13 +204,21 @@ export async function loadReport(client, identity, reportId) {
     chosen.product_code AS "productCode", chosen.product_name AS "productName", chosen.request_number AS "requestNumber", chosen.analyst_name AS "analystName", chosen.is_accredited AS "isAccredited",
     chosen.request_status AS "requestStatus", chosen.datasheet_status AS "datasheetStatus", chosen.completed_at AS "completedAt",
     specification.parameter_name AS "parameterName", specification.method_name AS "methodName", specification.rule_name AS specification,
+    specification.test_parameter_id AS "parameterId",specification.organization_id AS "parameterOrganizationId",specification.parameter_master_key AS "parameterKey",
+    parameter.history_available AS "parameterHistoryAvailable",parameter.description AS "parameterDescription",parameter.display_order AS "parameterOrder",
+    parameter.scheme_abbreviation AS "parameterSchemeAbbreviation",parameter.laboratory_id AS "parameterLaboratoryId",
     submission.unit_symbol AS "measurementUnit", submission.submitted_at AS "submittedAt", submission.source, submission.instance_id AS "instanceId", submission.version_id AS "versionId", submission.capture_revision AS "captureRevision",
     submission.result_type AS "resultType", submission.number_value AS "numberValue", submission.text_value AS "textValue", submission.boolean_value AS "booleanValue", boundary.outcome AS "decisionOutcome"
     FROM sample_report_tests chosen JOIN analytical_specifications specification ON specification.organization_id=chosen.organization_id AND specification.id=chosen.specification_id
+    LEFT JOIN laboratory_parameter_context parameter ON parameter.organization_id=specification.organization_id AND parameter.specification_id=specification.id
     JOIN datasheet_submissions submission ON submission.organization_id=chosen.organization_id AND submission.id=chosen.submission_id
     LEFT JOIN analytical_specification_limits boundary ON boundary.organization_id=chosen.organization_id AND boundary.specification_id=chosen.specification_id AND boundary.id=chosen.decision_limit_id
     WHERE chosen.organization_id=$1 AND chosen.report_id=$2 ORDER BY chosen.display_order`, [identity.organization_id, reportId])).rows;
-  for (const result of results) result.finalResult = result.resultType === 'numeric' ? result.numberValue : result.resultType === 'boolean' ? result.booleanValue : result.textValue;
+  for (const result of results) {
+    result.finalResult = result.resultType === 'numeric' ? result.numberValue : result.resultType === 'boolean' ? result.booleanValue : result.textValue;
+    result.parameterTitleValues = parameterTitleProjection(result);
+    for (const key of ['parameterId', 'parameterOrganizationId', 'parameterKey', 'parameterHistoryAvailable', 'parameterDescription', 'parameterOrder', 'parameterSchemeAbbreviation', 'parameterLaboratoryId']) delete result[key];
+  }
   const sectionResults = results.filter((result) => result.source === 'section');
   const loaded = await loadDefinitions(client, identity.organization_id, [...new Set([report.templateVersionId, ...sectionResults.map((result) => result.versionId)])]);
   const { finalCaptures, datasheetModels, metrics: captureMetrics } = await reportFinalSections(client, identity, results, loaded.definitions);

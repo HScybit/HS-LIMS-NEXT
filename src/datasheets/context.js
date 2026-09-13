@@ -2,6 +2,7 @@
 // Scientific labels come from frozen specifications; actor labels use a bounded
 // tenant-scoped lookup. No per-widget request or serialized context is persisted.
 import { valuePayload } from '../templates/calculations.js';
+import { parameterTitleProjection } from '../templates/parameter-title.js';
 
 export async function loadDatasheetContext(client, identity, sheet, captureRevision) {
   const started = performance.now();
@@ -13,6 +14,9 @@ export async function loadDatasheetContext(client, identity, sheet, captureRevis
   ), members AS MATERIALIZED (
     SELECT request.id AS "testRequestId",request.request_number AS "requestNumber",product.product_name AS "productName",product.sample_product_id AS "sampleProductId",
       specification.parameter_name AS "parameterName",specification.method_name AS "methodName",specification.unit_symbol AS "measurementUnit",specification.rule_name AS specification,
+      specification.test_parameter_id AS "parameterId",specification.organization_id AS "parameterOrganizationId",specification.parameter_master_key AS "parameterKey",
+      parameter.history_available AS "parameterHistoryAvailable",parameter.description AS "parameterDescription",parameter.display_order AS "parameterOrder",
+      parameter.scheme_abbreviation AS "parameterSchemeAbbreviation",parameter.laboratory_id AS "parameterLaboratoryId",
       submission.submitted_at AS "submittedAt",source_sheet.completed_at AS "completedAt",
       CASE WHEN selected.id IS NOT NULL THEN selected.recorded_by ELSE coalesce(submission.submitted_by,assignment.assigned_user_id) END AS analyst_id,
       CASE WHEN selected.id IS NULL THEN submission.result_type END AS result_type,
@@ -26,6 +30,7 @@ export async function loadDatasheetContext(client, identity, sheet, captureRevis
       AND source_sheet.id=CASE WHEN $3 THEN coalesce(request.final_datasheet_id,initial_sheet.id) ELSE $4::uuid END
     JOIN analytical_specifications specification ON specification.organization_id=request.organization_id
       AND specification.id=CASE WHEN $3 THEN request.specification_id ELSE source_sheet.specification_id END
+    LEFT JOIN laboratory_parameter_context parameter ON parameter.organization_id=specification.organization_id AND parameter.specification_id=specification.id
     LEFT JOIN datasheet_submissions submission ON submission.organization_id=source_sheet.organization_id AND submission.id=source_sheet.latest_submission_id
     LEFT JOIN selected_results selected ON selected.test_request_id=request.id AND (submission.id IS NULL OR selected.recorded_at>=submission.submitted_at)
     LEFT JOIN test_request_assignments assignment ON assignment.organization_id=request.organization_id AND assignment.test_request_id=request.id
@@ -45,6 +50,7 @@ export function assembleDatasheetContext(context, capture) {
   const first = context.rows[0];
   const sample = first ? Object.fromEntries(['sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference'].map((key) => [key, first[key]])) : {};
   const results = context.rows.map((row, index) => ({ id: row.testRequestId, serialNumber: index + 1, ...Object.fromEntries(['testRequestId', 'requestNumber', 'productName', 'sampleProductId', 'parameterName', 'methodName', 'measurementUnit', 'specification', 'analystName', 'submittedAt', 'completedAt', 'resultEntryId', 'resultDatasheetId', 'resultSavedAt'].map((key) => [key, row[key]])),
+    parameterTitleValues: parameterTitleProjection(row),
     finalResult: row.resultEntryId ? valuePayload(capture.pinnedValues.get(`${row.resultInstanceId}:${row.resultFieldId}:${row.resultOccurrenceId}:${row.resultValueRevision}`))
       : row.result_type === 'numeric' ? row.number_value : row.result_type === 'boolean' ? row.boolean_value : row.text_value }));
   return { sample, results, parametersByRequestId: Object.fromEntries(results.map((row) => [row.testRequestId, row])) };

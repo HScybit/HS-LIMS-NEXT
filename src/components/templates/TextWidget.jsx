@@ -3,11 +3,13 @@
 import { useMemo, useRef, useState } from 'react';
 import AppIcon from '../ui/AppIcon.jsx';
 import { editedTextTitle, formattedTextTitle, textWidgetTitle } from '../../templates/text.js';
+import { stringifyTitleValue } from '../../templates/parameter-title.js';
 
-export default function TextWidget({ field, mode, value, occurrenceId, disabled, onBeginEdit, onChange, onCommit }) {
-  const title = textWidgetTitle(field, value);
-  const markup = useMemo(() => formattedTextTitle(title), [title]);
-  const titleProps = markup === null ? { children: title } : { dangerouslySetInnerHTML: { __html: markup } };
+export default function TextWidget({ field, mode, value, parameter, occurrenceId, disabled, onBeginEdit, onChange, onCommit }) {
+  const title = textWidgetTitle(field, value, mode === 'plan' ? null : parameter);
+  const displayTitle = stringifyTitleValue(title);
+  const markup = useMemo(() => formattedTextTitle(displayTitle), [displayTitle]);
+  const titleProps = markup === null ? { children: displayTitle } : { dangerouslySetInnerHTML: { __html: markup } };
   const label = field.alias || field.label || 'text';
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -21,7 +23,7 @@ export default function TextWidget({ field, mode, value, occurrenceId, disabled,
   function begin() {
     if (disabled) return;
     session.current = { title, restore: onBeginEdit?.(field.id, occurrenceId) };
-    setEditing(true); change(title);
+    setEditing(true); change(displayTitle);
   }
   function finish(save) {
     const current = session.current;

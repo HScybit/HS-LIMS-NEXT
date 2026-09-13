@@ -264,6 +264,9 @@ try {
       await saveProduct(client, identity, { id: fixture.product.id, revision: 1, requestId: randomUUID(), key: fixture.product.code,
         name: 'Fresh captured Product', description: 'Fresh immutable Product context',
         customFields: [{ fieldId: productContextField.id, fieldRevision: 1, value: false }] });
+      await saveTestParameter(client, identity, { id: fixture.parameter.id, revision: 1, requestId: randomUUID(), name: 'Fresh captured parameter',
+        key: fixture.parameter.masterKey, schemeAbbreviation: fixture.parameter.schemeAbbreviation, order: 0, laboratoryId: fixture.laboratory.id,
+        description: '<b>Fresh parameter H<sub>2</sub>O</b>', measurementUncertainty: null });
     }, prepareDatasheet: async (client, identity, template) => {
       const result = await addImageWidget(client, identity, template, templateImage, { rowId: template.records.rows[0].id });
       assert.equal(result.metrics.assets.queryCount, 1);
@@ -275,6 +278,11 @@ try {
       const vertical = await editTemplate(client, identity, template.versionId, added.model.version.revision,
         { type: 'configureField', columnId, widget: 'vertical_text_widget', alias: 'fresh_vertical_title', label: 'Fresh vertical <b>title</b>', defaultValue: 'Unused vertical default' });
       verticalTextFieldId = vertical.model.columnsById[columnId].fieldId;
+      const titleColumn = await editTemplate(client, identity, template.versionId, vertical.model.version.revision, { type: 'addColumn', rowId });
+      const title = await editTemplate(client, identity, template.versionId, titleColumn.model.version.revision,
+        { type: 'configureField', columnId: titleColumn.model.rowsById[rowId].columnIds.at(-1), widget: 'text_widget', alias: 'fresh_parameter_title', label: 'description' });
+      await editTemplate(client, identity, template.versionId, title.model.version.revision,
+        { type: 'configureSection', id: template.records.sections[0].id, name: 'Final parameter results', isFinalResult: true, isParameterLoop: true });
     } });
   const verticalCapture = await withSession(session.token, (client, identity) => loadCapture(client, identity.organization_id, reportFlow.sheet.template_instance_id), { readOnly: true });
   assert.equal(verticalCapture.values.some((value) => value.fieldId === verticalTextFieldId), false);
@@ -313,6 +321,8 @@ try {
     assert.equal((await loadCustomCss(client, identity, { versionId: assets.stylesheet.versionId })).cssContent, assets.stylesheet.cssContent);
   }, { csrfToken: session.csrfToken });
   const captured = await withSession(session.token, (client, identity) => loadReport(client, identity, reportId), { readOnly: true });
+  assert.equal(captured.results[0].parameterTitleValues.order, 0);
+  assert.equal(captured.results[0].parameterTitleValues.description, '<b>Fresh parameter H<sub>2</sub>O</b>');
   assert.equal(captured.assets.header.versionId, assets.header.versionId);
   assert.ok(captured.assets.header.html.includes(`data:image/png;base64,${assets.content.toString('base64')}`));
   assert.equal(captured.assets.footer.versionId, assets.footer.versionId);
@@ -325,14 +335,17 @@ try {
   const queued = await withSession(session.token, (client, identity) => enqueueReportPdf(client, identity, reportId), { csrfToken: session.csrfToken });
   worker = createReportWorkerPool(workerUrl.href); await verifyReportWorkerRole(worker);
   assert.equal((await worker.query('SELECT id FROM sample_reports')).rowCount, 0);
+  assert.equal((await worker.query('SELECT * FROM laboratory_parameter_context')).rowCount, 0);
   const renderer = await loadReportRenderer(); let checkedProductContext = false;
   const printed = await processNextReportJob({ pool: worker, renderer: { ...renderer,
     renderReportDocument(report, stylesheet) {
       assert.deepEqual(report.productDetailsByLineId, captured.productDetailsByLineId);
+      assert.deepEqual(report.results.map((result) => result.parameterTitleValues), captured.results.map((result) => result.parameterTitleValues));
       const html = renderer.renderReportDocument(report, stylesheet);
       assert.ok(html.includes('Fresh captured Product')); assert.ok(html.includes('Fresh immutable Product context'));
       assert.ok(html.includes('>false</div>')); assert.ok(!html.includes('Configured default is not a captured Product value'));
       assert.ok(html.includes('Fresh vertical &lt;b&gt;title&lt;/b&gt;'));
+      assert.ok(html.includes('<b>Fresh parameter H<sub>2</sub>O</b>'));
       assert.ok(html.includes('transform:rotate(180deg);writing-mode:vertical-rl')); assert.ok(!html.includes('Unused vertical default'));
       checkedProductContext = true; return html;
     },
