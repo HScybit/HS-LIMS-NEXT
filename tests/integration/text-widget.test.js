@@ -8,6 +8,13 @@ import { editTemplate, freezeTemplate } from '../../src/templates/authoring.js';
 import { createCapture, saveCapture, changeRepeat } from '../../src/templates/capture.js';
 import { loadCapture } from '../../src/templates/loader.js';
 import { textWidgetTitle } from '../../src/templates/text.js';
+import { prepareReportFlow } from '../helpers/report-flow.js';
+import { generateReports, loadReport } from '../../src/reports/service.js';
+import { loadReportRenderer } from '../../src/reports/renderer.js';
+import { randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
+import { enqueueReportPdf, reportPdfFile } from '../../src/reports/jobs.js';
+import { processNextReportJob, createReportWorkerPool } from '../../src/reports/worker.js';
 
 const owner = ownerPool();
 after(async () => { await closePool(); await owner.end(); });
@@ -59,4 +66,37 @@ test('repeated Text defaults keep source titles while copied explicit title edit
   const reloaded = await work((client, identity) => loadCapture(client, identity.organization_id, created.instanceId));
   assert.equal(reloaded.values.filter((value) => value.fieldId === fields[0].id && value.origin === 'entered').length, 2);
   assert.deepEqual((await work((client, identity) => loadCapture(client, identity.organization_id, created.instanceId, 1))).values, original.values);
+});
+
+test('formatted Text preserves scientific markup in captured report output after later title changes', async () => {
+  const user = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.create', 'samples.manage', 'test_requests.allocate'] });
+  const account = { ...user, ...await signIn({ identifier: user.username, password: user.password }) };
+  const work = (action) => withSession(account.token, action, { csrfToken: account.csrfToken });
+  const addTitle = async (client, identity, template, label) => {
+    const added = await editTemplate(client, identity, template.versionId, template.revision, { type: 'addColumn', rowId: template.records.rows[0].id });
+    const columnId = added.model.rowsById[template.records.rows[0].id].columnIds.at(-1);
+    const result = await editTemplate(client, identity, template.versionId, added.model.version.revision,
+      { type: 'configureField', columnId, widget: 'text_widget', alias: 'formatted_title', label });
+    return { ...result, columnId };
+  };
+  const title = '<strong>Water H<sub>2</sub>O</strong> &amp; x<sup>2</sup> = 0';
+  const flow = await prepareReportFlow(owner, account, { finalSection: true, prepareDatasheet: (client, identity, template) => addTitle(client, identity, template, title) });
+  const configured = await work((client, identity) => addTitle(client, identity, flow.template, '<p style="text-align:center"><b>Detailed report</b></p>'));
+  const generated = await work((client, identity) => generateReports(client, identity, flow.sample.id, flow.input));
+  const reportId = generated.items[0].id;
+  const original = await work((client, identity) => loadReport(client, identity, reportId));
+  const renderer = await loadReportRenderer(); const html = renderer.renderReportDocument(original, renderer.stylesheet);
+  assert.ok(html.includes(title)); assert.ok(html.includes('<p style="text-align:center"><b>Detailed report</b></p>'));
+  await work((client, identity) => editTemplate(client, identity, flow.template.versionId, configured.model.version.revision,
+    { type: 'configureField', columnId: configured.columnId, widget: 'text_widget', alias: 'formatted_title', label: 'Later literal title' }));
+  const later = await work((client, identity) => loadReport(client, identity, reportId));
+  assert.equal(renderer.renderReportDocument(later, renderer.stylesheet), html);
+  process.loadEnvFile('.env.worker.local'); const worker = createReportWorkerPool();
+  try {
+    const queued = await work((client, identity) => enqueueReportPdf(client, identity, reportId));
+    assert.deepEqual(await processNextReportJob({ pool: worker, renderer, workerId: randomUUID() }), { jobId: queued.job.id, status: 'succeeded' });
+    const file = await work((client, identity) => reportPdfFile(client, identity, reportId));
+    assert.equal(file.content.subarray(0, 5).toString(), '%PDF-');
+    await writeFile('.local/m03-formatted-text-report.pdf', file.content);
+  } finally { await worker.end(); }
 });

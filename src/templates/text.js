@@ -1,3 +1,19 @@
+import { HttpError } from '../auth/errors.js';
+import { reportContentHtml } from '../report-assets/markup.js';
+
+// Null preserves the existing literal display. Inline images require their own
+// immutable history bindings before this widget can render them as markup.
+export function formattedTextTitle(title) {
+  if (typeof title !== 'string' || !/[<&]/.test(title)) return null;
+  try {
+    const { html, imageIds } = reportContentHtml(title);
+    return imageIds.length ? null : html;
+  } catch (error) {
+    if (error instanceof HttpError) return null;
+    throw error;
+  }
+}
+
 export function textWidgetTitle(field, value) {
   // Source Text displays Title independently of initialized key defaults.
   // Explicit runtime title edits use entered history on an editable field.

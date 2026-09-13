@@ -45,7 +45,7 @@ function imageId(source) {
 // state. Resolve immutable image IDs separately and pin them with the version.
 export function reportContentHtml(input, { imageSources } = {}) {
   if (typeof input !== 'string' || input.length > 1_000_000) throw new HttpError(400, 'invalid_report_html', 'Report content must contain at most 1,000,000 characters.');
-  const images = new Set(); let depth = 0; let nodes = 0; let resolvedBytes = Buffer.byteLength(input);
+  const images = new Set(); let depth = 0; let nodes = 0; let resolvedBytes = new TextEncoder().encode(input).byteLength;
   const html = sanitizeHtml(input, {
     allowedTags: tags,
     allowedAttributes: { '*': ['class', 'style', 'title', 'dir', 'lang'], a: ['href', 'target', 'rel'], img: ['src', 'alt', 'width', 'height'],
