@@ -21,7 +21,7 @@ function storedValues(identity, instance, versionId, nextRevision, values) {
 function defaults(model, occurrences) {
   const fieldsByGroup = new Map();
   for (const field of Object.values(model.fieldsById)) {
-    if (['formula_widget', 'product_detail_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
+    if (['formula_widget', 'product_detail_widget', 'vertical_text_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
     const group = field.repeatGroupId ?? null;
     if (!fieldsByGroup.has(group)) fieldsByGroup.set(group, []);
     fieldsByGroup.get(group).push(field);
@@ -68,7 +68,7 @@ function enteredValue(model, occurrences, input) {
   const field = model.fieldsById[input.fieldId];
   const occurrence = occurrences.get(input.occurrenceId);
   if (!field || !occurrence || (field.repeatGroupId ?? null) !== (occurrence.groupId ?? null)) throw new HttpError(400, 'invalid_capture_field', 'Field does not belong to this capture occurrence.');
-  if (['formula_widget', 'template_image_widget'].includes(field.widget) || isContextWidget(field.widget) || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
+  if (['formula_widget', 'template_image_widget', 'vertical_text_widget'].includes(field.widget) || isContextWidget(field.widget) || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
   if (!['present', 'empty', 'absent'].includes(input.state)) throw new HttpError(400, 'invalid_value_state', 'Select a supported value state.');
   if (input.state !== 'present' && input.value !== undefined && input.value !== null && input.value !== '') throw new HttpError(400, 'unexpected_value', 'An empty or absent value cannot include a payload.');
   input = resolveResultInput(field, input);

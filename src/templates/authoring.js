@@ -83,6 +83,7 @@ async function configureField(db, base, model, command) {
   if (serialPadding !== null && (command.widget !== 'sno_widget' || !Number.isSafeInteger(serialPadding) || serialPadding < 0 || serialPadding > 100)) throw new HttpError(400, 'invalid_serial_padding', 'Serial number padding must be between 0 and 100.');
   if (contextual && command.editable === true) throw new HttpError(400, 'readonly_context_widget', 'This widget displays its recorded source value.');
   if (command.widget === 'template_image_widget' && command.editable === true) throw new HttpError(400, 'readonly_image_widget', 'Template images can only be changed in the designer.');
+  if (command.widget === 'vertical_text_widget' && command.editable === true) throw new HttpError(400, 'readonly_text_widget', 'Vertical Text displays its configured title.');
   if (command.image !== undefined && command.widget !== 'template_image_widget') throw new HttpError(400, 'invalid_image_config', 'Image configuration belongs to an image widget.');
   const alias = text(command.alias, 'Identifier', 200, { optional: true }).trim();
   if (!/^[A-Za-z0-9_]*$/.test(alias)) throw new HttpError(400, 'invalid_alias', 'Identifier can contain only letters, numbers and underscores.');
@@ -100,7 +101,7 @@ async function configureField(db, base, model, command) {
     if (config.minimum !== null && config.maximum !== null && Number(config.minimum) > Number(config.maximum)) throw new HttpError(400, 'invalid_bounds', 'Minimum cannot exceed maximum.');
   }
   if (command.defaultValue !== undefined) {
-    if (field.widget === 'product_detail_widget') {
+    if (['product_detail_widget', 'vertical_text_widget'].includes(field.widget)) {
       const configured = text(command.defaultValue, 'Default Value', 16000, { optional: true });
       if (configured.includes('\0')) throw new HttpError(400, 'invalid_input', 'Default Value cannot contain null characters.');
       Object.assign(field, { defaultState: configured === '' ? 'absent' : 'present', defaultText: configured === '' ? null : configured });
@@ -108,7 +109,7 @@ async function configureField(db, base, model, command) {
       if (field.widget !== 'result_widget') throw new HttpError(400, 'unsupported_default', 'Default configuration is not available for this widget.');
       Object.assign(field, resultDefaultFields({ ...field, numeric: config }, command.defaultValue));
     }
-  } else if (field.widget === 'product_detail_widget' && previous) {
+  } else if (['product_detail_widget', 'vertical_text_widget'].includes(field.widget) && previous) {
     Object.assign(field, { defaultState: previous.defaultState, defaultText: previous.defaultText });
   } else if (field.widget === 'result_widget' && previous?.defaultState === 'present') {
     // A bounds/precision edit cannot publish a default that the new field rejects.

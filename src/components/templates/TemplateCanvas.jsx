@@ -22,6 +22,7 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
   if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} serialNumber={serialNumber} />;
   if (isContextWidget(field.widget)) return <div className={plan ? 'text-muted small' : 'text-break'}>{plan ? contextWidgetPreview[field.widget] : contextWidgetValue(field, report, parameter, serialNumber)}</div>;
   if (field.widget === 'text_widget') return <TextWidget field={field} mode={mode} value={value} occurrenceId={occurrenceId} disabled={disabled} onBeginEdit={onBeginEdit} onChange={onChange} onCommit={onCommit} />;
+  if (field.widget === 'vertical_text_widget') return <div className="d-flex align-items-center justify-content-center h-100"><p className="text-center mb-0" style={{ transform: 'rotate(180deg)', writingMode: 'vertical-rl' }}>{field.label}</p></div>;
   if (field.widget === 'formula_widget') return plan ? <p className="text-break mb-0">{field.formula}</p> : <><div className={edit ? 'formulaWidgetInput' : undefined} aria-label={label}>{shown}</div>{value?.state === 'invalid' ? <div className="text-danger small" role="status">{value.errorMessage}</div> : null}</>;
   if (field.widget === 'checkbox_widget') return <Checkbox checked={Boolean(shown)} disabled={!edit || disabled} aria-label={label} onChange={edit ? (next) => { onChange?.(field.id, occurrenceId, next); onCommit?.(field.id, occurrenceId, next); } : undefined} />;
   if (!plan && !edit) return <div>{String(shown ?? '')}</div>;

@@ -715,6 +715,13 @@
       "when": 1789287075968,
       "tag": "0101_product_detail_readonly",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1789291249628,
+      "tag": "0102_vertical_text_widget",
+      "breakpoints": true
     }
   ]
 }

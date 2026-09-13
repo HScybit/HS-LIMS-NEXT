@@ -242,6 +242,7 @@ try {
   const productContextField = await withSession(session.token, (client, identity) => saveCustomField(client, identity,
     { id: randomUUID(), revision: 0, requestId: randomUUID(), label: 'Fresh Product flag', key: 'fresh_product_flag', associatedWith: 'product', fieldType: 'checkbox' }), { csrfToken: session.csrfToken });
   const productContextSelector = 'project_field__splitter__fresh_product_flag';
+  let verticalTextFieldId;
   const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true,
     prepareProduct: async (client, identity, fixture) => {
       await saveProduct(client, identity, { id: fixture.product.id, revision: 1, requestId: randomUUID(), key: fixture.product.code,
@@ -251,8 +252,16 @@ try {
       const result = await addImageWidget(client, identity, template, templateImage, { rowId: template.records.rows[0].id });
       assert.equal(result.metrics.assets.queryCount, 1);
       assert.equal((await uploadTemplateImage(client, identity, template.versionId, result.fieldId, result.model.version.revision - 1, templateImage)).replayed, true);
-      await addProductWidgets(client, identity, { ...template, revision: result.model.version.revision }, template.records.sections[0].id, ['description', productContextSelector]);
+      const products = await addProductWidgets(client, identity, { ...template, revision: result.model.version.revision }, template.records.sections[0].id, ['description', productContextSelector]);
+      const rowId = template.records.rows[0].id;
+      const added = await editTemplate(client, identity, template.versionId, products.revision, { type: 'addColumn', rowId });
+      const columnId = added.model.rowsById[rowId].columnIds.at(-1);
+      const vertical = await editTemplate(client, identity, template.versionId, added.model.version.revision,
+        { type: 'configureField', columnId, widget: 'vertical_text_widget', alias: 'fresh_vertical_title', label: 'Fresh vertical <b>title</b>', defaultValue: 'Unused vertical default' });
+      verticalTextFieldId = vertical.model.columnsById[columnId].fieldId;
     } });
+  const verticalCapture = await withSession(session.token, (client, identity) => loadCapture(client, identity.organization_id, reportFlow.sheet.template_instance_id), { readOnly: true });
+  assert.equal(verticalCapture.values.some((value) => value.fieldId === verticalTextFieldId), false);
   const assets = await withSession(session.token, async (client, identity) => {
     const created = await createReportAssets(client, identity);
     const vector = await uploadReportImage(client, identity, { requestId: randomUUID(), originalName: 'Fresh vector.svg', mediaType: 'image/svg+xml', content: reportSvg });
@@ -307,6 +316,8 @@ try {
       const html = renderer.renderReportDocument(report, stylesheet);
       assert.ok(html.includes('Fresh captured Product')); assert.ok(html.includes('Fresh immutable Product context'));
       assert.ok(html.includes('>false</div>')); assert.ok(!html.includes('Configured default is not a captured Product value'));
+      assert.ok(html.includes('Fresh vertical &lt;b&gt;title&lt;/b&gt;'));
+      assert.ok(html.includes('transform:rotate(180deg);writing-mode:vertical-rl')); assert.ok(!html.includes('Unused vertical default'));
       checkedProductContext = true; return html;
     },
   }, workerId: randomUUID() });
