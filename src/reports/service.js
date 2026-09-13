@@ -19,6 +19,7 @@ import { loadSampleProductContext } from '../samples/product-context.js';
 import { parameterTitleProjection } from '../templates/parameter-title.js';
 import { parameterTitleRequests } from '../templates/parameter-title-requests.js';
 import { loadParameterTitleFields, requestedParameterTitles } from '../datasheets/parameter-title-fields.js';
+import { reportParameterDetailFallback, reportParameterDetailRequests, reportParameterDetails } from './parameter-details.js';
 
 const scope = (table, organizationId) => eq(table.organizationId, organizationId);
 const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, isFinalized: report.isFinalized, generatedAt: report.generatedAt });
@@ -43,6 +44,7 @@ export async function reportCandidates(client, identity, sampleId) {
       sheet.status AS "datasheetStatus", submission.specification_id AS "specificationId", submission.id AS "submissionId", submission.submitted_by AS "submittedBy",
       submission.source, submission.instance_id AS "instanceId", submission.version_id AS "versionId", submission.capture_revision AS "captureRevision",
       specification.parameter_name AS "parameterName", specification.method_name AS "methodName", specification.rule_name AS specification, submission.unit_symbol AS "measurementUnit",
+      specification.test_parameter_id AS "parameterId",specification.parameter_revision AS "parameterRevision",
       submission.result_type AS "resultType", submission.number_value AS "numberValue", submission.text_value AS "textValue", submission.boolean_value AS "booleanValue",
       boundary.id AS "decisionLimitId", boundary.outcome AS "decisionOutcome"
     FROM sample_products product JOIN sample_tests test ON test.organization_id=product.organization_id AND test.sample_product_id=product.id
@@ -138,7 +140,11 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
   const { versions, models, definitions } = await resolveCaptureVersions(client, identity, groups.map((group) => group.templateId),
     { kind: 'report', additionalVersionIds: selectedResults.filter((result) => result.source === 'section').map((result) => result.versionId) });
   const history = await reportFinalSections(client, identity, selectedResults, definitions);
-  const imageCounts = new Map(groups.map((group) => [group.key, assertReportSize(models.get(group.templateId), group.results, history.finalCaptures, history.datasheetModels).imageCounts ?? {}]));
+  const detailRequests = new Map();
+  for (const group of groups) reportParameterDetailRequests(models.get(group.templateId), group.results, reportParameterDetailFallback(group.results), detailRequests);
+  await reportParameterDetails(client, identity, selectedResults, detailRequests);
+  const imageCounts = new Map(groups.map((group) => [group.key, assertReportSize(models.get(group.templateId), group.results, history.finalCaptures, history.datasheetModels,
+    { parameterDetailFallback: reportParameterDetailFallback(group.results) }).imageCounts ?? {}]));
   const titleRequests = new Map();
   for (const group of groups) parameterTitleRequests(models.get(group.templateId), group.results, history, titleRequests);
   await requestedParameterTitles(client, identity, new Map(selectedResults.map((result) => [result.testRequestId, result])), titleRequests);
@@ -227,7 +233,10 @@ export async function loadReport(client, identity, reportId) {
   const loaded = await loadDefinitions(client, identity.organization_id, [...new Set([report.templateVersionId, ...sectionResults.map((result) => result.versionId)])]);
   const { finalCaptures, datasheetModels, metrics: captureMetrics } = await reportFinalSections(client, identity, results, loaded.definitions);
   const definition = loaded.definitions.get(report.templateVersionId);
-  const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels);
+  const detailFallback = reportParameterDetailFallback(results);
+  const detailRequests = reportParameterDetailRequests(definition.model, results, detailFallback);
+  await reportParameterDetails(client, identity, results, detailRequests, { rows: results });
+  const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels, { parameterDetailFallback: detailFallback });
   const parameterRequests = parameterTitleRequests(definition.model, results, { finalCaptures, datasheetModels });
   const parameters = parameterRequests.size ? await loadParameterTitleFields(client, identity, results, parameterRequests) : null;
   for (const result of results) {
@@ -245,6 +254,7 @@ export async function loadReport(client, identity, reportId) {
   return { report, sample: { sampleNumber: report.sampleNumber, sampleCategoryName: report.sampleCategoryName, customerName: report.customerName, customerAddress: report.customerAddress,
     customerReference: report.customerReference, receivedAt: report.receivedAt, registeredAt: report.registeredAt, dueAt: report.dueAt, description: report.description },
     results, printConfig, model: templateView(definition.model), finalCaptures, datasheetModels, assets: branding.assets,
+    ...(detailFallback?.parameterDetailValues ? { parameterDetailFallback: { parameterDetailValues: detailFallback.parameterDetailValues } } : {}),
     ...(products ? { productDetailsByLineId: products.productDetailsByLineId, primaryProductLineId: productLineId, productLineId } : {}),
     metrics: { definition: loaded.metrics, capture: captureMetrics, assets: branding.metrics, ...(products ? { products: products.metrics } : {}),
       ...(parameters ? { parameters: parameters.metrics } : {}), ...size } };

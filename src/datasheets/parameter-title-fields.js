@@ -139,6 +139,13 @@ export async function capturedParameterTitles(client, identity, model, capture, 
 export async function requestedParameterTitles(client, identity, subjects, requests) {
   if (!requests.size) return {};
   const chosen = [...requests.keys()].map((id) => subjects.get(id));
+  const rows = await capturedParameterRows(client, identity, chosen);
+  const loaded = await loadParameterTitleFields(client, identity, rows, requests);
+  return Object.fromEntries(rows.map((row) => [row.testRequestId, parameterTitleProjection(row, loaded.fieldsByRequestId.get(row.testRequestId))]));
+}
+
+export async function capturedParameterRows(client, identity, chosen) {
+  if (!chosen.length) return [];
   const rows = (await client.query(`SELECT chosen.test_request_id AS "testRequestId",parameter.parameter_id AS "parameterId",
       parameter.parameter_revision AS "parameterRevision",parameter.organization_id AS "parameterOrganizationId",parameter.parameter_name AS "parameterName",
       parameter.parameter_master_key AS "parameterKey",parameter.history_available AS "parameterHistoryAvailable",parameter.custom_field_count AS "parameterCustomFieldCount",
@@ -147,6 +154,5 @@ export async function requestedParameterTitles(client, identity, subjects, reque
     JOIN laboratory_parameter_context parameter ON parameter.organization_id=$1 AND parameter.specification_id=chosen.specification_id`,
   [identity.organization_id, chosen.map((row) => row.testRequestId), chosen.map((row) => row.specificationId)])).rows;
   if (rows.length !== chosen.length) throw incomplete();
-  const loaded = await loadParameterTitleFields(client, identity, rows, requests);
-  return Object.fromEntries(rows.map((row) => [row.testRequestId, parameterTitleProjection(row, loaded.fieldsByRequestId.get(row.testRequestId))]));
+  return rows;
 }

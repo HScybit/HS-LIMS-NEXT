@@ -771,6 +771,34 @@
       "when": 1789307103111,
       "tag": "0109_parameter_method_observations",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1789308811341,
+      "tag": "0110_parameter_detail_values",
+      "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1789311161248,
+      "tag": "0111_parameter_detail_sample_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1789312805022,
+      "tag": "0112_parameter_detail_report_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1789313932509,
+      "tag": "0113_parameter_detail_child_context",
+      "breakpoints": true
     }
   ]
 }

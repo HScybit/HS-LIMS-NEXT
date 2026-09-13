@@ -7,7 +7,8 @@ const fieldKeys = ['id', 'columnId', 'repeatGroupId', 'widget', 'valueType', 'al
 const resultDefaultKeys = ['defaultState', 'defaultNumber', 'defaultText', 'defaultLexical'];
 const numericKeys = ['displayScale', 'padDecimals', 'minimum', 'maximum'];
 const groupKeys = ['id', 'parentGroupId', 'sectionId', 'rowId', 'source', 'minimum', 'maximum'];
-const valueKeys = ['fieldId', 'occurrenceId', 'revision', 'valueType', 'state', 'origin', 'numberValue', 'textValue', 'booleanValue', 'dateValue', 'optionId', 'imageId', 'lexical', 'errorCode', 'errorMessage'];
+const valueKeys = ['fieldId', 'occurrenceId', 'revision', 'valueType', 'state', 'origin', 'numberValue', 'textValue', 'booleanValue', 'dateValue', 'optionId', 'imageId', 'lexical', 'errorCode', 'errorMessage',
+  'parameterDetailKind', 'parameterDetailItemCount', 'parameterDetailSpecificationId', 'parameterDetailItems'];
 
 function select(record, keys) {
   const result = {};

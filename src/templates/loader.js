@@ -4,6 +4,7 @@ import { HttpError } from '../auth/errors.js';
 import * as tables from '../db/template-schema.js';
 import { assembleDefinition } from './model.js';
 import { uuid } from './input.js';
+import { loadParameterDetailItems } from './parameter-detail-items.js';
 
 // Eight definition SELECTs, including optional version selection, independent of template size.
 // Load columns separately; each field can have at most one numeric configuration.
@@ -142,7 +143,8 @@ export async function loadCaptures(client, organizationId, requests, { pinnedVal
   if (occurrences.rows.length > 200_000) throw new HttpError(422, 'capture_batch_limit', 'The combined captures exceed the supported report size.');
   const valueColumns = `value.instance_id AS "instanceId", value.field_id AS "fieldId", value.occurrence_id AS "occurrenceId",
     value.revision, value.value_type AS "valueType", value.state, value.origin, value.number_value AS "numberValue", value.text_value AS "textValue", value.boolean_value AS "booleanValue",
-    value.date_value::text AS "dateValue", value.option_id AS "optionId", value.image_id AS "imageId", value.lexical, value.error_code AS "errorCode", value.error_message AS "errorMessage", value.saved_at AS "savedAt", value.saved_by AS "savedBy"`;
+    value.date_value::text AS "dateValue", value.option_id AS "optionId", value.image_id AS "imageId", value.lexical, value.error_code AS "errorCode", value.error_message AS "errorMessage", value.saved_at AS "savedAt", value.saved_by AS "savedBy",
+    value.parameter_detail_kind AS "parameterDetailKind",value.parameter_detail_item_count AS "parameterDetailItemCount",value.parameter_detail_specification_id AS "parameterDetailSpecificationId"`;
   // Explicit historical result selections share the third capture statement.
   // They remain separate from the active values rendered in the current rows.
   // Materialize each key set once: joining occurrences into the history scan
@@ -176,6 +178,8 @@ export async function loadCaptures(client, organizationId, requests, { pinnedVal
       WHERE value.organization_id=$1 LIMIT 200001`, [...parameters, pinnedValues.map((value) => value.instanceId), pinnedValues.map((value) => value.fieldId),
     pinnedValues.map((value) => value.occurrenceId), pinnedValues.map((value) => value.revision)]);
   if (values.rows.length > 200_000) throw new HttpError(422, 'capture_batch_limit', 'The combined captures exceed the supported report size.');
+  const detailValues = values.rows.filter((value) => value.valueType === 'parameter_detail');
+  const parameterDetails = detailValues.length ? await loadParameterDetailItems(client, organizationId, detailValues) : null;
   const activeOccurrenceIds = new Set();
   for (const { instanceId, subjectId, subjectTestRequestId, subjectSpecificationId, subjectParameterName, subjectMethodName,
     subjectMeasurementUnit, subjectSpecification, ...occurrence } of occurrences.rows) {
@@ -186,8 +190,12 @@ export async function loadCaptures(client, organizationId, requests, { pinnedVal
   }
   const recordedValues = new Map();
   for (const { instanceId, pinned, ...value } of values.rows) {
+    if (value.valueType !== 'parameter_detail') {
+      delete value.parameterDetailKind; delete value.parameterDetailItemCount; delete value.parameterDetailSpecificationId;
+    }
     if (pinned) recordedValues.set(`${instanceId}:${value.fieldId}:${value.occurrenceId}:${value.revision}`, value);
     else if (activeOccurrenceIds.has(`${instanceId}:${value.occurrenceId}`)) captures.get(instanceId).values.push(value);
   }
-  return { captures, pinnedValues: recordedValues, metrics: { queryCount: 3, databaseMs: performance.now() - started } };
+  return { captures, pinnedValues: recordedValues, metrics: { queryCount: 3 + (parameterDetails?.queryCount ?? 0), databaseMs: performance.now() - started,
+    ...(parameterDetails ? { parameterDetails } : {}) } };
 }

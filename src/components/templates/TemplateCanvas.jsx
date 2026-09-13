@@ -12,14 +12,17 @@ import { contextWidgetPreview, contextWidgetValue, isContextWidget } from '../..
 import { fieldDefaultValue } from '../../templates/defaults.js';
 import TemplateImageWidget from './TemplateImageWidget.jsx';
 import TextWidget from './TextWidget.jsx';
+import ParameterDetailWidget from './ParameterDetailWidget.jsx';
 import { resolveParameterTitle, verticalTitleValue } from '../../templates/parameter-title.js';
 
-export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, onBeginEdit, occurrenceId, validation, disabled = false, report, parameter, serialNumber, imageSources, onUploadImage, showImagePlaceholder }) {
+export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, onBeginEdit, onRefreshDetail, captured = false, occurrenceId, validation, disabled = false, report, parameter, serialNumber, imageSources, onUploadImage, showImagePlaceholder }) {
   const plan = mode === 'plan';
   const edit = mode === 'edit';
   const shown = displayValue(field, value);
   const label = field.alias || field.label || field.widget;
   if (field.widget === 'template_image_widget') return <TemplateImageWidget field={field} value={value} mode={mode} sources={imageSources} onUpload={onUploadImage} disabled={disabled} showPlaceholder={showImagePlaceholder} />;
+  if (field.widget === 'parameter_detail_widget') return <ParameterDetailWidget field={field} mode={mode} value={value} captured={captured}
+    parameter={parameter ?? report?.parameterDetailFallback} onRefresh={onRefreshDetail} occurrenceId={occurrenceId} disabled={disabled} />;
   if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} serialNumber={serialNumber} />;
   if (isContextWidget(field.widget)) return <div className={plan ? 'text-muted small' : 'text-break'}>{plan ? contextWidgetPreview[field.widget] : contextWidgetValue(field, report, parameter, serialNumber)}</div>;
   if (field.widget === 'text_widget') return <TextWidget field={field} mode={mode} value={value} parameter={parameter?.parameterTitleValues} occurrenceId={occurrenceId} disabled={disabled} onBeginEdit={onBeginEdit} onChange={onChange} onCommit={onCommit} />;
@@ -107,6 +110,7 @@ function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId,
     </div> : null}
     {isEditing && field?.widget !== 'text_widget' && !field?.alias ? <div className="template-column-warning">Missing key</div> : null}
     <div className="row1">{field ? <TemplateWidget field={field} mode={widgetMode} value={values[key]} validation={validation[key]} onChange={onChange} onCommit={onCommit} onBeginEdit={onBeginEdit} occurrenceId={activeOccurrenceId} disabled={busy}
+      onRefreshDetail={context.onRefreshDetail} captured={Boolean(context.runtime)}
       imageSources={context.imageSources ?? context.report?.assets?.templateImages ?? model.imageSources} onUploadImage={context.onUploadImage} showImagePlaceholder={context.showImagePlaceholder || plan}
       report={context.report ?? context.dataContext} parameter={parameter} serialNumber={parameter?.serialNumber ?? context.reportSerialNumber ?? model.rowsById[column.rowId].serialNumber ?? 0} /> : null}
       {column.childSectionIds.map((childId) => renderSection(context, childId, activeOccurrenceId, values))}
@@ -182,15 +186,15 @@ function renderSection(context, id, parentOccurrenceId, values, onlyOccurrenceId
   </div>);
 }
 
-export default function TemplateCanvas({ model, mode = 'plan', editing = empty, onToggleEdit, onCommand, onPanel, selected, onSelect, busy = false, values = empty, occurrences, occurrenceId, validation = empty, onChange, onCommit, onBeginEdit, onRepeat, report, dataContext, sectionRoots, canvasId = 'template-designer', idPrefix = '', onUploadImage, showImagePlaceholder = false, imageSources }) {
+export default function TemplateCanvas({ model, mode = 'plan', editing = empty, onToggleEdit, onCommand, onPanel, selected, onSelect, busy = false, values = empty, occurrences, occurrenceId, validation = empty, onChange, onCommit, onBeginEdit, onRepeat, onRefreshDetail, report, dataContext, sectionRoots, canvasId = 'template-designer', idPrefix = '', onUploadImage, showImagePlaceholder = false, imageSources }) {
   const plan = mode === 'plan';
   const runtime = useMemo(() => {
     if (occurrences === undefined) return null;
     assertCaptureSize(model, occurrences);
     return indexOccurrences(model, occurrences);
   }, [model, occurrences]);
-  const context = useMemo(() => ({ model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources }),
-    [model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources]);
+  const context = useMemo(() => ({ model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, onRefreshDetail, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources }),
+    [model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, onRefreshDetail, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources]);
   return <div id={canvasId ?? undefined} className="template-render-canvas">{sectionRoots
     ? sectionRoots.map((root) => renderSection(context, root.sectionId, root.parentOccurrenceId, values, root.occurrenceId))
     : model.rootSectionIds.map((id) => renderSection(context, id, runtime?.root.id ?? occurrenceId, values))}</div>;

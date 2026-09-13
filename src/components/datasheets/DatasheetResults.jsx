@@ -12,6 +12,7 @@ import { apiRequest } from '../../lib/api-client.js';
 import { createCaptureAutosave } from '../../datasheets/autosave.js';
 import { valueKey, capturedInputValue } from '../../templates/calculations.js';
 import { resolveResultInput } from '../../templates/defaults.js';
+import { showToast } from '../ui/toast.jsx';
 import '../../styles/template-designer.scss';
 import '../../styles/tr-details-page.scss';
 
@@ -31,6 +32,7 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [calculating, setCalculating] = useState(false);
+  const [detailRequest, setDetailRequest] = useState(null);
   const [reload, setReload] = useState(0);
   const drafts = useRef(new Map());
   const operation = useRef(false);
@@ -101,21 +103,22 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
     await autosave.flush();
   }, [autosave, persistInput]);
 
-  const perform = useCallback(async (action) => {
+  const perform = useCallback(async (action, { retryDetail = false } = {}) => {
     if (operation.current) return false;
+    if (detailRequest && !retryDetail) { setError('Retry the Parameter Detail refresh or reload before continuing.'); return false; }
     operation.current = true; setBusy(true); setError('');
     try { await flushPending(); await action(); return true; }
     catch (failure) { if (active.current) setError(failure.message); return false; }
     finally { operation.current = false; if (active.current) setBusy(false); }
-  }, [flushPending]);
+  }, [flushPending, detailRequest]);
 
   useEffect(() => navigationGuard.register({
-    hasPending: () => operation.current || drafts.current.size > 0 || (autosave.snapshot()?.pending.length ?? 0) > 0,
+    hasPending: () => operation.current || Boolean(detailRequest) || drafts.current.size > 0 || (autosave.snapshot()?.pending.length ?? 0) > 0,
     prepareLeave: perform,
-  }), [navigationGuard, autosave, perform]);
+  }), [navigationGuard, autosave, perform, detailRequest]);
 
   useEffect(() => {
-    const hasPending = () => drafts.current.size > 0 || (autosave.snapshot()?.pending.length ?? 0) > 0;
+    const hasPending = () => Boolean(detailRequest) || drafts.current.size > 0 || (autosave.snapshot()?.pending.length ?? 0) > 0;
     function beforeUnload(event) {
       if (hasPending() || operation.current) { event.preventDefault(); event.returnValue = ''; }
     }
@@ -131,7 +134,7 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
     window.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('click', followLink, true);
     return () => { window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('click', followLink, true); };
-  }, [autosave, perform, router]);
+  }, [autosave, perform, router, detailRequest]);
 
   const change = useCallback((fieldId, occurrenceId, value) => {
     if (operation.current || !current.current?.canExecute) return;
@@ -184,6 +187,25 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
       applySaved(result);
     });
   }, [applySaved, autosave, datasheetId, perform]);
+  const refreshDetail = useCallback((fieldId, occurrenceId) => {
+    void perform(async () => {
+      const command = detailRequest ?? { revision: autosave.snapshot().revision, requestId: crypto.randomUUID(), fields: [{ fieldId, occurrenceId }] };
+      setDetailRequest(command);
+      try {
+        const result = await apiRequest(`/api/datasheets/${datasheetId}/parameter-details`, { method: 'POST', body: command });
+        autosave.reset(result.instanceId, result.revision, result.values); applySaved(result);
+        if (active.current) { setDetailRequest(null); showToast('Parameter detail refreshed'); }
+      } catch (failure) {
+        if (active.current) {
+          // A lost response may follow a committed refresh. Keep its exact
+          // request until retry succeeds or an explicit reload reconciles it.
+          if (failure.status >= 400 && failure.status < 500) setDetailRequest(null);
+          showToast(failure.message, 'error');
+        }
+        throw failure;
+      }
+    }, { retryDetail: true });
+  }, [applySaved, autosave, datasheetId, detailRequest, perform]);
   async function refresh() {
     if ((drafts.current.size || autosave.snapshot()?.pending.length) && !window.confirm('Reload and discard your unsaved changes?')) return;
     if (operation.current) return;
@@ -191,7 +213,7 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
     // Wait for in-flight writes, then honor the explicit discard confirmation
     // even when the queue contains a stale-write or authorization failure.
     try { await autosave.flush(); } catch { /* Unsaved changes were explicitly discarded. */ }
-    drafts.current.clear(); current.current = null;
+    drafts.current.clear(); current.current = null; setDetailRequest(null);
     setData(null); setValues({}); setError(''); setReload((value) => value + 1);
     operation.current = false; setBusy(false);
   }
@@ -203,18 +225,19 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
       <div className="tr-details-page-header__title-copy"><div className="tr-details-page-header__title-row"><h1>Add Results</h1></div>
         <div className="tr-details-page-header__timestamp"><span>{data.model.version.name || 'Datasheet'}</span></div></div>
     </div><div className="tr-details-page-header__actions">
-      <SecondaryButton size="default" tone="primary" leftIcon="calculator" disabled={!data.canExecute || !data.model.calculationOrder.length || busy} onClick={calculate}>{calculating ? 'Calculating' : 'Calculate'}</SecondaryButton>
-      <PrimaryButton leftIcon="check" disabled={busy} onClick={done}>Done</PrimaryButton>
+      <SecondaryButton size="default" tone="primary" leftIcon="calculator" disabled={!data.canExecute || !data.model.calculationOrder.length || busy || Boolean(detailRequest)} onClick={calculate}>{calculating ? 'Calculating' : 'Calculate'}</SecondaryButton>
+      <PrimaryButton leftIcon="check" disabled={busy || Boolean(detailRequest)} onClick={done}>Done</PrimaryButton>
     </div></section></PageHeader>
     <main className="tr-details-page tr-details-page--single-method tr-details-results-page" aria-busy={busy}>
       <section className="tr-details-page__content"><div className="tr-details-report-surface">
         {error ? <div className="alert alert-danger mb-3" role="alert">{error}
-          <button type="button" className="btn btn-link" disabled={busy} onClick={() => { void perform(async () => autosave.retry()); }}>Retry save</button>
+          {detailRequest ? <button type="button" className="btn btn-link" disabled={busy} onClick={() => refreshDetail()}>Retry refresh</button>
+            : <button type="button" className="btn btn-link" disabled={busy} onClick={() => { void perform(async () => autosave.retry()); }}>Retry save</button>}
           <button type="button" className="btn btn-link" disabled={busy} onClick={refresh}>Reload</button>
         </div> : null}
         <div className="tr-details-template"><Profiler id="datasheet-canvas" onRender={(_id, phase, duration, _base, start) => performance.measure(`datasheet:react-${phase}`, { start, duration })}>
           <TemplateCanvas model={data.model} mode={data.canExecute ? 'edit' : 'view'} values={values} validation={data.validation} dataContext={data.dataContext}
-            occurrences={data.capture.occurrences} onChange={change} onCommit={commit} onBeginEdit={beginEdit} onRepeat={repeat} busy={busy} />
+            occurrences={data.capture.occurrences} onChange={change} onCommit={commit} onBeginEdit={beginEdit} onRepeat={repeat} onRefreshDetail={refreshDetail} busy={busy || Boolean(detailRequest)} />
         </Profiler></div>
       </div></section>
     </main>

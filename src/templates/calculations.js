@@ -1,6 +1,7 @@
 import { evaluateExpression, ExpressionError } from './expressions.js';
 import { formatValueWithDecimalPoints } from './formatting.js';
 import { assertCaptureSize } from './runtime-limits.js';
+import { parameterDetailKey, parameterDetailPayload } from './parameter-detail.js';
 
 export const valueKey = (fieldId, occurrenceId) => `${fieldId}:${occurrenceId}`;
 
@@ -17,6 +18,7 @@ export function compareOccurrencePosition(left, right) {
 
 export function valuePayload(value) {
   if (!value || value.state !== 'present') return null;
+  if (value.valueType === 'parameter_detail') return parameterDetailPayload(value);
   if (value.valueType === 'result') return value.numberValue ?? value.textValue;
   return ({ numeric: value.numberValue, text: value.textValue, boolean: value.booleanValue, date: value.dateValue, option: value.optionId, image: value.imageId })[value.valueType];
 }
@@ -67,6 +69,7 @@ export function calculateCapture(model, occurrences, savedValues) {
     if (value?.state === 'invalid') throw new ExpressionError('expression_dependency', 'A formula input contains an invalid result.');
     let result = valuePayload(value);
     const field = model.fieldsById[fieldId];
+    if (field.widget === 'parameter_detail_widget' && field.alias !== parameterDetailKey(field.label)) return null;
     if (field.valueType === 'option' && result !== null) result = field.options.find((option) => option.id === result)?.value ?? null;
     // The source server normalizes numeric strings before passing variables to its parser.
     // Frozen option IDs identify storage; formulas consume the option's source value.

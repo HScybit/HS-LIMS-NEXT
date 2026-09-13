@@ -3,7 +3,7 @@ import { initialOccurrences } from './occurrences.js';
 import { isContextWidget } from './context-widgets.js';
 import { database } from '../db/pool.js';
 import { HttpError } from '../auth/errors.js';
-import { templateInstances, templateOccurrences, templateValues } from '../db/template-schema.js';
+import { templateInstances, templateOccurrences, templateValues, templateParameterDetailItems } from '../db/template-schema.js';
 import { loadDefinition, loadCapture } from './loader.js';
 import { insertBatch } from './authoring.js';
 import { calculateCapture, valueKey } from './calculations.js';
@@ -14,16 +14,27 @@ import { agreedResultNumber, agreedResultValue, recordJobResultEntries } from '.
 import { resolveResultInput } from './defaults.js';
 import { assertTemplateImageBudget } from '../template-assets/service.js';
 import { capturedParameterTitles } from '../datasheets/parameter-title-fields.js';
+import { captureParameterDetails } from '../datasheets/parameter-details.js';
+import { parameterDetailBytes } from './parameter-detail.js';
 
 function storedValues(identity, instance, versionId, nextRevision, values) {
-  return values.map((value) => ({ ...value, organizationId: identity.organization_id, instanceId: instance.id, versionId,
+  return values.map(({ parameterDetailItems: _items, ...value }) => ({ ...value, organizationId: identity.organization_id, instanceId: instance.id, versionId,
     revision: nextRevision, savedBy: identity.user_id }));
+}
+
+async function appendCaptureValues(client, identity, instanceId, versionId, nextRevision, values) {
+  parameterDetailBytes(values);
+  const db = database(client);
+  await insertBatch(db, templateValues, storedValues(identity, { id: instanceId }, versionId, nextRevision, values));
+  const items = values.flatMap((value) => (value.parameterDetailItems ?? []).map((item) => ({ ...item,
+    organizationId: identity.organization_id, instanceId, fieldId: value.fieldId, occurrenceId: value.occurrenceId, revision: nextRevision })));
+  await insertBatch(db, templateParameterDetailItems, items);
 }
 
 function defaults(model, occurrences) {
   const fieldsByGroup = new Map();
   for (const field of Object.values(model.fieldsById)) {
-    if (['formula_widget', 'product_detail_widget', 'vertical_text_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
+    if (['formula_widget', 'product_detail_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
     const group = field.repeatGroupId ?? null;
     if (!fieldsByGroup.has(group)) fieldsByGroup.set(group, []);
     fieldsByGroup.get(group).push(field);
@@ -46,7 +57,7 @@ export async function createWorkflowCapture(client, identity, versionId, options
   return initializeCapture(client, identity, versionId, options);
 }
 
-async function initializeCapture(client, identity, versionId, { subjects = [] } = {}) {
+async function initializeCapture(client, identity, versionId, { subjects = [], testRequestId, specificationId } = {}) {
   uuid(versionId);
   const { model } = await loadDefinition(client, identity.organization_id, versionId, { forFreeze: true });
   if (model.version.status !== 'frozen') throw new HttpError(400, 'unfrozen_template', 'Capture must use a frozen template version.');
@@ -55,16 +66,21 @@ async function initializeCapture(client, identity, versionId, { subjects = [] } 
   assertCaptureSize(model, occurrences);
   const initialValues = defaults(model, occurrences);
   await assertTemplateImageBudget(client, identity.organization_id, model, { occurrences, values: initialValues });
-  const calculation = calculateCapture(model, occurrences, initialValues);
   const subjectsByOccurrence = new Map(bindings.map((binding) => [binding.occurrenceId, binding]));
+  const boundOccurrences = occurrences.map((row) => ({ ...row, subject: subjectsByOccurrence.get(row.id) }));
+  const beforeDetails = calculateCapture(model, boundOccurrences, initialValues);
+  const details = await captureParameterDetails(client, identity, model, boundOccurrences,
+    { context: { testRequestId, specificationId }, validation: beforeDetails.validation, silent: true });
+  initialValues.push(...details);
+  const calculation = details.length ? calculateCapture(model, occurrences, initialValues) : beforeDetails;
   await capturedParameterTitles(client, identity, model, { values: calculation.values,
-    occurrences: occurrences.map((row) => ({ ...row, subject: subjectsByOccurrence.get(row.id) })) }, calculation.validation);
+    occurrences: boundOccurrences }, calculation.validation);
   const db = database(client);
   await setCaptureContext(client, instance.id);
   await db.insert(templateInstances).values(instance);
   // Breadth-first order ensures the parent exists before the repeat ancestry trigger runs.
   await insertBatch(db, templateOccurrences, occurrences.map((row) => ({ ...row, organizationId: identity.organization_id, instanceId: instance.id, versionId })));
-  await insertBatch(db, templateValues, storedValues(identity, instance, versionId, 1, [...initialValues, ...calculation.calculated]));
+  await appendCaptureValues(client, identity, instance.id, versionId, 1, [...initialValues, ...calculation.calculated]);
   return { instanceId: instance.id, versionId, revision: 1, subjectBindings: bindings };
 }
 
@@ -74,7 +90,7 @@ function enteredValue(model, occurrences, input) {
   const field = model.fieldsById[input.fieldId];
   const occurrence = occurrences.get(input.occurrenceId);
   if (!field || !occurrence || (field.repeatGroupId ?? null) !== (occurrence.groupId ?? null)) throw new HttpError(400, 'invalid_capture_field', 'Field does not belong to this capture occurrence.');
-  if (['formula_widget', 'template_image_widget', 'vertical_text_widget'].includes(field.widget) || isContextWidget(field.widget) || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
+  if (['formula_widget', 'template_image_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) || isContextWidget(field.widget) || (field.widget === 'text_widget' && !field.editable)) throw new HttpError(403, 'readonly_field', 'This field cannot accept entered values.');
   if (!['present', 'empty', 'absent'].includes(input.state)) throw new HttpError(400, 'invalid_value_state', 'Select a supported value state.');
   if (input.state !== 'present' && input.value !== undefined && input.value !== null && input.value !== '') throw new HttpError(400, 'unexpected_value', 'An empty or absent value cannot include a payload.');
   input = resolveResultInput(field, input);
@@ -105,6 +121,67 @@ export async function recalculateCapture(client, identity, instanceId, expectedR
   return updateCapture(client, identity, instanceId, expectedRevision, []);
 }
 
+export async function refreshParameterDetails(client, identity, instanceId, input) {
+  requirePermission(identity, 'datasheets.execute'); uuid(instanceId);
+  fieldsOnly(input, ['revision', 'requestId', 'fields']); revision(input.revision); uuid(input.requestId, 'Refresh request');
+  if (!Array.isArray(input.fields) || !input.fields.length || input.fields.length > 1000) {
+    throw new HttpError(400, 'invalid_parameter_details', 'Refresh between 1 and 1,000 Parameter Details at a time.');
+  }
+  instanceId = instanceId.toLowerCase();
+  const requestId = input.requestId.toLowerCase();
+  const selected = input.fields.map((item) => {
+    fieldsOnly(item, ['fieldId', 'occurrenceId']);
+    return { fieldId: uuid(item.fieldId, 'Field').toLowerCase(), occurrenceId: uuid(item.occurrenceId, 'Occurrence').toLowerCase() };
+  });
+  const keys = new Set(selected.map((item) => valueKey(item.fieldId, item.occurrenceId)));
+  if (keys.size !== selected.length) throw new HttpError(400, 'duplicate_value', 'A refresh cannot contain the same field occurrence twice.');
+  await requireCaptureWrite(client, instanceId);
+  const instance = (await client.query('SELECT version_id,revision,status FROM template_instances WHERE organization_id=$1 AND id=$2 FOR UPDATE',
+    [identity.organization_id, instanceId])).rows[0];
+  if (!instance) throw new HttpError(404, 'capture_not_found', 'Datasheet capture was not found.');
+  const prior = (await client.query(`SELECT instance_id,revision,recorded_by,parameter_detail_field_count FROM template_capture_revisions
+    WHERE organization_id=$1 AND parameter_detail_request_id=$2`, [identity.organization_id, requestId])).rows[0];
+  if (prior) {
+    const recorded = (await client.query(`SELECT field_id,occurrence_id FROM template_values
+      WHERE organization_id=$1 AND instance_id=$2 AND revision=$3 AND origin='parameter'`,
+    [identity.organization_id, prior.instance_id, prior.revision])).rows;
+    if (prior.instance_id !== instanceId || prior.revision !== input.revision + 1 || prior.recorded_by !== identity.user_id
+      || prior.parameter_detail_field_count !== selected.length || recorded.length !== selected.length
+      || recorded.some((row) => !keys.has(valueKey(row.field_id, row.occurrence_id)))) {
+      throw new HttpError(409, 'parameter_detail_request_reused', 'This refresh request was already used with different details.');
+    }
+    const { model } = await loadDefinition(client, identity.organization_id, instance.version_id);
+    const capture = await loadCapture(client, identity.organization_id, instanceId, prior.revision);
+    const calculation = calculateCapture(model, capture.occurrences, capture.values);
+    return { instanceId, versionId: instance.version_id, revision: prior.revision, values: calculation.values, validation: calculation.validation,
+      parameterTitleValuesByRequestId: await capturedParameterTitles(client, identity, model, capture, calculation.validation), replayed: true };
+  }
+  if (instance.revision !== input.revision || instance.status !== 'editing') throw new HttpError(409, 'stale_capture', 'This datasheet changed or was frozen. Reload before refreshing.');
+  const { model } = await loadDefinition(client, identity.organization_id, instance.version_id);
+  const capture = await loadCapture(client, identity.organization_id, instanceId);
+  const before = calculateCapture(model, capture.occurrences, capture.values);
+  const details = await captureParameterDetails(client, identity, model, capture.occurrences,
+    { selected, context: { instanceId }, validation: before.validation });
+  const calculation = calculateCapture(model, capture.occurrences,
+    [...capture.values.filter((value) => !keys.has(valueKey(value.fieldId, value.occurrenceId))), ...details]);
+  parameterDetailBytes(calculation.values);
+  const parameterTitleValuesByRequestId = await capturedParameterTitles(client, identity, model,
+    { occurrences: capture.occurrences, values: calculation.values }, calculation.validation);
+  await client.query(`SELECT set_config('app.parameter_detail_capture_id',$1,true),set_config('app.parameter_detail_request_id',$2,true),
+    set_config('app.parameter_detail_field_count',$3,true)`, [instanceId, requestId, String(details.length)]);
+  try {
+    await client.query('UPDATE template_instances SET revision=revision+1 WHERE organization_id=$1 AND id=$2', [identity.organization_id, instanceId]);
+  } catch (error) {
+    if (error.constraint === 'capture_parameter_detail_request') throw new HttpError(409, 'parameter_detail_request_reused', 'This refresh request was already used with different details.');
+    throw error;
+  }
+  await client.query(`SELECT set_config('app.parameter_detail_capture_id','',true),set_config('app.parameter_detail_request_id','',true),
+    set_config('app.parameter_detail_field_count','',true)`);
+  await appendCaptureValues(client, identity, instanceId, instance.version_id, input.revision + 1, [...details, ...calculation.calculated]);
+  return { instanceId, versionId: instance.version_id, revision: input.revision + 1, values: calculation.values, validation: calculation.validation,
+    parameterTitleValuesByRequestId, replayed: false, calculationMs: calculation.durationMs };
+}
+
 async function updateCapture(client, identity, instanceId, expectedRevision, inputs) {
   requirePermission(identity, 'datasheets.execute'); uuid(instanceId); revision(expectedRevision);
   await requireCaptureWrite(client, instanceId);
@@ -127,7 +204,7 @@ async function updateCapture(client, identity, instanceId, expectedRevision, inp
     const old = previous.get(valueKey(value.fieldId, value.occurrenceId));
     return !old || ['state', 'numberValue', 'errorCode', 'errorMessage'].some((key) => (value[key] ?? null) !== (old[key] ?? null));
   });
-  await insertBatch(database(client), templateValues, storedValues(identity, { id: instanceId }, versionId, expectedRevision + 1, [...entered, ...calculated]));
+  await appendCaptureValues(client, identity, instanceId, versionId, expectedRevision + 1, [...entered, ...calculated]);
   await recordJobResultEntries(client, instanceId, model, entered);
   return { instanceId, versionId, revision: expectedRevision + 1, values: calculation.values, validation: calculation.validation,
     parameterTitleValuesByRequestId, calculationMs: calculation.durationMs };
@@ -191,8 +268,11 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
         // Static defaults remain tied to the frozen field on the new row;
         // promoting them to entered data changes Text titles or rejects images.
         const staticDefault = value.origin === 'default' && ['text_widget', 'template_image_widget'].includes(model.fieldsById[value.fieldId].widget);
-        return { ...value, occurrenceId: mapping.get(value.occurrenceId), origin: staticDefault ? 'default' : 'entered' };
+        return { ...value, occurrenceId: mapping.get(value.occurrenceId), origin: value.origin === 'parameter' ? 'parameter' : staticDefault ? 'default' : 'entered' };
       }) : defaults(model, copies);
+    if (!command.withData) additions.push(...await captureParameterDetails(client, identity, model, occurrences,
+      { occurrenceIds: new Set(copies.map((row) => row.id)), context: { instanceId }, silent: true,
+        validation: calculateCapture(model, occurrences, [...capture.values, ...additions]).validation }));
   } else {
     if (siblings.length <= group.minimum) throw new HttpError(400, 'repeat_minimum', 'The minimum number of repeated rows must remain.');
     // Remove children before parents to preserve the ancestry constraint throughout the transaction.
@@ -206,9 +286,10 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
   // Deletion can only reduce the budget, including for older oversized captures.
   if (command.type === 'clone') await assertTemplateImageBudget(client, identity.organization_id, model, { occurrences, values: [...capture.values, ...additions] });
   const calculation = calculateCapture(model, occurrences, [...capture.values, ...additions]);
+  if (command.type === 'clone') parameterDetailBytes(calculation.values);
   const parameterTitleValuesByRequestId = command.type === 'clone' ? await capturedParameterTitles(client, identity, model,
     { occurrences, values: calculation.values }, calculation.validation) : undefined;
-  await insertBatch(db, templateValues, storedValues(identity, { id: instanceId }, versionId, nextRevision, [...additions, ...calculation.calculated]));
+  await appendCaptureValues(client, identity, instanceId, versionId, nextRevision, [...additions, ...calculation.calculated]);
   return { instanceId, versionId, revision: nextRevision, occurrences, values: calculation.values, validation: calculation.validation,
     ...(parameterTitleValuesByRequestId ? { parameterTitleValuesByRequestId } : {}) };
 }

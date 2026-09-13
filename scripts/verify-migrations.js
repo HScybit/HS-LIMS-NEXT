@@ -15,6 +15,7 @@ import { animatedPng } from '../tests/helpers/template-images.js';
 import { uploadTemplateImage } from '../src/template-assets/service.js';
 import { freezeTemplate, editTemplate } from '../src/templates/authoring.js';
 import { createCapture, saveCapture } from '../src/templates/capture.js';
+import { parameterDetailPayload } from '../src/templates/parameter-detail.js';
 import { loadCapture, loadDefinition } from '../src/templates/loader.js';
 import { createLaboratoryFixture } from '../tests/helpers/laboratory.js';
 import { quickCreateCustomer } from '../src/samples/customer.js';
@@ -278,7 +279,7 @@ try {
   const productContextSelector = 'project_field__splitter__fresh_product_flag';
   const parameterContextField = await withSession(session.token, (client, identity) => saveCustomField(client, identity,
     { id: randomUUID(), revision: 0, requestId: randomUUID(), label: 'Fresh Parameter flag', key: 'fresh_parameter_flag', associatedWith: 'parameter', fieldType: 'checkbox' }), { csrfToken: session.csrfToken });
-  let verticalTextFieldId;
+  let verticalTextFieldId; let parameterDetailFieldId;
   const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true,
     prepareProduct: async (client, identity, fixture) => {
       await saveProduct(client, identity, { id: fixture.product.id, revision: 1, requestId: randomUUID(), key: fixture.product.code,
@@ -308,11 +309,18 @@ try {
       const customColumn = await editTemplate(client, identity, template.versionId, title.model.version.revision, { type: 'addColumn', rowId });
       const customTitle = await editTemplate(client, identity, template.versionId, customColumn.model.version.revision,
         { type: 'configureField', columnId: customColumn.model.rowsById[rowId].columnIds.at(-1), widget: 'text_widget', alias: 'fresh_custom_title', label: 'prefix.fresh_parameter_flag' });
-      await editTemplate(client, identity, template.versionId, customTitle.model.version.revision,
+      const detailColumn = await editTemplate(client, identity, template.versionId, customTitle.model.version.revision, { type: 'addColumn', rowId });
+      const detail = await editTemplate(client, identity, template.versionId, detailColumn.model.version.revision,
+        { type: 'configureField', columnId: detailColumn.model.rowsById[rowId].columnIds.at(-1), widget: 'parameter_detail_widget', alias: 'fresh_parameter_methods', label: 'moa_applicable' });
+      parameterDetailFieldId = detail.model.columnsById[detailColumn.model.rowsById[rowId].columnIds.at(-1)].fieldId;
+      await editTemplate(client, identity, template.versionId, detail.model.version.revision,
         { type: 'configureSection', id: template.records.sections[0].id, name: 'Final parameter results', isFinalResult: true, isParameterLoop: true });
     } });
   const verticalCapture = await withSession(session.token, (client, identity) => loadCapture(client, identity.organization_id, reportFlow.sheet.template_instance_id), { readOnly: true });
   assert.equal(verticalCapture.values.some((value) => value.fieldId === verticalTextFieldId), false);
+  assert.ok(verticalCapture.values.filter((value) => value.fieldId === parameterDetailFieldId)
+    .every((value) => parameterDetailPayload(value)[0] === reportFlow.fixture.method.name));
+  assert.equal(verticalCapture.metrics.queryCount, 5);
   const assets = await withSession(session.token, async (client, identity) => {
     const created = await createReportAssets(client, identity);
     const vector = await uploadReportImage(client, identity, { requestId: randomUUID(), originalName: 'Fresh vector.svg', mediaType: 'image/svg+xml', content: reportSvg });
@@ -370,6 +378,7 @@ try {
     renderReportDocument(report, stylesheet) {
       assert.deepEqual(report.productDetailsByLineId, captured.productDetailsByLineId);
       assert.deepEqual(report.results.map((result) => result.parameterTitleValues), captured.results.map((result) => result.parameterTitleValues));
+      assert.deepEqual(report.finalCaptures, captured.finalCaptures);
       const html = renderer.renderReportDocument(report, stylesheet);
       assert.ok(html.includes('Fresh captured Product')); assert.ok(html.includes('Fresh immutable Product context'));
       assert.ok(html.includes('>false</div>')); assert.ok(!html.includes('Configured default is not a captured Product value'));

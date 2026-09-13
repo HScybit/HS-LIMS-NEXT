@@ -9,7 +9,7 @@ import { registerSample } from '../../src/samples/register.js';
 import { generateTestRequests } from '../../src/test-requests/generate.js';
 import { createTestRequestJobs } from '../../src/test-requests/jobs.js';
 
-export async function prepareSubjectJob(owner, creator, analyst, { manualParent = false, resultWidget = false, resultValueType = 'numeric', resultDefaultValue, finalSection = false, jobWorkflowId = null } = {}) {
+export async function prepareSubjectJob(owner, creator, analyst, { manualParent = false, resultWidget = false, resultValueType = 'numeric', resultDefaultValue, finalSection = false, jobWorkflowId = null, prepareTemplate } = {}) {
   const source = await createLaboratoryFixture(owner, creator, { repeated: false });
   const client = await owner.connect();
   let template;
@@ -64,6 +64,7 @@ export async function prepareSubjectJob(owner, creator, analyst, { manualParent 
       { type: 'configureField', columnId: field.columnId, widget: field.widget, alias: field.alias, defaultValue: resultDefaultValue, displayScale: 2 }));
     template.revision = configured.model.version.revision;
   }
+  if (prepareTemplate) await work((client, identity) => prepareTemplate(client, identity, template, source));
   const settings = await work(loadLaboratorySettings);
   await work((client, identity) => saveLaboratorySettings(client, identity, { revision: settings.settings.revision,
     autoCreateJobs: false, resultSummaryTemplateId: template.templateId, jobWorkflowId }));

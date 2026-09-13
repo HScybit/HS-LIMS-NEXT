@@ -25,7 +25,7 @@ async function ensureDatasheet(client, identity, request) {
   const subjects = request.is_job ? (await client.query(`SELECT id AS "testRequestId",specification_id AS "specificationId"
     FROM test_requests WHERE organization_id=$1 AND parent_test_request_id=$2 ORDER BY job_member_position,id`, [identity.organization_id, request.id])).rows
     : [{ testRequestId: request.id, specificationId: request.specification_id }];
-  const capture = await createWorkflowCapture(client, identity, versionId, { subjects });
+  const capture = await createWorkflowCapture(client, identity, versionId, { subjects, testRequestId: request.id, specificationId: request.specification_id });
   const [sheet] = await database(client).insert(datasheets).values({ organizationId: identity.organization_id, testRequestId: request.id,
     templateInstanceId: capture.instanceId, specificationId: request.specification_id, methodId: request.method_id, attemptNumber: 1, createdBy: identity.user_id }).returning({ id: datasheets.id });
   await insertDatasheetSubjects(client, identity, sheet.id, capture);

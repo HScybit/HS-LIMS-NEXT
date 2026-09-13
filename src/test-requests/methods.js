@@ -45,7 +45,7 @@ export async function addTestRequestMethod(client, identity, requestId, input) {
   // precision. Only the selected method receives a new master snapshot.
   const specificationId = (await client.query('SELECT laboratory_snapshot_method($1,$2) AS id', [request.id, methodId])).rows[0].id;
   const versionId = await resolveCaptureVersion(client, identity, request.datasheet_template_id, { kind: 'datasheet' });
-  const capture = await createWorkflowCapture(client, identity, versionId, { subjects: [{ testRequestId: request.id, specificationId }] });
+  const capture = await createWorkflowCapture(client, identity, versionId, { subjects: [{ testRequestId: request.id, specificationId }], testRequestId: request.id, specificationId });
   const attempt = (await client.query('SELECT coalesce(max(attempt_number),0)+1 AS number FROM datasheets WHERE organization_id=$1 AND test_request_id=$2',
     [identity.organization_id, request.id])).rows[0].number;
   const [sheet] = await database(client).insert(datasheets).values({ organizationId: identity.organization_id, testRequestId: request.id,
