@@ -30,13 +30,27 @@ export function customFieldSubmittedValue(value) {
   return Array.isArray(value) ? value.filter(meaningfulValue) : value === undefined || value === null ? '' : value;
 }
 
-export function customFieldFormDisplayValue(value, field, lookupOptions = []) {
+export function customFieldValidationError(field, value) {
+  const control = customFieldControl(field);
+  if (control.type === 'array') {
+    // GenericForm requiredness differs from submitted-value cleanup: a repeated false is not filled.
+    const filled = Array.isArray(value) && value.some((item) => Array.isArray(item) ? item.length > 0
+      : typeof item === 'boolean' ? item : item !== undefined && item !== null && String(item).trim() !== '');
+    return control.required && !filled ? 'Required' : null;
+  }
+  const filled = control.multiple ? Array.isArray(value) && value.length > 0 : Boolean(value || value === false || value === 0);
+  if (control.required && !filled) return 'Required';
+  if (control.type === 'number' && value !== '' && value !== null && value !== undefined && Number.isNaN(Number(value))) return 'Please enter a valid number!';
+  return null;
+}
+
+export function customFieldFormDisplayValue(value, field, lookupOptions = [], formatDate = customFieldDateDisplay) {
   const control = customFieldControl(field, lookupOptions);
   const display = (item) => {
     // The source drops false/zero display items, while retaining them in the submitted value array.
     if (Array.isArray(item)) return item.map(display).filter(Boolean).join(', ');
     if (item === undefined || item === null || item === '') return '';
-    if (['date', 'datetime-local'].includes(control.type)) return customFieldDateDisplay(item, field);
+    if (['date', 'datetime-local'].includes(control.type)) return formatDate(item, field);
     const option = control.options.find((option) => String(option.value) === String(item));
     return option?.label ?? item;
   };

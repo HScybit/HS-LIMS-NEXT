@@ -31,7 +31,10 @@ export const sampleCategories = pgTable('sample_categories', {
 export const products = pgTable('products', {
   ...identity(), ...metadata(), description: text('description').notNull().default(''), abbreviation: text('abbreviation'), jobTemplateId: uuid('job_template_id'),
   tagCount: integer('tag_count').notNull().default(0), saveRequestId: uuid('save_request_id'),
-}, (t) => [...named(t, 'products'), link(t, t.jobTemplateId, templates), check('product_tag_count', sql`${t.tagCount} >= 0`)]);
+  customFieldCount: integer('custom_field_count').notNull().default(0), customFieldsProvided: boolean('custom_fields_provided').notNull().default(false),
+}, (t) => [...named(t, 'products'), link(t, t.jobTemplateId, templates), check('product_tag_count', sql`${t.tagCount} >= 0`),
+  check('product_custom_field_count', sql`${t.customFieldCount} between 0 and 500`),
+  index('products_scheme_order').on(t.organizationId, t.createdAt, t.updatedAt, t.id).where(sql`${t.active}`)]);
 
 export const productSampleCategories = pgTable('product_sample_categories', {
   organizationId: tenant(), productId: uuid('product_id').notNull(), sampleCategoryId: uuid('sample_category_id').notNull(),

@@ -37,6 +37,8 @@ import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/master
 import { loadProduct, saveProduct, retireProduct, listProducts } from '../src/masters/products.js';
 import { loadCustomField, saveCustomField, retireCustomField, listCustomFields } from '../src/masters/custom-fields.js';
 import { uploadCustomFieldAttachment, readCustomFieldAttachment } from '../src/custom-fields/attachments.js';
+import { createProductFieldFixture } from '../tests/helpers/product-field-fixtures.js';
+import { generateProductCustomFields } from '../src/masters/product-custom-field-generation.js';
 import { createTestRequestJobs } from '../src/test-requests/jobs.js';
 import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
@@ -185,6 +187,21 @@ try {
     assert.deepEqual(await uploadCustomFieldAttachment(client, identity, attachment.command), { ...attachment.saved, replayed: true });
     assert.deepEqual((await readCustomFieldAttachment(client, identity, attachment.saved.id)).content, attachment.command.content);
   }, { csrfToken: session.csrfToken });
+  const captureAccount = await createAccount(owner, { permissions: ['masters.manage'] });
+  const captureSession = await signIn({ identifier: captureAccount.username, password: captureAccount.password });
+  const captureWork = (action, readOnly = false) => withSession(captureSession.token, action, { csrfToken: captureSession.csrfToken, readOnly });
+  const capturedProducts = await createProductFieldFixture(captureWork, { fieldCount: 16, productCount: 1, userId: captureAccount.userId });
+  await captureWork(async (client, identity) => {
+    const loaded = await loadProduct(client, identity, capturedProducts.products[0].id);
+    assert.equal(loaded.customFields.length, 16);
+    assert.equal(loaded.customFields.find((field) => field.fieldType === 'date').timeZone, 'UTC');
+    const generated = await generateProductCustomFields(client, identity, { product: capturedProducts.product, customFieldTimeZone: 'UTC',
+      customFields: capturedProducts.values.map((field, index) => ({ ...field, value: index >= 13 ? '' : field.value })) });
+    assert.deepEqual(generated.values.map((field) => field.value), ['P/002', 'P/002/copy', 'P/002/copy/copy']);
+    const listed = await listProducts(client, identity, { search: 'Synthetic value' });
+    assert.equal(listed.rows.length, 1);
+    assert.equal(Object.keys(listed.rows[0].customFields).length, 16);
+  }, true);
   const productJobSample = await withSession(session.token, (client, identity) => registerSample(client, identity, laboratory.registration), { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
     const generated = await generateTestRequests(client, identity, productJobSample.id);

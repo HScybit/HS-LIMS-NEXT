@@ -18,12 +18,12 @@ function requireRead(identity) {
   if (!identity.permission_codes?.some((permission) => ['masters.read', 'masters.manage'].includes(permission))) throw new HttpError(403, 'forbidden', 'You cannot view custom fields.');
 }
 
-export async function productCustomFields(client, identity) {
+export async function productCustomFields(client, identity, { forListing = false } = {}) {
   requireRead(identity);
   const fields = (await client.query(`SELECT definition.id,definition.revision,field.field_id AS "versionId",
     field.option_count AS "optionCount",${Object.entries(columns).map(([key, column]) => `field.${column} AS "${key}"`).join(',')}
     FROM (SELECT id,revision,organization_id FROM custom_field_definitions
-      WHERE organization_id=$1 AND associated_with='product' AND active
+      WHERE organization_id=$1 AND associated_with='product' AND active ${forListing ? 'AND (show_in_list OR show_in_filter)' : ''}
       ORDER BY display_order,label,id LIMIT $2) definition
     LEFT JOIN custom_field_versions field ON field.organization_id=definition.organization_id
       AND field.field_id=definition.id AND field.revision=definition.revision`,
@@ -99,6 +99,7 @@ async function appendLinks(client, organizationId, input) {
 
 export async function saveCustomField(client, identity, value) {
   requirePermission(identity, 'masters.manage'); const input = customFieldInput(value);
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('custom-field-definitions:'||$1::text,0))", [identity.organization_id]);
   const prior = await priorSave(client, identity, input.id, input.revision, input.requestId, input.revision ? 'update' : 'create');
   if (prior) {
     if (JSON.stringify(authoredFields(prior)) !== JSON.stringify(authoredFields(input))) throw new HttpError(409, 'save_request_reused', 'This save request was already used for different values.');
@@ -135,6 +136,7 @@ export async function retireCustomField(client, identity, input) {
   requirePermission(identity, 'masters.manage'); fieldsOnly(input, ['id', 'revision', 'requestId']);
   const id = uuid(input.id, 'Custom field').toLowerCase(); const requestId = uuid(input.requestId, 'Delete request').toLowerCase();
   const revision = integer(input.revision, 'Revision', 1, 2_147_483_646);
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('custom-field-definitions:'||$1::text,0))", [identity.organization_id]);
   const prior = await priorSave(client, identity, id, revision, requestId, 'retire');
   if (prior) return { id, revision: prior.revision };
   const current = (await client.query('SELECT revision,active FROM custom_field_definitions WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, id])).rows[0];

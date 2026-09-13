@@ -3,6 +3,7 @@ import { HttpError } from '../auth/errors.js';
 import { parseCustomFieldDate, customFieldDateDisplay } from './dates.js';
 
 export const customFieldTimeZoneDataVersion = moment.tz.dataVersion;
+export const customFieldDateParserVersion = `moment@${moment.version};moment-timezone@${moment.tz.version}`;
 const timeZones = new Map(moment.tz.names().map((name) => [name.toLowerCase(), name]));
 
 export function customFieldTimeZone(value) {

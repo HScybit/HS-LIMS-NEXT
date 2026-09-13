@@ -2,6 +2,10 @@ const nextConfig = {
   poweredByHeader: false,
   reactProductionProfiling: process.env.PROFILE_REACT === '1',
   experimental: { optimizePackageImports: ['@tabler/icons-react'] },
+  outputFileTracingIncludes: {
+    '/api/masters/products/custom-field-generation': ['./src/custom-fields/*.js', './src/masters/custom-field-config.js', './src/auth/errors.js',
+      './node_modules/moment/**', './node_modules/moment-timezone/**'],
+  },
   async headers() {
     // Next 16.3.4 appends Route Handler Content-Type as an array, which its
     // compression filter rejects. Setting these JSON-only routes here keeps a

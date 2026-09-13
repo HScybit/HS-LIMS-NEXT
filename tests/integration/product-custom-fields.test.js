@@ -47,12 +47,15 @@ test('batched Product options remain bound to the selected revision when a defin
   const command = input({ label: 'Changing choices', fieldType: 'select', options: firstOptions });
   await work((client, identity) => saveCustomField(client, identity, command));
   let statements = 0;
-  const fields = await work((client, identity) => productCustomFields({ query: async (...args) => {
+  const fields = await work(async (client, identity) => {
+    assert.equal((await client.query('SHOW transaction_isolation')).rows[0].transaction_isolation, 'read committed');
+    return productCustomFields({ query: async (...args) => {
     const result = await client.query(...args); statements++;
     if (statements === 1) await work((other, actor) => saveCustomField(other, actor, { ...command, requestId: randomUUID(), revision: 1,
       label: 'New choices', options: [option('N', 'Replacement')] }));
     return result;
-  } }, identity), viewer, true);
+    } }, identity);
+  }, viewer);
   const previous = fields.find((field) => field.id === command.id);
   assert.equal(statements, 2); assert.equal(previous.revision, 1); assert.equal(previous.label, 'Changing choices'); assert.deepEqual(previous.options, firstOptions);
   const current = (await measured()).fields.find((field) => field.id === command.id);

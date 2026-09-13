@@ -156,7 +156,8 @@ test('Product listing batches ordered relation labels, preserves literal and ord
   const calls = [];
   const first = await work((client, identity) => listProducts({ query: (...args) => { calls.push(args[0]); return client.query(...args); } }, identity,
     { search: prefix, sort: { key: 'name', dir: 'asc' }, pageSize: 2 }), viewer, true);
-  assert.equal(calls.length, 2); assert.equal(first.totalCount, 4); assert.deepEqual(first.rows.map((row) => row._id), records.slice(0, 2).map((row) => row.id));
+  // One current-definition query, then the existing count and relation-label page queries.
+  assert.equal(calls.length, 3); assert.equal(first.totalCount, 4); assert.deepEqual(first.rows.map((row) => row._id), records.slice(0, 2).map((row) => row.id));
   assert.equal(first.rows[0].tags, `Beta ${prefix}, Alpha_% ${prefix}`); assert.equal(first.rows[0].job_template_id, `Summary_% ${prefix}`);
   const second = await work((client, identity) => listProducts(client, identity, { search: prefix, sort: { key: 'name', dir: 'asc' }, pageSize: 2, page: 2 }), viewer, true);
   assert.deepEqual(second.rows.map((row) => row._id), records.slice(2).map((row) => row.id));

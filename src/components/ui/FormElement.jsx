@@ -3,6 +3,7 @@
 import React, { useId } from 'react';
 import cx from 'classnames';
 import InputFieldDropdown from './InputFieldDropdown.jsx';
+import InputFieldDate from './InputFieldDate.jsx';
 import SearchableSelect from './SearchableSelect.jsx';
 import InputFieldText from './InputFieldText.jsx';
 import InputFieldTextarea from './InputFieldTextarea.jsx';
@@ -13,6 +14,7 @@ import '../../styles/form-controls.scss';
 const inputByType = {
   text: InputFieldText,
   dropdown: InputFieldDropdown,
+  date: InputFieldDate,
   'searchable-select': SearchableSelect,
   textarea: InputFieldTextarea,
   range: InputFieldRange,

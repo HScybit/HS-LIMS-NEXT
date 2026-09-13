@@ -46,3 +46,17 @@ test('product input rejects hidden links, malformed identities and invalid text 
     assert.throws(() => productInput(input(changes)), { status: 400 });
   }
 });
+
+test('Product capture input distinguishes omission from replacement and rejects client interpretation metadata', () => {
+  const absent = productInput(input()); assert.equal(absent.customFieldsProvided, false); assert.equal(absent.customFields, undefined);
+  const empty = productInput(input({ customFields: [] })); assert.equal(empty.customFieldsProvided, true); assert.deepEqual(empty.customFields, []);
+  const fieldId = randomUUID();
+  const value = productInput(input({ customFields: [{ fieldId: fieldId.toUpperCase(), fieldRevision: 2, value: [false, 0, ' ', '01.00'] }], customFieldTimeZone: 'america/new_york' }));
+  assert.equal(value.customFieldTimeZone, 'America/New_York');
+  assert.deepEqual(value.customFields, [{ fieldId, fieldRevision: 2, value: [false, 0, '01.00'] }]);
+  for (const changes of [{ customFields: undefined }, { customFields: null }, { customFieldsProvided: true }, { customFieldCount: 1 },
+    { customFieldTimeZone: 'UTC' }, { customFields: [], customFieldTimeZone: 'constructor' },
+    { customFields: [{ fieldId, fieldRevision: 1, value: 0, rawNumberText: 'forged' }] }]) {
+    assert.throws(() => productInput(input(changes)), { status: 400 });
+  }
+});

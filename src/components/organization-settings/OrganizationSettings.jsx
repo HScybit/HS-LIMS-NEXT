@@ -8,7 +8,8 @@ import { AppLoader } from '../ui/AppLoader.jsx';
 import { showToast } from '../ui/toast.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 
-const tabs = [{ id: 'tr_settings', label: 'TR Settings' }, { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }];
+const tabs = [{ id: 'tr_settings', label: 'TR Settings' }, { id: 'nabl_settings', label: 'NABL Settings' },
+  { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }, { id: 'settings', label: 'Tenant Settings' }];
 
 function SettingsSelect({ id, label, value, options, disabled, onChange, helperText }) {
   const choices = options.map((row) => ({ value: row.id, label: row.label }));
@@ -21,12 +22,14 @@ function SettingsSelect({ id, label, value, options, disabled, onChange, helperT
 export default function OrganizationSettings({ initialTab = 'template_configs' }) {
   const [activeTab, setActiveTab] = useState(initialTab); const [data, setData] = useState(null); const [draft, setDraft] = useState(null);
   const [error, setError] = useState(''); const [saving, setSaving] = useState(false); const [reload, setReload] = useState(0);
+  // This source checkbox is a local UI control; the source save command does not submit it.
+  const [editNonNablStart, setEditNonNablStart] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
       try {
         const result = await apiRequest('/api/organization-settings/laboratory', { signal: controller.signal });
-        if (!controller.signal.aborted) { setData(result); setDraft(result.settings); setError(''); }
+        if (!controller.signal.aborted) { setData(result); setDraft({ ...result.settings, schemeMonthFormat: result.settings.schemeMonthFormat || 'short' }); setError(''); }
       } catch (failure) { if (!controller.signal.aborted) setError(failure.message); }
     }
     void load(); return () => controller.abort();
@@ -36,7 +39,10 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
     setSaving(true); setError('');
     try {
       const result = await apiRequest('/api/organization-settings/laboratory', { method: 'PUT', body: {
-        revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: draft.jobWorkflowId } });
+        revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: draft.jobWorkflowId,
+        schemeCurrentYearDigits: draft.schemeCurrentYearDigits ?? '', schemeNextYearDigits: draft.schemeNextYearDigits ?? '',
+        schemeSeparator: draft.schemeSeparator ?? '', schemeMonthFormat: draft.schemeMonthFormat,
+        schemeNonNablStartNumber: draft.schemeNonNablStartNumber ?? '' } });
       setDraft((current) => ({ ...current, revision: result.revision })); showToast('Settings saved successfully.');
     } catch (failure) { setError(failure.message); }
     finally { setSaving(false); }
@@ -77,6 +83,29 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
               <SettingsSelect id="job_workflow" label="Job Workflow" value={draft.jobWorkflowId} options={data.workflows} disabled={disabled}
                 helperText="Used when jobs are allocated. Leave empty to use the sample category's test request workflow."
                 onChange={(value) => setDraft((current) => ({ ...current, jobWorkflowId: value }))} />
+            </div></section>
+          </div>
+          <div role="tabpanel" id="tabpanel-nabl_settings" aria-labelledby="tab-nabl_settings" hidden={activeTab !== 'nabl_settings'}>
+            <section className="settings-section"><h6 className="settings-section__title">ULR Number Series</h6><div className="row g-3 align-items-end">
+              <div className="col-md-8"><FormElement label="Non-NABL Start Number" inputProps={{ id: 'non_nabl_start_number', type: 'number',
+                value: draft.schemeNonNablStartNumber ?? '', disabled, onChange: (event) => setDraft((current) => ({ ...current, schemeNonNablStartNumber: event.target.value })) }} /></div>
+              <div className="col-md-4"><div className="smplfy-checkbox-field"><Checkbox id="non_nabl_start_no" ariaLabel="Edit Start No.?" checked={editNonNablStart}
+                disabled={disabled} onChange={setEditNonNablStart} /><div className="smplfy-checkbox-field__body">
+                <label className="smplfy-checkbox-field__label mb-0" htmlFor="non_nabl_start_no">Edit Start No.?</label></div></div></div>
+            </div></section>
+          </div>
+          <div role="tabpanel" id="tabpanel-settings" aria-labelledby="tab-settings" hidden={activeTab !== 'settings'}>
+            <section className="settings-section"><h6 className="settings-section__title">Financial Year</h6><div className="row gx-3">
+              {[
+                ['schemeCurrentYearDigits', 'current_year_digits', 'Current Year Digits', 'e.g. 24', 128],
+                ['schemeNextYearDigits', 'next_year_digits', 'Next Year Digits', 'e.g. 25', 128],
+                ['schemeSeparator', 'separator', 'Separator', 'e.g. -', 250],
+              ].map(([key, id, label, placeholder, maxLength]) => <div key={id} className="col-md-4"><div className="mb-3"><FormElement label={label}
+                inputProps={{ id, value: draft[key] ?? '', placeholder, maxLength, disabled,
+                  onChange: (event) => setDraft((current) => ({ ...current, [key]: event.target.value })) }} /></div></div>)}
+              <div className="col-md-6"><FormElement type="dropdown" label="Current Month Format" inputProps={{ id: 'current_month_format', value: draft.schemeMonthFormat,
+                options: [{ value: 'short', label: 'Short' }, { value: 'long', label: 'Long' }, { value: 'number', label: 'Number' }], disabled,
+                onChange: (event) => setDraft((current) => ({ ...current, schemeMonthFormat: event.target.value })) }} /></div>
             </div></section>
           </div>
         </div>
