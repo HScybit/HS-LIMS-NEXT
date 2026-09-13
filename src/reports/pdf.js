@@ -47,8 +47,9 @@ export async function renderReportPdf({ html, printConfig, stylesheet }, { brows
     await context.route('**/*', (route) => { blockedRequests += 1; return route.abort(); });
     const page = await context.newPage();
     timer = setTimeout(() => { timedOut = true; void context.close().catch(() => {}); }, timeoutMs);
-    await page.setContent(html, { waitUntil: 'load', timeout: timeoutMs });
+    // Select fixed print images before parsing <picture>; changing media after load can interrupt image.decode().
     await page.emulateMedia({ media: 'print' });
+    await page.setContent(html, { waitUntil: 'load', timeout: timeoutMs });
     await page.evaluate(async () => { await document.fonts.ready; });
     if (blockedRequests) throw new HttpError(422, 'report_external_resource', 'The report contains a resource that has not been captured for printing.');
     const decodedImages = await page.evaluate(async () => {

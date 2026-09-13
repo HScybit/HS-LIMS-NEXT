@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
+import sharp from 'sharp';
 import { renderReportPdf } from '../../src/reports/pdf.js';
 import { pdfPageText } from '../helpers/pdf-page-text.js';
 
@@ -17,6 +18,31 @@ const html = `<!doctype html><html><head><style>${stylesheet}</style></head><bod
 
 test('printing rejects corrupted inline images instead of retaining a PDF with a broken report image', async () => {
   await assert.rejects(renderReportPdf({ html: '<html><body><img src="data:image/png;base64,AA=="></body></html>', printConfig: {}, stylesheet: '' }), { code: 'report_image_unavailable' });
+});
+
+test('printing loads the fixed picture source from the first document load', async () => {
+  const source = async (color) => `data:image/png;base64,${(await sharp({ create: { width: 16, height: 16, channels: 3, background: color } }).png().toBuffer()).toString('base64')}`;
+  const screen = await source('blue'); const print = await source('red');
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  let firstLoad;
+  try {
+    const instrumented = { newContext: async (options) => {
+      const context = await browser.newContext(options); const newPage = context.newPage.bind(context);
+      context.newPage = async () => {
+        const page = await newPage(); const setContent = page.setContent.bind(page);
+        page.setContent = async (...args) => {
+          await setContent(...args);
+          firstLoad = await page.evaluate(() => ({ print: matchMedia('print').matches, source: document.images[0].currentSrc }));
+        };
+        return page;
+      };
+      return context;
+    } };
+    const bytes = await renderReportPdf({ html: `<html><body><picture><source media="print" srcset="${print}"><img src="${screen}"></picture></body></html>`,
+      printConfig: {}, stylesheet: '' }, { browser: instrumented });
+    assert.deepEqual(firstLoad, { print: true, source: print }, 'PDF loading must start with the captured print source, avoiding an in-flight screen-to-print decode replacement.');
+    assert.equal(bytes.subarray(0, 5).toString(), '%PDF-');
+  } finally { await browser.close(); }
 });
 
 test('paper width and orientation determine the actual wrapped header height used by a multipage PDF', async (context) => {
