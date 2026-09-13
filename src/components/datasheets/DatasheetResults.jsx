@@ -132,6 +132,21 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
     drafts.current.set(key, input);
     setValues((previous) => ({ ...previous, [key]: draftValue(current.current.model.fieldsById[fieldId], input) }));
   }, []);
+  const beginEdit = useCallback((fieldId, occurrenceId) => {
+    const key = valueKey(fieldId, occurrenceId); const prior = drafts.current.get(key);
+    const instanceId = current.current?.capture.instance.id;
+    return () => {
+      if (!active.current || current.current?.capture.instance.id !== instanceId) return;
+      if (prior) drafts.current.set(key, prior); else drafts.current.delete(key);
+      const saved = current.current.capture.values.find((value) => valueKey(value.fieldId, value.occurrenceId) === key);
+      const restored = prior ? draftValue(current.current.model.fieldsById[fieldId], prior) : saved;
+      setValues((previous) => {
+        const next = { ...previous };
+        if (restored) next[key] = restored; else delete next[key];
+        return next;
+      });
+    };
+  }, []);
   const commit = useCallback((fieldId, occurrenceId, value) => {
     if (operation.current || !current.current?.canExecute) return;
     const input = inputFor(fieldId, occurrenceId, value);
@@ -192,7 +207,7 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
         </div> : null}
         <div className="tr-details-template"><Profiler id="datasheet-canvas" onRender={(_id, phase, duration, _base, start) => performance.measure(`datasheet:react-${phase}`, { start, duration })}>
           <TemplateCanvas model={data.model} mode={data.canExecute ? 'edit' : 'view'} values={values} validation={data.validation} dataContext={data.dataContext}
-            occurrences={data.capture.occurrences} onChange={change} onCommit={commit} onRepeat={repeat} busy={busy} />
+            occurrences={data.capture.occurrences} onChange={change} onCommit={commit} onBeginEdit={beginEdit} onRepeat={repeat} busy={busy} />
         </Profiler></div>
       </div></section>
     </main>

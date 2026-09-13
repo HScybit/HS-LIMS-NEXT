@@ -11,8 +11,9 @@ import { assertCaptureSize } from '../../templates/runtime-limits.js';
 import { contextWidgetPreview, contextWidgetValue, isContextWidget } from '../../templates/context-widgets.js';
 import { fieldDefaultValue } from '../../templates/defaults.js';
 import TemplateImageWidget from './TemplateImageWidget.jsx';
+import TextWidget from './TextWidget.jsx';
 
-export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, occurrenceId, validation, disabled = false, report, parameter, serialNumber, imageSources, onUploadImage, showImagePlaceholder }) {
+export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view', value, onChange, onCommit, onBeginEdit, occurrenceId, validation, disabled = false, report, parameter, serialNumber, imageSources, onUploadImage, showImagePlaceholder }) {
   const plan = mode === 'plan';
   const edit = mode === 'edit';
   const shown = displayValue(field, value);
@@ -20,7 +21,7 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
   if (field.widget === 'template_image_widget') return <TemplateImageWidget field={field} value={value} mode={mode} sources={imageSources} onUpload={onUploadImage} disabled={disabled} showPlaceholder={showImagePlaceholder} />;
   if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} serialNumber={serialNumber} />;
   if (isContextWidget(field.widget)) return <div className={plan ? 'text-muted small' : 'text-break'}>{plan ? contextWidgetPreview[field.widget] : contextWidgetValue(field, report, parameter, serialNumber)}</div>;
-  if (field.widget === 'text_widget') return <div>{value?.state === 'present' ? value.textValue : field.label}</div>;
+  if (field.widget === 'text_widget') return <TextWidget field={field} mode={mode} value={value} occurrenceId={occurrenceId} disabled={disabled} onBeginEdit={onBeginEdit} onChange={onChange} onCommit={onCommit} />;
   if (field.widget === 'formula_widget') return plan ? <p className="text-break mb-0">{field.formula}</p> : <><div className={edit ? 'formulaWidgetInput' : undefined} aria-label={label}>{shown}</div>{value?.state === 'invalid' ? <div className="text-danger small" role="status">{value.errorMessage}</div> : null}</>;
   if (field.widget === 'checkbox_widget') return <Checkbox checked={Boolean(shown)} disabled={!edit || disabled} aria-label={label} onChange={edit ? (next) => { onChange?.(field.id, occurrenceId, next); onCommit?.(field.id, occurrenceId, next); } : undefined} />;
   if (!plan && !edit) return <div>{String(shown ?? '')}</div>;
@@ -80,7 +81,7 @@ function ReportResult({ report, parameter, serialNumber }) {
 
 // The markup/classes follow the source TemplateSectionNode, TemplateRowNode and TemplateColNode.
 function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId, values }) {
-  const { model, plan, mode, selected, onSelect, onCommand, onPanel, busy, validation, onChange, onCommit } = context;
+  const { model, plan, mode, selected, onSelect, onCommand, onPanel, busy, validation, onChange, onCommit, onBeginEdit } = context;
   const subject = context.runtime?.subjectFor(activeOccurrenceId);
   const parameter = subject ? { ...context.dataContext?.parametersByRequestId?.[subject.testRequestId], ...subject } : context.reportParameter;
   const column = model.columnsById[id];
@@ -103,7 +104,7 @@ function TemplateColumn({ context, id, sectionId, isEditing, activeOccurrenceId,
       </div></div></div></div>
     </div> : null}
     {isEditing && field?.widget !== 'text_widget' && !field?.alias ? <div className="template-column-warning">Missing key</div> : null}
-    <div className="row1">{field ? <TemplateWidget field={field} mode={widgetMode} value={values[key]} validation={validation[key]} onChange={onChange} onCommit={onCommit} occurrenceId={activeOccurrenceId} disabled={busy}
+    <div className="row1">{field ? <TemplateWidget field={field} mode={widgetMode} value={values[key]} validation={validation[key]} onChange={onChange} onCommit={onCommit} onBeginEdit={onBeginEdit} occurrenceId={activeOccurrenceId} disabled={busy}
       imageSources={context.imageSources ?? context.report?.assets?.templateImages ?? model.imageSources} onUploadImage={context.onUploadImage} showImagePlaceholder={context.showImagePlaceholder || plan}
       report={context.report ?? context.dataContext} parameter={parameter} serialNumber={parameter?.serialNumber ?? context.reportSerialNumber ?? model.rowsById[column.rowId].serialNumber ?? 0} /> : null}
       {column.childSectionIds.map((childId) => renderSection(context, childId, activeOccurrenceId, values))}
@@ -179,15 +180,15 @@ function renderSection(context, id, parentOccurrenceId, values, onlyOccurrenceId
   </div>);
 }
 
-export default function TemplateCanvas({ model, mode = 'plan', editing = empty, onToggleEdit, onCommand, onPanel, selected, onSelect, busy = false, values = empty, occurrences, occurrenceId, validation = empty, onChange, onCommit, onRepeat, report, dataContext, sectionRoots, canvasId = 'template-designer', idPrefix = '', onUploadImage, showImagePlaceholder = false, imageSources }) {
+export default function TemplateCanvas({ model, mode = 'plan', editing = empty, onToggleEdit, onCommand, onPanel, selected, onSelect, busy = false, values = empty, occurrences, occurrenceId, validation = empty, onChange, onCommit, onBeginEdit, onRepeat, report, dataContext, sectionRoots, canvasId = 'template-designer', idPrefix = '', onUploadImage, showImagePlaceholder = false, imageSources }) {
   const plan = mode === 'plan';
   const runtime = useMemo(() => {
     if (occurrences === undefined) return null;
     assertCaptureSize(model, occurrences);
     return indexOccurrences(model, occurrences);
   }, [model, occurrences]);
-  const context = useMemo(() => ({ model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onRepeat, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources }),
-    [model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onRepeat, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources]);
+  const context = useMemo(() => ({ model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources }),
+    [model, mode, plan, editing, onToggleEdit, onCommand, onPanel, selected, onSelect, busy, validation, onChange, onCommit, onBeginEdit, onRepeat, runtime, report, dataContext, idPrefix, onUploadImage, showImagePlaceholder, imageSources]);
   return <div id={canvasId ?? undefined} className="template-render-canvas">{sectionRoots
     ? sectionRoots.map((root) => renderSection(context, root.sectionId, root.parentOccurrenceId, values, root.occurrenceId))
     : model.rootSectionIds.map((id) => renderSection(context, id, runtime?.root.id ?? occurrenceId, values))}</div>;
