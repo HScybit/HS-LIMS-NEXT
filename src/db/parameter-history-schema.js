@@ -40,11 +40,14 @@ export const testParameterVersions = pgTable('test_parameter_versions', {
 
 export const testParameterVersionMethods = pgTable('test_parameter_version_methods', {
   ...scope(), methodId: uuid('method_id').notNull(), isDefault: boolean('is_default').notNull(),
+  methodRevision: integer('method_revision'), methodName: text('method_name'),
 }, (table) => [
   primaryKey({ name: 'test_parameter_version_method_pk', columns: [...versionColumns(table), table.methodId] }),
   uniqueIndex('test_parameter_version_default_method').on(...versionColumns(table)).where(sql`${table.isDefault}`),
   versionLink(table, 'test_parameter_version_method_parent_fk'),
   foreignKey({ name: 'test_parameter_version_method_fk', columns: [table.organizationId, table.methodId], foreignColumns: [methodsOfAnalysis.organizationId, methodsOfAnalysis.id] }),
+  check('test_parameter_version_method_observation', sql`(${table.methodRevision} is null and ${table.methodName} is null)
+    or (${table.methodRevision} is not null and ${table.methodName} is not null and ${table.methodRevision}>0 and length(trim(${table.methodName})) between 1 and 250)`),
 ]);
 
 export const parameterUncertaintyColumns = pgTable('parameter_uncertainty_columns', {

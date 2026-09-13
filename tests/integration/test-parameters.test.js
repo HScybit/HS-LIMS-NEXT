@@ -7,6 +7,7 @@ import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { emptyUncertaintyGrid, updateUncertaintyGrid } from '../../src/masters/parameter-grid.js';
 import { listTestParameters, parameterLaboratories, loadTestParameter, saveTestParameter, retireTestParameter } from '../../src/masters/test-parameters.js';
+import { saveMethod, retireMethod } from '../../src/masters/methods.js';
 
 const owner = ownerPool(); let account; let outsider; let viewer;
 const work = (callback, user = account, readOnly = false) => withSession(user.token, callback, { csrfToken: user.csrfToken, readOnly });
@@ -58,6 +59,51 @@ test('concurrent retries create once, stale edits retain history and a reused re
   await assert.rejects(work((client, identity) => loadTestParameter(client, identity, command.id)), { code: 'parameter_not_found' });
   const retired = await work((client, identity) => loadTestParameter(client, identity, command.id, { atRevision: 3 }), account, true);
   assert.equal(retired.operation, 'retire'); assert.equal(retired.active, false); assert.deepEqual(retired.measurementUncertainty, command.measurementUncertainty);
+});
+
+test('applicable method names are captured at the parameter save and survive method renames, retirement and exact retries', async () => {
+  const fixture = await createLaboratoryFixture(owner, account, { repeated: false });
+  const command = { ...input(), id: fixture.parameter.id, revision: 1 };
+  const rows = (user = account) => work(async (client) => (await client.query(`SELECT revision,method_id,method_revision,method_name,is_default
+    FROM test_parameter_version_methods WHERE organization_id=$1 AND parameter_id=$2 ORDER BY revision,method_id`,
+  [account.organizationId, command.id])).rows, user, true);
+  await work((client, identity) => saveTestParameter(client, identity, command));
+  assert.equal((await owner.query('SELECT 1 FROM method_versions WHERE organization_id=$1 AND method_id=$2',
+    [account.organizationId, fixture.method.id])).rowCount, 0, 'An observed method head must not invent earlier method history');
+  const original = [{ revision: 2, method_id: fixture.method.id, method_revision: 1, method_name: fixture.method.name, is_default: true }];
+  assert.deepEqual(await rows(), original);
+  const methodCommand = { id: fixture.method.id, revision: 1, requestId: randomUUID(), name: 'Renamed applicable method',
+    uuid: fixture.method.methodUuid, description: '', decimalScale: 2, parseNumber: true, accessUserIds: [] };
+  await work((client, identity) => saveMethod(client, identity, methodCommand));
+  assert.deepEqual(await rows(), original);
+  assert.equal((await work((client, identity) => saveTestParameter(client, identity, command))).revision, 2);
+  assert.deepEqual(await rows(viewer), original, 'A retry retains the original observation');
+  await work((client, identity) => saveTestParameter(client, identity, { ...command, revision: 2, requestId: randomUUID() }));
+  await work((client, identity) => retireMethod(client, identity, { id: fixture.method.id, revision: 2, requestId: randomUUID() }));
+  await work((client, identity) => retireTestParameter(client, identity, { id: command.id, revision: 3, requestId: randomUUID() }));
+  assert.deepEqual(await rows(), [...original,
+    { ...original[0], revision: 3, method_revision: 2, method_name: methodCommand.name },
+    { ...original[0], revision: 4, method_revision: 3, method_name: methodCommand.name }]);
+  assert.deepEqual(await rows(outsider), []);
+  for (const statement of [
+    'UPDATE test_parameter_version_methods SET method_name=$3 WHERE organization_id=$1 AND parameter_id=$2',
+    'INSERT INTO test_parameter_version_methods(organization_id,parameter_id,revision,method_id,is_default,method_revision,method_name) VALUES($1,$2,2,$4,false,1,$3)',
+  ]) await assert.rejects(work((client) => client.query(statement, statement.startsWith('INSERT')
+    ? [account.organizationId, command.id, 'Forged name', randomUUID()] : [account.organizationId, command.id, 'Forged name'])), { code: '42501' });
+  assert.equal((await owner.query("SELECT has_table_privilege('sampleify_report_worker','test_parameter_version_methods','SELECT') AS allowed")).rows[0].allowed, false);
+});
+
+test('a failed parameter transaction rolls back its captured method names together with the master revision', async () => {
+  const fixture = await createLaboratoryFixture(owner, account, { repeated: false });
+  await assert.rejects(work(async (client, identity) => {
+    await saveTestParameter(client, identity, { ...input(), id: fixture.parameter.id, revision: 1 });
+    assert.equal((await client.query('SELECT method_name FROM test_parameter_version_methods WHERE organization_id=$1 AND parameter_id=$2',
+      [account.organizationId, fixture.parameter.id])).rows[0].method_name, fixture.method.name);
+    throw new Error('Synthetic failure after the history write');
+  }), { message: 'Synthetic failure after the history write' });
+  assert.equal((await work((client, identity) => loadTestParameter(client, identity, fixture.parameter.id))).revision, 1);
+  assert.equal((await owner.query('SELECT 1 FROM test_parameter_version_methods WHERE organization_id=$1 AND parameter_id=$2',
+    [account.organizationId, fixture.parameter.id])).rowCount, 0);
 });
 
 test('master and history permissions reject cross-tenant IDs, readonly writes and foreign labs', async () => {

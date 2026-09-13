@@ -288,6 +288,9 @@ try {
         key: fixture.parameter.masterKey, schemeAbbreviation: fixture.parameter.schemeAbbreviation, order: 0, laboratoryId: fixture.laboratory.id,
         description: '<b>Fresh parameter H<sub>2</sub>O</b>', measurementUncertainty: null,
         customFields: [{ fieldId: parameterContextField.id, fieldRevision: 1, value: false }] });
+      assert.deepEqual((await client.query(`SELECT method_id,method_revision,method_name FROM test_parameter_version_methods
+        WHERE organization_id=$1 AND parameter_id=$2 AND revision=2`, [identity.organization_id, fixture.parameter.id])).rows,
+      [{ method_id: fixture.method.id, method_revision: fixture.method.revision, method_name: fixture.method.name }]);
     }, prepareDatasheet: async (client, identity, template) => {
       const result = await addImageWidget(client, identity, template, templateImage, { rowId: template.records.rows[0].id });
       assert.equal(result.metrics.assets.queryCount, 1);
