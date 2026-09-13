@@ -17,6 +17,8 @@ import { assertReportSize } from './render-model.js';
 import { loadReportAssets, loadReportAssetBatch } from './assets.js';
 import { loadSampleProductContext } from '../samples/product-context.js';
 import { parameterTitleProjection } from '../templates/parameter-title.js';
+import { parameterTitleRequests } from '../templates/parameter-title-requests.js';
+import { loadParameterTitleFields, requestedParameterTitles } from '../datasheets/parameter-title-fields.js';
 
 const scope = (table, organizationId) => eq(table.organizationId, organizationId);
 const reportSummary = (report) => ({ id: report.id, reportNumber: report.reportNumber, revision: report.revision, reportType: report.reportType, groupKey: report.groupKey, status: report.status, isFinalized: report.isFinalized, generatedAt: report.generatedAt });
@@ -137,6 +139,9 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
     { kind: 'report', additionalVersionIds: selectedResults.filter((result) => result.source === 'section').map((result) => result.versionId) });
   const history = await reportFinalSections(client, identity, selectedResults, definitions);
   const imageCounts = new Map(groups.map((group) => [group.key, assertReportSize(models.get(group.templateId), group.results, history.finalCaptures, history.datasheetModels).imageCounts ?? {}]));
+  const titleRequests = new Map();
+  for (const group of groups) parameterTitleRequests(models.get(group.templateId), group.results, history, titleRequests);
+  await requestedParameterTitles(client, identity, new Map(selectedResults.map((result) => [result.testRequestId, result])), titleRequests);
   const db = database(client);
   await db.insert(sampleEvents).values({ organizationId: identity.organization_id, id: input.requestId, sampleId,
     eventType: input.finalizeSample ? 'reports_finalized' : 'reports_generated', actorUserId: identity.user_id,
@@ -205,7 +210,8 @@ export async function loadReport(client, identity, reportId) {
     chosen.request_status AS "requestStatus", chosen.datasheet_status AS "datasheetStatus", chosen.completed_at AS "completedAt",
     specification.parameter_name AS "parameterName", specification.method_name AS "methodName", specification.rule_name AS specification,
     specification.test_parameter_id AS "parameterId",specification.organization_id AS "parameterOrganizationId",specification.parameter_master_key AS "parameterKey",
-    parameter.history_available AS "parameterHistoryAvailable",parameter.description AS "parameterDescription",parameter.display_order AS "parameterOrder",
+    parameter.history_available AS "parameterHistoryAvailable",specification.parameter_revision AS "parameterRevision",parameter.custom_field_count AS "parameterCustomFieldCount",
+    parameter.description AS "parameterDescription",parameter.display_order AS "parameterOrder",
     parameter.scheme_abbreviation AS "parameterSchemeAbbreviation",parameter.laboratory_id AS "parameterLaboratoryId",
     submission.unit_symbol AS "measurementUnit", submission.submitted_at AS "submittedAt", submission.source, submission.instance_id AS "instanceId", submission.version_id AS "versionId", submission.capture_revision AS "captureRevision",
     submission.result_type AS "resultType", submission.number_value AS "numberValue", submission.text_value AS "textValue", submission.boolean_value AS "booleanValue", boundary.outcome AS "decisionOutcome"
@@ -216,14 +222,19 @@ export async function loadReport(client, identity, reportId) {
     WHERE chosen.organization_id=$1 AND chosen.report_id=$2 ORDER BY chosen.display_order`, [identity.organization_id, reportId])).rows;
   for (const result of results) {
     result.finalResult = result.resultType === 'numeric' ? result.numberValue : result.resultType === 'boolean' ? result.booleanValue : result.textValue;
-    result.parameterTitleValues = parameterTitleProjection(result);
-    for (const key of ['parameterId', 'parameterOrganizationId', 'parameterKey', 'parameterHistoryAvailable', 'parameterDescription', 'parameterOrder', 'parameterSchemeAbbreviation', 'parameterLaboratoryId']) delete result[key];
   }
   const sectionResults = results.filter((result) => result.source === 'section');
   const loaded = await loadDefinitions(client, identity.organization_id, [...new Set([report.templateVersionId, ...sectionResults.map((result) => result.versionId)])]);
   const { finalCaptures, datasheetModels, metrics: captureMetrics } = await reportFinalSections(client, identity, results, loaded.definitions);
   const definition = loaded.definitions.get(report.templateVersionId);
   const size = assertReportSize(definition.model, results, finalCaptures, datasheetModels);
+  const parameterRequests = parameterTitleRequests(definition.model, results, { finalCaptures, datasheetModels });
+  const parameters = parameterRequests.size ? await loadParameterTitleFields(client, identity, results, parameterRequests) : null;
+  for (const result of results) {
+    result.parameterTitleValues = parameterTitleProjection(result, parameters?.fieldsByRequestId.get(result.testRequestId));
+    for (const key of ['parameterId', 'parameterOrganizationId', 'parameterKey', 'parameterHistoryAvailable', 'parameterRevision', 'parameterCustomFieldCount',
+      'parameterDescription', 'parameterOrder', 'parameterSchemeAbbreviation', 'parameterLaboratoryId']) delete result[key];
+  }
   const productSelectors = [...loaded.definitions.values()].flatMap(({ model }) => Object.values(model.fieldsById)
     .filter((field) => field.widget === 'product_detail_widget').map((field) => field.alias));
   const productLineId = report.productContextLineId ?? report.sampleProductId;
@@ -235,5 +246,6 @@ export async function loadReport(client, identity, reportId) {
     customerReference: report.customerReference, receivedAt: report.receivedAt, registeredAt: report.registeredAt, dueAt: report.dueAt, description: report.description },
     results, printConfig, model: templateView(definition.model), finalCaptures, datasheetModels, assets: branding.assets,
     ...(products ? { productDetailsByLineId: products.productDetailsByLineId, primaryProductLineId: productLineId, productLineId } : {}),
-    metrics: { definition: loaded.metrics, capture: captureMetrics, assets: branding.metrics, ...(products ? { products: products.metrics } : {}), ...size } };
+    metrics: { definition: loaded.metrics, capture: captureMetrics, assets: branding.metrics, ...(products ? { products: products.metrics } : {}),
+      ...(parameters ? { parameters: parameters.metrics } : {}), ...size } };
 }

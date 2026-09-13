@@ -15,7 +15,8 @@ export async function loadDatasheetContext(client, identity, sheet, captureRevis
     SELECT request.id AS "testRequestId",request.request_number AS "requestNumber",product.product_name AS "productName",product.sample_product_id AS "sampleProductId",
       specification.parameter_name AS "parameterName",specification.method_name AS "methodName",specification.unit_symbol AS "measurementUnit",specification.rule_name AS specification,
       specification.test_parameter_id AS "parameterId",specification.organization_id AS "parameterOrganizationId",specification.parameter_master_key AS "parameterKey",
-      parameter.history_available AS "parameterHistoryAvailable",parameter.description AS "parameterDescription",parameter.display_order AS "parameterOrder",
+      parameter.history_available AS "parameterHistoryAvailable",specification.parameter_revision AS "parameterRevision",parameter.custom_field_count AS "parameterCustomFieldCount",
+      parameter.description AS "parameterDescription",parameter.display_order AS "parameterOrder",
       parameter.scheme_abbreviation AS "parameterSchemeAbbreviation",parameter.laboratory_id AS "parameterLaboratoryId",
       submission.submitted_at AS "submittedAt",source_sheet.completed_at AS "completedAt",
       CASE WHEN selected.id IS NOT NULL THEN selected.recorded_by ELSE coalesce(submission.submitted_by,assignment.assigned_user_id) END AS analyst_id,
@@ -46,11 +47,11 @@ export async function loadDatasheetContext(client, identity, sheet, captureRevis
     occurrenceId: row.resultOccurrenceId, revision: row.resultValueRevision })), databaseMs: performance.now() - started };
 }
 
-export function assembleDatasheetContext(context, capture) {
+export function assembleDatasheetContext(context, capture, customFields) {
   const first = context.rows[0];
   const sample = first ? Object.fromEntries(['sampleNumber', 'customerName', 'customerAddress', 'sampleCategoryName', 'receivedAt', 'registeredAt', 'dueAt', 'description', 'customerReference'].map((key) => [key, first[key]])) : {};
   const results = context.rows.map((row, index) => ({ id: row.testRequestId, serialNumber: index + 1, ...Object.fromEntries(['testRequestId', 'requestNumber', 'productName', 'sampleProductId', 'parameterName', 'methodName', 'measurementUnit', 'specification', 'analystName', 'submittedAt', 'completedAt', 'resultEntryId', 'resultDatasheetId', 'resultSavedAt'].map((key) => [key, row[key]])),
-    parameterTitleValues: parameterTitleProjection(row),
+    parameterTitleValues: parameterTitleProjection(row, customFields?.get(row.testRequestId)),
     finalResult: row.resultEntryId ? valuePayload(capture.pinnedValues.get(`${row.resultInstanceId}:${row.resultFieldId}:${row.resultOccurrenceId}:${row.resultValueRevision}`))
       : row.result_type === 'numeric' ? row.number_value : row.result_type === 'boolean' ? row.boolean_value : row.text_value }));
   return { sample, results, parametersByRequestId: Object.fromEntries(results.map((row) => [row.testRequestId, row])) };

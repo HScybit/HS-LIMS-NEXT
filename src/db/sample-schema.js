@@ -100,6 +100,7 @@ export const analyticalSpecifications = pgTable('analytical_specifications', {
   foreignKey({ name: 'analytical_spec_basis_fk', columns: [t.organizationId, t.basisSpecificationId], foreignColumns: [t.organizationId, t.id] }),
   check('analytical_spec_basis_identity', sql`${t.basisSpecificationId} is distinct from ${t.id}`),
   unique('analytical_specification_method_key').on(t.organizationId, t.id, t.methodId),
+  index('analytical_specification_parameter_version').on(t.organizationId, t.testParameterId, t.parameterRevision),
   check('analytical_specification_revisions', sql`${t.parameterRevision} > 0 and ${t.methodRevision} > 0 and ${t.parameterScale} between 0 and 12 and ${t.decimalScale} between 0 and 12`),
   check('analytical_specification_unit', sql`(${t.measurementUnitId} is null and num_nonnulls(${t.unitRevision}, ${t.unitCode}, ${t.unitName}, ${t.unitSymbol}, ${t.unitDimension}) = 0)
     or (${t.measurementUnitId} is not null and ${t.unitRevision} is not null and ${t.unitRevision} > 0 and ${t.unitCode} is not null and ${t.unitName} is not null and ${t.unitSymbol} is not null)`),

@@ -45,6 +45,13 @@ export default function DatasheetResults({ datasheetId, sampleId, requestedRevis
       else nextValues[key] = draftValue(current.current.model.fieldsById[input.fieldId], input);
     }
     const next = { ...current.current, validation: result.validation, capture: { ...current.current.capture, revision: result.revision, values: result.values } };
+    if (result.parameterTitleValuesByRequestId && next.dataContext) {
+      const results = next.dataContext.results.map((row) => {
+        const { project_field_data: _customFields, ...base } = row.parameterTitleValues ?? {};
+        return { ...row, parameterTitleValues: result.parameterTitleValuesByRequestId[row.testRequestId] ?? base };
+      });
+      next.dataContext = { ...next.dataContext, results, parametersByRequestId: Object.fromEntries(results.map((row) => [row.testRequestId, row])) };
+    }
     current.current = next; setData(next); setValues(nextValues);
   }, []);
   // The queue constructor only stores callbacks; applySaved runs after an awaited save.

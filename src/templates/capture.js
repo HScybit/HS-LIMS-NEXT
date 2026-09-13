@@ -13,6 +13,7 @@ import { assertCaptureSize } from './runtime-limits.js';
 import { agreedResultNumber, agreedResultValue, recordJobResultEntries } from '../datasheets/job-results.js';
 import { resolveResultInput } from './defaults.js';
 import { assertTemplateImageBudget } from '../template-assets/service.js';
+import { capturedParameterTitles } from '../datasheets/parameter-title-fields.js';
 
 function storedValues(identity, instance, versionId, nextRevision, values) {
   return values.map((value) => ({ ...value, organizationId: identity.organization_id, instanceId: instance.id, versionId,
@@ -55,6 +56,9 @@ async function initializeCapture(client, identity, versionId, { subjects = [] } 
   const initialValues = defaults(model, occurrences);
   await assertTemplateImageBudget(client, identity.organization_id, model, { occurrences, values: initialValues });
   const calculation = calculateCapture(model, occurrences, initialValues);
+  const subjectsByOccurrence = new Map(bindings.map((binding) => [binding.occurrenceId, binding]));
+  await capturedParameterTitles(client, identity, model, { values: calculation.values,
+    occurrences: occurrences.map((row) => ({ ...row, subject: subjectsByOccurrence.get(row.id) })) }, calculation.validation);
   const db = database(client);
   await setCaptureContext(client, instance.id);
   await db.insert(templateInstances).values(instance);
@@ -116,6 +120,8 @@ async function updateCapture(client, identity, instanceId, expectedRevision, inp
   if (keys.size !== entered.length) throw new HttpError(400, 'duplicate_value', 'A save cannot contain the same field occurrence twice.');
   const priorValues = capture.values.filter((value) => !keys.has(valueKey(value.fieldId, value.occurrenceId)));
   const calculation = calculateCapture(model, capture.occurrences, [...priorValues, ...entered]);
+  const parameterTitleValuesByRequestId = await capturedParameterTitles(client, identity, model,
+    { occurrences: capture.occurrences, values: calculation.values }, calculation.validation);
   const previous = new Map(capture.values.map((value) => [valueKey(value.fieldId, value.occurrenceId), value]));
   const calculated = calculation.calculated.filter((value) => {
     const old = previous.get(valueKey(value.fieldId, value.occurrenceId));
@@ -123,7 +129,8 @@ async function updateCapture(client, identity, instanceId, expectedRevision, inp
   });
   await insertBatch(database(client), templateValues, storedValues(identity, { id: instanceId }, versionId, expectedRevision + 1, [...entered, ...calculated]));
   await recordJobResultEntries(client, instanceId, model, entered);
-  return { instanceId, versionId, revision: expectedRevision + 1, values: calculation.values, validation: calculation.validation, calculationMs: calculation.durationMs };
+  return { instanceId, versionId, revision: expectedRevision + 1, values: calculation.values, validation: calculation.validation,
+    parameterTitleValuesByRequestId, calculationMs: calculation.durationMs };
 }
 
 export async function changeRepeat(client, identity, instanceId, expectedRevision, command) {
@@ -199,6 +206,9 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
   // Deletion can only reduce the budget, including for older oversized captures.
   if (command.type === 'clone') await assertTemplateImageBudget(client, identity.organization_id, model, { occurrences, values: [...capture.values, ...additions] });
   const calculation = calculateCapture(model, occurrences, [...capture.values, ...additions]);
+  const parameterTitleValuesByRequestId = command.type === 'clone' ? await capturedParameterTitles(client, identity, model,
+    { occurrences, values: calculation.values }, calculation.validation) : undefined;
   await insertBatch(db, templateValues, storedValues(identity, { id: instanceId }, versionId, nextRevision, [...additions, ...calculation.calculated]));
-  return { instanceId, versionId, revision: nextRevision, occurrences, values: calculation.values, validation: calculation.validation };
+  return { instanceId, versionId, revision: nextRevision, occurrences, values: calculation.values, validation: calculation.validation,
+    ...(parameterTitleValuesByRequestId ? { parameterTitleValuesByRequestId } : {}) };
 }

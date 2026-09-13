@@ -7,6 +7,8 @@ import { isContextWidget } from '../templates/context-widgets.js';
 import { loadDatasheetContext, assembleDatasheetContext } from './context.js';
 import { withTemplateImages } from '../template-assets/service.js';
 import { loadSampleProductContext } from '../samples/product-context.js';
+import { parameterTitleRequests } from '../templates/parameter-title-requests.js';
+import { loadParameterTitleFields } from './parameter-title-fields.js';
 
 export async function datasheetRecord(client, identity, datasheetId, sampleId) {
   uuid(datasheetId, 'Datasheet');
@@ -49,15 +51,18 @@ export async function loadDatasheet(client, identity, datasheetId, { sampleId, a
     { sampleProductIds: [...new Set([sheet.sampleProductId, ...context.rows.map((row) => row.sampleProductId)])] }) : null;
   const capture = await loadCapture(client, identity.organization_id, sheet.templateInstanceId, captureRevision, { pinnedValues: context?.pinnedValues ?? [] });
   const calculation = calculateCapture(definition.model, capture.occurrences, capture.values);
+  const parameterRequests = context ? parameterTitleRequests(definition.model, context.rows, { capture, validation: calculation.validation }) : new Map();
+  const parameters = parameterRequests.size ? await loadParameterTitleFields(client, identity, context.rows, parameterRequests) : null;
   const withImages = await withTemplateImages(client, identity.organization_id, definition, capture);
   const projectionStart = performance.now();
   const modelView = datasheetTemplateView(withImages.model); const runtimeView = datasheetCaptureView(capture);
   const projectionMs = performance.now() - projectionStart;
-  const dataContext = context ? assembleDatasheetContext(context, capture) : undefined;
+  const dataContext = context ? assembleDatasheetContext(context, capture, parameters?.fieldsByRequestId) : undefined;
   if (products) Object.assign(dataContext, { productDetailsByLineId: products.productDetailsByLineId, primaryProductLineId: products.primaryProductLineId, productLineId: sheet.sampleProductId });
   return { datasheet: sheet, model: modelView, capture: runtimeView, dataContext, validation: calculation.validation,
     canExecute: atRevision === undefined && sheet.canWork && identity.permission_codes.includes('datasheets.execute') && sheet.assignedAnalyst
       && ['allocated', 'in_progress', 'rejected'].includes(sheet.requestStatus) && ['in_progress', 'rejected'].includes(sheet.status) && capture.instance.status === 'editing',
     metrics: { metadataQueryCount: context ? 2 : 1, metadataMs: metadataMs + (context?.databaseMs ?? 0), definition: definition.metrics, capture: capture.metrics,
-      ...(products ? { products: products.metrics } : {}), ...(withImages.metrics.assets ? { assets: withImages.metrics.assets } : {}), calculationMs: calculation.durationMs, projectionMs } };
+      ...(products ? { products: products.metrics } : {}), ...(parameters ? { parameters: parameters.metrics } : {}),
+      ...(withImages.metrics.assets ? { assets: withImages.metrics.assets } : {}), calculationMs: calculation.durationMs, projectionMs } };
 }

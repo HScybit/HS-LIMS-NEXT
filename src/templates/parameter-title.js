@@ -2,11 +2,12 @@ const own = (record, key) => record != null && Object.hasOwn(record, key) ? reco
 
 // Only recorded specification/version columns enter the render model. Missing
 // old master history must not acquire values from a later mutable revision.
-export function parameterTitleProjection(row) {
+export function parameterTitleProjection(row, customFields) {
   if (!row.parameterId) return null;
   const parameter = { _id: row.parameterId, organization_id: row.parameterOrganizationId, name: row.parameterName, key: row.parameterKey };
   if (row.parameterHistoryAvailable) Object.assign(parameter, { description: row.parameterDescription, order: row.parameterOrder,
     scheme_abbr: row.parameterSchemeAbbreviation, lab_id: row.parameterLaboratoryId });
+  if (row.parameterHistoryAvailable && customFields !== undefined) parameter.project_field_data = customFields;
   return parameter;
 }
 

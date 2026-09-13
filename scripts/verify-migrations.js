@@ -23,6 +23,7 @@ import { loadSample } from '../src/samples/load.js';
 import { generateTestRequests } from '../src/test-requests/generate.js';
 import { allocateTestRequest } from '../src/test-requests/allocate.js';
 import { prepareReportFlow } from '../tests/helpers/report-flow.js';
+import { prepareParameterTitleRegistration } from '../tests/helpers/parameter-title-fields.js';
 import { addProductWidgets } from '../tests/helpers/product-context.js';
 import { prepareSubjectJob } from '../tests/helpers/job-subjects.js';
 import { createReportTemplate } from '../tests/helpers/reports.js';
@@ -275,6 +276,8 @@ try {
   const productContextField = await withSession(session.token, (client, identity) => saveCustomField(client, identity,
     { id: randomUUID(), revision: 0, requestId: randomUUID(), label: 'Fresh Product flag', key: 'fresh_product_flag', associatedWith: 'product', fieldType: 'checkbox' }), { csrfToken: session.csrfToken });
   const productContextSelector = 'project_field__splitter__fresh_product_flag';
+  const parameterContextField = await withSession(session.token, (client, identity) => saveCustomField(client, identity,
+    { id: randomUUID(), revision: 0, requestId: randomUUID(), label: 'Fresh Parameter flag', key: 'fresh_parameter_flag', associatedWith: 'parameter', fieldType: 'checkbox' }), { csrfToken: session.csrfToken });
   let verticalTextFieldId;
   const reportFlow = await prepareReportFlow(owner, { ...account, ...session }, { finalSection: true,
     prepareProduct: async (client, identity, fixture) => {
@@ -283,7 +286,8 @@ try {
         customFields: [{ fieldId: productContextField.id, fieldRevision: 1, value: false }] });
       await saveTestParameter(client, identity, { id: fixture.parameter.id, revision: 1, requestId: randomUUID(), name: 'Fresh captured parameter',
         key: fixture.parameter.masterKey, schemeAbbreviation: fixture.parameter.schemeAbbreviation, order: 0, laboratoryId: fixture.laboratory.id,
-        description: '<b>Fresh parameter H<sub>2</sub>O</b>', measurementUncertainty: null });
+        description: '<b>Fresh parameter H<sub>2</sub>O</b>', measurementUncertainty: null,
+        customFields: [{ fieldId: parameterContextField.id, fieldRevision: 1, value: false }] });
     }, prepareDatasheet: async (client, identity, template) => {
       const result = await addImageWidget(client, identity, template, templateImage, { rowId: template.records.rows[0].id });
       assert.equal(result.metrics.assets.queryCount, 1);
@@ -298,7 +302,10 @@ try {
       const titleColumn = await editTemplate(client, identity, template.versionId, vertical.model.version.revision, { type: 'addColumn', rowId });
       const title = await editTemplate(client, identity, template.versionId, titleColumn.model.version.revision,
         { type: 'configureField', columnId: titleColumn.model.rowsById[rowId].columnIds.at(-1), widget: 'text_widget', alias: 'fresh_parameter_title', label: 'description' });
-      await editTemplate(client, identity, template.versionId, title.model.version.revision,
+      const customColumn = await editTemplate(client, identity, template.versionId, title.model.version.revision, { type: 'addColumn', rowId });
+      const customTitle = await editTemplate(client, identity, template.versionId, customColumn.model.version.revision,
+        { type: 'configureField', columnId: customColumn.model.rowsById[rowId].columnIds.at(-1), widget: 'text_widget', alias: 'fresh_custom_title', label: 'prefix.fresh_parameter_flag' });
+      await editTemplate(client, identity, template.versionId, customTitle.model.version.revision,
         { type: 'configureSection', id: template.records.sections[0].id, name: 'Final parameter results', isFinalResult: true, isParameterLoop: true });
     } });
   const verticalCapture = await withSession(session.token, (client, identity) => loadCapture(client, identity.organization_id, reportFlow.sheet.template_instance_id), { readOnly: true });
@@ -340,6 +347,8 @@ try {
   const captured = await withSession(session.token, (client, identity) => loadReport(client, identity, reportId), { readOnly: true });
   assert.equal(captured.results[0].parameterTitleValues.order, 0);
   assert.equal(captured.results[0].parameterTitleValues.description, '<b>Fresh parameter H<sub>2</sub>O</b>');
+  assert.equal(captured.results[0].parameterTitleValues.project_field_data.fresh_parameter_flag.display_value, false);
+  assert.equal(captured.metrics.parameters.queryCount, 3);
   assert.equal(captured.assets.header.versionId, assets.header.versionId);
   assert.ok(captured.assets.header.html.includes(`data:image/png;base64,${assets.content.toString('base64')}`));
   assert.equal(captured.assets.footer.versionId, assets.footer.versionId);
@@ -371,6 +380,19 @@ try {
   assert.equal(checkedProductContext, true);
   const pdf = await withSession(session.token, (client, identity) => reportPdfFile(client, identity, reportId), { readOnly: true });
   assert.equal(pdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdf.byteLength > 5000);
+  const creationOwner = await createAccount(owner, { permissions: ['samples.create', 'samples.manage', 'templates.manage', 'masters.manage', 'settings.manage'] });
+  const creationSession = await signIn({ identifier: creationOwner.username, password: creationOwner.password });
+  const creationFixture = await prepareParameterTitleRegistration(owner, { ...creationOwner, ...creationSession });
+  const creationActor = await createAccount(owner, { organizationId: creationOwner.organizationId, permissions: ['samples.create'] });
+  const creationLogin = await signIn({ identifier: creationActor.username, password: creationActor.password });
+  const titleSample = await withSession(creationLogin.token, (client, identity) => registerSample(client, identity, creationFixture.registration), { csrfToken: creationLogin.csrfToken });
+  const titleChild = titleSample.testRequests.find((row) => row.datasheetId);
+  const titleSheet = await withSession(creationSession.token, (client, identity) => loadDatasheet(client, identity, titleChild.datasheetId), { readOnly: true });
+  assert.equal(titleSheet.dataContext.results[0].parameterTitleValues.project_field_data.creation.display_value, 'Captured creation title');
+  await withSession(creationLogin.token, async (client) => {
+    await client.query("SELECT set_config('app.auto_job_request_id',$1,true)", [titleChild.id]);
+    assert.equal((await client.query('SELECT * FROM laboratory_parameter_field_context')).rowCount, 0);
+  }, { readOnly: true });
   const signedAccount = { ...account, ...session };
   const jobFlow = await prepareSubjectJob(owner, signedAccount, signedAccount, { resultWidget: true, resultValueType: 'result', resultDefaultValue: '000.00' });
   const work = (action, options = {}) => withSession(session.token, action, { csrfToken: session.csrfToken, ...options });

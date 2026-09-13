@@ -13,6 +13,7 @@ import { generateReports, loadReport } from '../../src/reports/service.js';
 import { loadReportRenderer } from '../../src/reports/renderer.js';
 import { enqueueReportPdf, reportPdfFile } from '../../src/reports/jobs.js';
 import { processNextReportJob, createReportWorkerPool } from '../../src/reports/worker.js';
+import { saveCustomField } from '../../src/masters/custom-fields.js';
 
 const owner = ownerPool();
 after(async () => { await closePool(); await owner.end(); });
@@ -72,15 +73,24 @@ test('pre-history parameters retain only their actual specification fields after
 });
 
 test('parameter projections require active laboratory access or the exact report live worker lease', async () => {
-  const author = await account(); const flow = await prepareParameterTitleFlow(owner, author, { productLines: 2 });
+  const author = await account(); const flow = await prepareParameterTitleFlow(owner, author, { productLines: 2,
+    prepareParameter: async (client, identity) => {
+      const field = await saveCustomField(client, identity, { id: randomUUID(), requestId: randomUUID(), revision: 0,
+        key: 'scoped', label: 'Scoped field', fieldType: 'text', associatedWith: 'parameter' });
+      return { customFields: [{ fieldId: field.id, fieldRevision: field.revision, value: 'Selected history' }] };
+    } });
   const denied = await account({ organizationId: author.organizationId, permissions: ['samples.create'] });
   const foreign = await account({ permissions: ['samples.read'] });
   assert.equal((await owner.query('SELECT * FROM laboratory_parameter_context')).rowCount, 0);
   assert.equal((await getPool().query('SELECT * FROM laboratory_parameter_context')).rowCount, 0);
-  for (const user of [denied, foreign]) assert.equal((await work(user, (client) => client.query('SELECT * FROM laboratory_parameter_context'))).rowCount, 0);
+  const views = ['laboratory_parameter_context', 'laboratory_parameter_field_context', 'laboratory_parameter_value_context'];
+  for (const user of [denied, foreign]) for (const view of views) assert.equal((await work(user, (client) => client.query(`SELECT * FROM ${view}`))).rowCount, 0);
   const unbound = await work(author, (client, identity) => saveTestParameter(client, identity, { id: randomUUID(), revision: 0, requestId: randomUUID(),
-    name: 'Unbound metadata', key: 'UNBOUND', schemeAbbreviation: 'UNBOUND', description: 'Not captured', order: 0, laboratoryId: null, measurementUncertainty: null }));
+    name: 'Unbound metadata', key: 'UNBOUND', schemeAbbreviation: 'UNBOUND', description: 'Not captured', order: 0, laboratoryId: null, measurementUncertainty: null,
+    customFields: flow.parameterCommand.customFields }));
   assert.equal((await work(author, (client) => client.query('SELECT * FROM laboratory_parameter_context WHERE parameter_id=$1', [unbound.id]))).rowCount, 0);
+  assert.equal((await work(author, (client) => client.query('SELECT * FROM laboratory_parameter_field_context WHERE parameter_id=$1', [unbound.id]))).rowCount, 0);
+  await prepareParameterTitleFlow(owner, author, { complete: false, prepareParameter: async () => ({ key: 'UNSELECTED', schemeAbbreviation: 'UNSELECTED', customFields: flow.parameterCommand.customFields }) });
   assert.equal((await work(author, (client) => client.query("SELECT has_table_privilege(current_user,'laboratory_parameter_context','INSERT,UPDATE,DELETE') AS allowed"))).rows[0].allowed, false);
   await assert.rejects(work(author, (client) => client.query('DELETE FROM laboratory_parameter_context WHERE false')), { code: '55000' });
   const generated = await work(author, (client, identity) => generateReports(client, identity, flow.sample.id,
@@ -99,22 +109,28 @@ test('parameter projections require active laboratory access or the exact report
       assert.equal((await client.query('SELECT * FROM laboratory_parameter_context')).rowCount, 0);
       const identity = (await client.query('SELECT * FROM report_pdf_begin_read($1,$2,$3)', lease)).rows[0];
       assert.deepEqual((await client.query('SELECT specification_id FROM laboratory_parameter_context')).rows, selected);
+      assert.deepEqual((await client.query('SELECT parameter_id,display_text FROM laboratory_parameter_field_context')).rows,
+        [{ parameter_id: flow.fixture.parameter.id, display_text: 'Selected history' }]);
+      assert.deepEqual((await client.query('SELECT parameter_id,raw_text FROM laboratory_parameter_value_context')).rows,
+        [{ parameter_id: flow.fixture.parameter.id, raw_text: 'Selected history' }]);
       assert.equal((await loadReport(client, identity, reportId)).results[0].parameterTitleValues.order, 0);
       const hash = (await client.query("SELECT current_setting('app.report_pdf_lease_hash') AS hash")).rows[0].hash;
       await client.query("SELECT set_config('app.report_pdf_lease_hash','invalid',true)");
-      assert.equal((await client.query('SELECT * FROM laboratory_parameter_context')).rowCount, 0);
+      for (const view of views) assert.equal((await client.query(`SELECT * FROM ${view}`)).rowCount, 0);
       await client.query('SELECT * FROM report_pdf_begin_read($1,$2,$3)', lease);
       await owner.query('UPDATE memberships SET active=false WHERE organization_id=$1 AND user_id=$2', [author.organizationId, author.userId]);
-      try { assert.equal((await client.query('SELECT * FROM laboratory_parameter_context')).rowCount, 0); }
+      try { for (const view of views) assert.equal((await client.query(`SELECT * FROM ${view}`)).rowCount, 0); }
       finally { await owner.query('UPDATE memberships SET active=true WHERE organization_id=$1 AND user_id=$2', [author.organizationId, author.userId]); }
       return hash;
     }, { pool: worker });
     await assert.rejects(worker.query('SELECT * FROM test_parameter_versions'), { code: '42501' });
+    await assert.rejects(worker.query('SELECT * FROM parameter_version_custom_fields'), { code: '42501' });
+    await assert.rejects(worker.query('SELECT * FROM parameter_version_custom_field_values'), { code: '42501' });
     await owner.query('UPDATE report_pdf_jobs SET lease_expires_at=started_at+(clock_timestamp()-started_at)/2 WHERE organization_id=$1 AND id=$2', [job.organization_id, job.job_id]);
     await transaction(async (client) => {
       await client.query("SELECT set_config('app.organization_id',$1,true),set_config('app.user_id',$2,true),set_config('app.report_pdf_job_id',$3,true),set_config('app.report_pdf_lease_hash',$4,true)",
         [author.organizationId, author.userId, job.job_id, leaseHash]);
-      assert.equal((await client.query('SELECT * FROM laboratory_parameter_context')).rowCount, 0);
+      for (const view of views) assert.equal((await client.query(`SELECT * FROM ${view}`)).rowCount, 0);
     }, { pool: worker });
   } finally {
     if (job) {
