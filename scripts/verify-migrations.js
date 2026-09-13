@@ -50,6 +50,7 @@ import { loadWorkflowRun } from '../src/workflows/load.js';
 import { createWorkflow, saveWorkflowState, saveWorkflowTransition, publishWorkflow, cloneWorkflowDraft } from '../src/workflows/authoring.js';
 import { loadWorkflowDefinition } from '../src/workflows/definition.js';
 import { loadWorkflowMaster, updateWorkflowMaster, retireWorkflowMaster } from '../src/workflows/metadata.js';
+import { cloneWorkflowMaster } from '../src/workflows/master-clone.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
 import { generateReports, loadReport } from '../src/reports/service.js';
 import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
@@ -115,6 +116,14 @@ try {
     await saveWorkflowState(client, identity, copy.versionId, 1, { ...initialInput, outputCount: 1 }, first.id);
     assert.equal((await loadWorkflowDefinition(client, identity, copy.versionId)).transitions.length, 0);
     assert.deepEqual(await loadWorkflowDefinition(client, identity, workflow.versionId), original);
+    const cloneInput = { id: randomUUID(), requestId: randomUUID(), sourceVersionId: workflow.versionId };
+    const masterCopy = await cloneWorkflowMaster(client, identity, workflow.workflowId, cloneInput);
+    assert.equal(masterCopy.metadataRevision, 1); assert.equal(masterCopy.revision, 2);
+    const masterGraph = await loadWorkflowDefinition(client, identity, masterCopy.versionId);
+    assert.equal(masterGraph.states.length, original.states.length); assert.equal(masterGraph.transitions[0].sourcePort, 8);
+    assert.notEqual(masterGraph.states[0].id, original.states[0].id);
+    assert.equal((await client.query('SELECT source_version_id FROM workflow_clone_origins WHERE organization_id=$1 AND workflow_id=$2',
+      [identity.organization_id, masterCopy.workflowId])).rows[0].source_version_id, workflow.versionId);
     const metadata = await loadWorkflowMaster(client, identity, workflow.workflowId);
     assert.equal(metadata.metadataRevision, 1); assert.equal(metadata.createdBy, identity.user_id);
     const input = { id: workflow.workflowId, requestId: randomUUID(), metadataRevision: 1, name: 'Fresh workflow metadata edit' };
@@ -123,6 +132,7 @@ try {
     assert.equal((await loadWorkflowMaster(client, identity, workflow.workflowId, { atRevision: 1 })).name, 'Fresh workflow layout');
     await retireWorkflowMaster(client, identity, { id: workflow.workflowId, requestId: randomUUID(), metadataRevision: changed.metadataRevision });
     await assert.rejects(loadWorkflowMaster(client, identity, workflow.workflowId), { code: 'workflow_not_found' });
+    assert.deepEqual(await cloneWorkflowMaster(client, identity, workflow.workflowId, cloneInput), masterCopy);
   }, { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
     const command = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh role history', description: '0',
@@ -499,7 +509,7 @@ try {
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, role history/settings, workflow layout/ports/cloning, template capture, typed parameter uncertainty, method/user and Product/tag history/retry/retirement, Product job fallback, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, role history/settings, workflow layout/ports/metadata and master/draft cloning, template capture, typed parameter uncertainty, method/user and Product/tag history/retry/retirement, Product job fallback, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

@@ -51,6 +51,27 @@ export const workflowMetadataVersions = pgTable('workflow_metadata_versions', {
       and num_nonnulls(${t.requestedCode},${t.requestedAppliesTo},${t.requestedActive})=0))`),
 ]);
 
+export const workflowCloneOrigins = pgTable('workflow_clone_origins', {
+  organizationId: tenant(), workflowId: uuid('workflow_id').notNull(), workflowVersionId: uuid('workflow_version_id').notNull(),
+  clonedRevision: integer('cloned_revision').notNull(),
+  sourceWorkflowId: uuid('source_workflow_id').notNull(), sourceVersionId: uuid('source_version_id').notNull(),
+  sourceRevision: integer('source_revision').notNull(), sourceMetadataRevision: integer('source_metadata_revision').notNull(),
+  requestedSourceVersionId: uuid('requested_source_version_id'), requestId: uuid('request_id').notNull(),
+  createdBy: uuid('created_by').notNull(), createdAt: time('created_at').notNull().defaultNow(),
+  createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, (t) => [primaryKey({ name: 'workflow_clone_origin_pk', columns: [t.organizationId, t.workflowId] }),
+  unique('workflow_clone_request_key').on(t.organizationId, t.requestId),
+  ...[[t.workflowId, workflows, 'workflow_clone_target_fk'], [t.sourceWorkflowId, workflows, 'workflow_clone_source_fk'],
+    [t.workflowVersionId, workflowVersions, 'workflow_clone_version_fk'], [t.sourceVersionId, workflowVersions, 'workflow_clone_source_version_fk'],
+    [t.requestedSourceVersionId, workflowVersions, 'workflow_clone_requested_version_fk']].map(([column, table, name]) => foreignKey({
+    name, columns: [t.organizationId, column], foreignColumns: [table.organizationId, table.id],
+  })),
+  foreignKey({ name: 'workflow_clone_request_fk', columns: [t.organizationId, t.requestId], foreignColumns: [workflowMetadataVersions.organizationId, workflowMetadataVersions.requestId] }),
+  foreignKey({ name: 'workflow_clone_actor_fk', columns: [t.organizationId, t.createdBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('workflow_clone_origin_identity', sql`${t.workflowId}<>${t.sourceWorkflowId} and ${t.workflowVersionId}<>${t.sourceVersionId}
+    and ${t.clonedRevision}>0 and ${t.sourceRevision}>0 and ${t.sourceMetadataRevision}>=0`),
+]);
+
 export const workflowStates = pgTable('workflow_states', {
   ...identity(), workflowVersionId: uuid('workflow_version_id').notNull(), code: text('code').notNull(), name: text('name').notNull(),
   description: text('description').notNull().default(''), stateType: text('state_type').notNull().default('normal'), displayOrder: integer('display_order').notNull().default(0), color: text('color'),
