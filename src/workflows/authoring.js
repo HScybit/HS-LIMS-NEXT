@@ -38,7 +38,7 @@ async function nextRevision(client, org, versionId) {
 async function requireRoles(client, org, roleIds) {
   const distinct = [...new Set(roleIds)];
   if (!distinct.length) return;
-  const result = await client.query('SELECT id FROM roles WHERE organization_id=$1 AND id=ANY($2::uuid[])', [org, distinct]);
+  const result = await client.query('SELECT id FROM roles WHERE organization_id=$1 AND active AND id=ANY($2::uuid[])', [org, distinct]);
   if (result.rowCount !== distinct.length) throw new HttpError(422, 'invalid_workflow_role', 'A selected role is unavailable in this organization.');
 }
 

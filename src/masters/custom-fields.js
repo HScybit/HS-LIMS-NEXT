@@ -223,7 +223,7 @@ export async function listCustomFields(client, identity, input = {}) {
 export async function customFieldRoles(client, identity, input = {}) {
   requireRead(identity); fieldsOnly(input, ['search']);
   const search = searchText(input.search, 'Role search');
-  const rows = (await client.query(`SELECT id,name FROM roles WHERE organization_id=$1 AND name ILIKE $2 ORDER BY name,id LIMIT 101`,
+  const rows = (await client.query(`SELECT id,name FROM roles WHERE organization_id=$1 AND active AND name ILIKE $2 ORDER BY name,id LIMIT 101`,
     [identity.organization_id, literalSearch(search)])).rows;
   return { rows: rows.slice(0, 100), hasMore: rows.length > 100 };
 }

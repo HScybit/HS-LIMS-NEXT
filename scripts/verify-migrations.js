@@ -52,6 +52,8 @@ import { generateReports, loadReport } from '../src/reports/service.js';
 import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
 import { loadReportRenderer } from '../src/reports/renderer.js';
 import { createReportWorkerPool, verifyReportWorkerRole, processNextReportJob } from '../src/reports/worker.js';
+import { createRole, updateRole, retireRole, loadRole, listRoles, loadRoleSettings } from '../src/roles/service.js';
+import { saveLaboratorySettings } from '../src/organization-settings/service.js';
 
 process.loadEnvFile('.env.worker.local');
 
@@ -90,8 +92,26 @@ try {
   const role = (await getPool().query('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')).rows[0];
   assert.deepEqual(role, { rolsuper: false, rolbypassrls: false });
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
-  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage'] });
+  const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage', 'roles.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
+  await withSession(session.token, async (client, identity) => {
+    const command = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh role history', description: '0',
+      defaultPath: '/samples', permissionCodes: ['templates.read'], capabilityKeys: ['can_self_allocate', 'can_create_sample'] };
+    assert.equal((await createRole(client, identity, command)).revision, 1);
+    assert.equal((await createRole(client, identity, command)).revision, 1);
+    const original = await loadRole(client, identity, command.id, { atRevision: 1 });
+    assert.equal(original.savedBy, account.userId);
+    await updateRole(client, identity, { id: command.id, requestId: randomUUID(), revision: 1, name: 'Fresh edited role' });
+    assert.deepEqual((await loadRole(client, identity, command.id)).permissionCodes, command.permissionCodes);
+    const removal = { id: command.id, requestId: randomUUID(), revision: 2 };
+    assert.equal((await retireRole(client, identity, removal)).revision, 3);
+    assert.equal((await retireRole(client, identity, removal)).revision, 3);
+    assert.deepEqual(await loadRole(client, identity, command.id, { atRevision: 1 }), original);
+    assert.equal((await listRoles(client, identity, { search: 'Fresh edited role' })).totalCount, 0);
+    assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, false);
+    await saveLaboratorySettings(client, identity, { revision: 0, autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: null, selfAllocationEnabled: true });
+    assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, true);
+  }, { csrfToken: session.csrfToken });
   // Enrollment must work from an empty schema using only the restricted app role.
   const mfaSetup = await withSession(session.token, startMfaSetup, { csrfToken: session.csrfToken, accountAction: true });
   const mfaInput = { setupId: mfaSetup.setupId, code: totpAt(mfaSetup.secret, Date.now()) };

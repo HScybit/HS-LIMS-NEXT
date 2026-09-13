@@ -35,7 +35,9 @@ export async function workflowConditionSource(client, identity, run) {
   return { ...request, testRequest: request };
 }
 export async function currentWorkflowRoles(client, identity) {
-  return new Set((await client.query('SELECT role_id FROM membership_roles WHERE organization_id=$1 AND user_id=$2', [identity.organization_id, identity.user_id])).rows.map((role) => role.role_id));
+  return new Set((await client.query(`SELECT assignment.role_id FROM membership_roles assignment JOIN roles role
+    ON role.organization_id=assignment.organization_id AND role.id=assignment.role_id AND role.active
+    WHERE assignment.organization_id=$1 AND assignment.user_id=$2`, [identity.organization_id, identity.user_id])).rows.map((role) => role.role_id));
 }
 export function canRequestTransition(identity, transition, roles) {
   return ['samples.manage', 'datasheets.execute', 'approvals.respond'].some((permission) => identity.permission_codes?.includes(permission))

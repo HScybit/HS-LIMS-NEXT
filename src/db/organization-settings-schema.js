@@ -9,6 +9,7 @@ import { workflows } from './workflow-schema.js';
 export const organizationLaboratorySettings = pgTable('organization_laboratory_settings', {
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   autoCreateJobs: boolean('auto_create_jobs').notNull().default(false),
+  selfAllocationEnabled: boolean('self_allocation_enabled').notNull().default(false),
   resultSummaryTemplateId: uuid('result_summary_template_id'), jobWorkflowId: uuid('job_workflow_id'),
   // GenericForm scheme settings are source text-input lexemes; parseInt prefixes and absent fallbacks are meaningful.
   schemeCurrentYearDigits: text('scheme_current_year_digits'), schemeNextYearDigits: text('scheme_next_year_digits'),

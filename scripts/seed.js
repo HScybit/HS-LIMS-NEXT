@@ -4,6 +4,7 @@ import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq } from 'drizzle-orm';
 import { organizations, users, credentials, memberships, roles, permissions, rolePermissions, membershipRoles } from '../src/db/schema.js';
+import { roleCapabilities } from '../src/db/role-history-schema.js';
 import { hashPassword } from '../src/auth/passwords.js';
 
 const url = new URL(process.env.MIGRATION_DATABASE_URL);
@@ -25,12 +26,15 @@ try {
       const [user] = await tx.insert(users).values({ username: 'analyst.demo', email: 'analyst@example.invalid', displayName: 'Demo Analyst' }).returning();
       await tx.insert(credentials).values({ userId: user.id, passwordHash });
       await tx.insert(memberships).values({ userId: user.id, organizationId: organization.id, isDefault: true });
-      const [role] = await tx.insert(roles).values({ organizationId: organization.id, name: 'Laboratory Administrator' }).returning();
+      const [role] = await tx.insert(roles).values({ organizationId: organization.id, name: 'Laboratory Administrator', protected: true }).returning();
+      await tx.insert(roleCapabilities).values({ organizationId: organization.id, roleId: role.id, capabilityKey: 'can_admin' });
       await tx.insert(membershipRoles).values({ userId: user.id, organizationId: organization.id, roleId: role.id });
       for (const [code, description] of [
         ['templates.read', 'Read templates'], ['templates.manage', 'Manage templates'],
         ['samples.read', 'Read samples'], ['samples.create', 'Create samples'], ['samples.manage', 'Manage samples'],
         ['datasheets.execute', 'Enter datasheet results'],
+        ['roles.read', 'View roles'], ['roles.manage', 'Manage roles'],
+        ['settings.read', 'View organization settings'], ['settings.manage', 'Manage organization settings'],
       ]) {
         await tx.insert(permissions).values({ code, description }).onConflictDoNothing();
         await tx.insert(rolePermissions).values({ organizationId: organization.id, roleId: role.id, permissionCode: code });

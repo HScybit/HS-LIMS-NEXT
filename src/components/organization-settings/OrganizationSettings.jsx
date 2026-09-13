@@ -39,7 +39,8 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
     setSaving(true); setError('');
     try {
       const result = await apiRequest('/api/organization-settings/laboratory', { method: 'PUT', body: {
-        revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: draft.jobWorkflowId,
+        revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, selfAllocationEnabled: draft.selfAllocationEnabled,
+        resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: draft.jobWorkflowId,
         schemeCurrentYearDigits: draft.schemeCurrentYearDigits ?? '', schemeNextYearDigits: draft.schemeNextYearDigits ?? '',
         schemeSeparator: draft.schemeSeparator ?? '', schemeMonthFormat: draft.schemeMonthFormat,
         schemeNonNablStartNumber: draft.schemeNonNablStartNumber ?? '' } });
@@ -69,6 +70,11 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
                 <Checkbox id="auto_create_jobs" ariaLabel="Auto Create Jobs" checked={draft.autoCreateJobs} disabled={disabled}
                   onChange={(value) => setDraft((current) => ({ ...current, autoCreateJobs: value }))} />
                 <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="auto_create_jobs">Auto Create Jobs</label></div>
+              </div></div>
+              <div className="mb-3"><div className="smplfy-checkbox-field">
+                <Checkbox id="enable_self_allocation" ariaLabel="Enable Self Allocation" checked={draft.selfAllocationEnabled} disabled={disabled}
+                  onChange={(value) => setDraft((current) => ({ ...current, selfAllocationEnabled: value }))} />
+                <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="enable_self_allocation">Enable Self Allocation</label></div>
               </div></div>
             </section>
           </div>

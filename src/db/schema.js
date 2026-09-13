@@ -55,9 +55,18 @@ export const roles = pgTable('roles', {
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   id: uuid('id').notNull().defaultRandom(),
   name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  defaultPath: text('default_path'),
+  active: boolean('active').notNull().default(true),
+  protected: boolean('protected').notNull().default(false),
+  // Pre-existing roles have no invented creation event. Their first edit records revision one.
+  revision: integer('revision').notNull().default(0),
 }, (table) => [
   primaryKey({ columns: [table.organizationId, table.id] }),
   uniqueIndex('roles_name_key').on(table.organizationId, sql`lower(${table.name})`),
+  check('role_fields', sql`length(trim(${table.name})) between 1 and 150 and length(${table.description})<=2000
+    and (${table.defaultPath} is null or length(${table.defaultPath})<=300) and ${table.revision}>=0
+    and (not ${table.protected} or ${table.active})`),
 ]);
 
 export const permissions = pgTable('permissions', {
@@ -80,6 +89,7 @@ export const membershipRoles = pgTable('membership_roles', {
   roleId: uuid('role_id').notNull(),
 }, (table) => [
   primaryKey({ columns: [table.organizationId, table.userId, table.roleId] }),
+  index('membership_roles_role').on(table.organizationId, table.roleId, table.userId),
   foreignKey({ columns: [table.organizationId, table.userId], foreignColumns: [memberships.organizationId, memberships.userId] }),
   foreignKey({ columns: [table.organizationId, table.roleId], foreignColumns: [roles.organizationId, roles.id] }),
 ]);
