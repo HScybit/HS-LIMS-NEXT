@@ -9,6 +9,8 @@ import PrimaryButton from '../ui/PrimaryButton.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
 import WorkflowCanvas from './WorkflowCanvas.jsx';
 import WorkflowNodeDialog from './WorkflowNodeDialog.jsx';
+import WorkflowConnectionDialog from './WorkflowConnectionDialog.jsx';
+import { workflowConnectionsAtPorts } from '../../workflows/connection-form.js';
 import { apiRequest } from '../../lib/api-client.js';
 
 const idle = { busy: false, uncertain: false, saved: false, stale: false, error: null };
@@ -36,7 +38,7 @@ export default function WorkflowPage({ workflowId, canManage }) {
     const pending = () => busy.current || dragging.current || Boolean(command.current) || dirty.current;
     const prepareLeave = async (leave = async () => {}) => {
       if (busy.current || dragging.current) return false;
-      if (pending() && !window.confirm(command.current ? 'A save may have completed. Leave without confirming its result?' : 'You have unsaved node changes. Leave without saving them?')) return false;
+      if (pending() && !window.confirm(command.current ? 'A save may have completed. Leave without confirming its result?' : 'You have unsaved workflow changes. Leave without saving them?')) return false;
       await leave(); return true;
     };
     const unregister = navigation?.register({ hasPending: pending, prepareLeave });
@@ -61,17 +63,21 @@ export default function WorkflowPage({ workflowId, canManage }) {
   }
   function closeForm(unchanged = false) {
     if (busy.current || command.current) return;
-    if (!unchanged && dirty.current && !window.confirm('Discard unsaved node changes?')) return;
+    if (!unchanged && dirty.current && !window.confirm('Discard unsaved workflow changes?')) return;
     dirty.current = false; setForm(null); setAction((current) => current.stale ? current : idle);
   }
   async function execute(operation, input, elementId) {
-    if (busy.current || action.stale || !command.current && !editable) return 'failed';
+    if (busy.current || action.stale) return 'failed';
+    if (!command.current && !editable) {
+      setAction({ ...idle, stale: true, error: { message: 'Workflow editing is no longer available. Reload the workflow to continue.' } });
+      return 'failed';
+    }
     if (!command.current) {
       if (!operation) return 'failed';
       command.current = { body: { requestId: crypto.randomUUID(), versionId: data.version.id, revision: data.version.revision,
         operation, ...(elementId ? { elementId } : {}), ...(input === undefined ? {} : { input }) } };
     }
-    busy.current = true; setAction({ ...idle, busy: true });
+    busy.current = true; setAction({ ...idle, busy: true, operation: command.current.body.operation });
     try {
       command.current.saved ??= await apiRequest(`/api/workflows/${workflowId}/commands`, { method: 'POST', body: command.current.body });
       const current = await apiRequest(definitionPath(workflowId, command.current.saved.versionId));
@@ -81,7 +87,7 @@ export default function WorkflowPage({ workflowId, canManage }) {
     } catch (failure) {
       const saved = Boolean(command.current?.saved); const uncertain = saved || !failure.status || failure.status >= 500;
       if (!uncertain) command.current = null;
-      setAction({ busy: false, saved, uncertain, stale: !uncertain && failure.status === 409,
+      setAction({ busy: false, saved, uncertain, operation: command.current?.body.operation, stale: !uncertain && failure.status === 409,
         error: saved ? { message: `The change was saved, but the workflow could not be reloaded. ${failure.message}` } : failure });
       return uncertain ? 'pending' : 'failed';
     } finally { busy.current = false; }
@@ -95,9 +101,23 @@ export default function WorkflowPage({ workflowId, canManage }) {
     } catch (failure) { setAction((value) => ({ ...value, busy: false, error: failure })); }
     finally { busy.current = false; }
   }
-  function editNode(node) { if (!disabled && !dragging.current) { dirty.current = false; setAction(idle); setForm({ node }); } }
+  function editNode(node) { if (!disabled && !dragging.current) { dirty.current = false; setAction(idle); setForm({ type: 'node', node }); } }
   function deleteNode(node) {
     if (!disabled && !dragging.current && window.confirm('Delete this node and its connected connections?')) void execute('delete_state', undefined, node.id);
+  }
+  function editConnection(connection, ports) {
+    if (disabled || dragging.current) return;
+    dirty.current = false; setAction(idle); setForm({ type: 'connection', connection, ports });
+  }
+  function createConnection(ports) {
+    if (disabled || dragging.current) return;
+    const matches = workflowConnectionsAtPorts(data.transitions, ports);
+    if (matches.length > 1) { setAction({ ...idle, error: { message: 'More than one connection uses these ports. Select the individual connection to edit it.' } }); return; }
+    editConnection(matches[0] ?? null, ports);
+  }
+  function deleteConnection() {
+    if (action.busy || action.uncertain || action.stale || !form?.connection) return;
+    if (window.confirm('Delete this connection?')) void execute('delete_transition', undefined, form.connection.id);
   }
   return <>
     <PageHeader><div className="page-header page-header--workflow-editor"><div className="container-fluid h-100"><div className="row page-header__row h-100 align-items-center justify-content-between gx-0">
@@ -119,11 +139,18 @@ export default function WorkflowPage({ workflowId, canManage }) {
     {error ? <div className="alert alert-danger m-4" role="alert">{error}<button type="button" className="btn btn-link" onClick={() => setReload((value) => value + 1)}>Retry</button></div>
       : data ? <main className="workflow-page workflow-page--editor"><section className="workflow-editor-card"><WorkflowCanvas states={data.states} transitions={data.transitions}
         onEditNode={editable ? editNode : undefined} onDeleteNode={editable ? deleteNode : undefined}
+        onEditConnection={editable ? editConnection : undefined} onCreateConnection={editable ? createConnection : undefined}
         onMoveNode={editable ? (id, position) => execute('patch_state', { canvasX: position.x, canvasY: position.y }, id) : undefined}
-        onDragChange={(value) => { dragging.current = value; setMoving(value); }} moving={moving} disabled={disabled} /></section></main>
+        onDragChange={(value) => { dragging.current = value; setMoving(value); }} moving={moving}
+        modalOpen={Boolean(form)} disabled={!form && (action.busy || action.uncertain || action.stale)} /></section></main>
         : <p className="text-muted m-4" role="status">Loading workflow...</p>}
-    {form && data ? <WorkflowNodeDialog key={form.node?.id ?? 'new'} node={form.node} states={data.states} action={action}
+    {form?.type === 'node' && data ? <WorkflowNodeDialog key={form.node?.id ?? 'new'} node={form.node} states={data.states} action={action}
       onSave={(input) => execute(form.node ? 'patch_state' : 'create_state', input, form.node?.id)} onClose={closeForm}
       onReload={reloadWorkflow} onDirtyChange={(value) => { dirty.current = value; }} /> : null}
+    {form?.type === 'connection' && data ? <WorkflowConnectionDialog key={form.connection?.id ?? 'new'} connection={form.connection} ports={form.ports}
+      states={data.states} transitions={data.transitions} action={action}
+      onSave={(input) => execute(form.connection ? 'patch_transition' : 'create_transition', input, form.connection?.id)}
+      onDelete={form.connection ? deleteConnection : undefined} onClose={closeForm} onReload={reloadWorkflow}
+      onDirtyChange={(value) => { dirty.current = value; }} /> : null}
   </>;
 }

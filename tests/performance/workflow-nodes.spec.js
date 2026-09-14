@@ -99,10 +99,10 @@ test('node dialogs and draft edits meet declared small, large and complex browse
       expect(current.states.at(-1).capabilityRoles.filter((role) => role.capability === 'view')).toHaveLength(selectedRoles);
       const source = await work((client, identity) => loadWorkflowDefinition(client, identity, fixture.source.version.id), true);
       expect(workflowGraphValues(source)).toEqual(workflowGraphValues(fixture.source));
-      expect(entry.metrics.modalMs).toBeLessThanOrEqual(modalBudgetMs);
-      expect(entry.metrics.inputMs).toBeLessThanOrEqual(inputBudgetMs);
-      expect(entry.metrics.saveMs).toBeLessThanOrEqual(saveBudgetMs);
       console.log(JSON.stringify({ edges, selectedRoles, ...entry.metrics }));
+      expect.soft(entry.metrics.modalMs).toBeLessThanOrEqual(modalBudgetMs);
+      expect.soft(entry.metrics.inputMs).toBeLessThanOrEqual(inputBudgetMs);
+      expect.soft(entry.metrics.saveMs).toBeLessThanOrEqual(saveBudgetMs);
       if (selectedRoles === 500) {
         await page.setViewportSize({ width: 390, height: 844 });
         await expect(page.locator('.lims-main')).toHaveCSS('margin-left', '0px');
@@ -116,7 +116,7 @@ test('node dialogs and draft edits meet declared small, large and complex browse
         await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
       }
     }
-    report.status = 'passed';
+    report.status = test.info().errors.length ? 'failed' : 'passed';
   } catch (error) { report.status = 'failed'; report.error = error.message; throw error; }
   finally { report.finishedAt = new Date().toISOString(); await writeFile('.local/workflow-node-performance.json', JSON.stringify(report, null, 2) + '\n'); await closePool(); await owner.end(); }
 });
