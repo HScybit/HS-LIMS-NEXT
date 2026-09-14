@@ -46,12 +46,14 @@ export const memberships = pgTable('memberships', {
   active: boolean('active').notNull().default(true),
   // Zero preserves an observed membership without inventing historical status changes.
   statusRevision: integer('status_revision').notNull().default(0),
+  signatureRevision: integer('signature_revision').notNull().default(0),
   isDefault: boolean('is_default').notNull().default(false),
   createdAt: time('created_at').notNull().defaultNow(),
 }, (table) => [
   primaryKey({ columns: [table.organizationId, table.userId] }),
   uniqueIndex('memberships_default_user_key').on(table.userId).where(sql`${table.isDefault}`),
   check('membership_status_revision', sql`${table.statusRevision}>=0`),
+  check('membership_signature_revision', sql`${table.signatureRevision}>=0`),
 ]);
 
 export const roles = pgTable('roles', {
