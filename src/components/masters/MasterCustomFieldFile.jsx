@@ -9,16 +9,17 @@ export default function MasterCustomFieldFile({ kind, field, value, stored, disa
   const [uploading, setUploading] = useState(false); const [failure, setFailure] = useState(''); const [uploaded, setUploaded] = useState(null);
   const id = `${kind}-custom-field-${field.id}`; const fileId = String(value ?? '').trim();
   const file = uploaded?.id === fileId ? uploaded : stored?.items.find((item) => item.attachmentId === fileId)?.attachment;
-  const name = file?.originalName || fileId; const url = fileId ? `/api/custom-fields/attachments/${encodeURIComponent(fileId)}` : '';
+  const name = file?.originalName || fileId;
+  const url = fileId ? `${kind === 'user' ? '/api/users/custom-fields/attachments' : '/api/custom-fields/attachments'}/${encodeURIComponent(fileId)}` : '';
   useEffect(() => () => { controller.current?.abort(); }, []);
 
   async function upload(file) {
     if (disabled || uploading || !file) return;
-    if (request.current?.file !== file) request.current = { file, id: crypto.randomUUID() };
+    if (request.current?.file !== file) request.current = { file, id: crypto.randomUUID(), field: { id: field.id, revision: field.revision } };
     const pending = request.current; const abort = new AbortController(); controller.current = abort;
     setUploading(true); setFailure(''); onBusy(field.id, true);
     try {
-      const result = await uploadCustomFieldFile(field, file, pending.id, abort.signal);
+      const result = await uploadCustomFieldFile(pending.field, file, pending.id, abort.signal, { userFields: kind === 'user' });
       if (!abort.signal.aborted) { setUploaded(result); onChange(result.id); request.current = null; }
     } catch (failure) {
       if (!abort.signal.aborted) setFailure(failure.message);

@@ -11,7 +11,7 @@ import { customFieldDateInput, customFieldDateTimeInput } from '../../custom-fie
 
 const userOption = (id, name) => ({ value: id, label: String(name ?? id).replace(/[_/-]/g, ' ').replace(/\s+/g, ' ').trim() });
 
-function Field({ kind, field, value, stored, disabled, error, onChange, onBusy, userOptions, loadUsers }) {
+export function CustomFieldControl({ kind, field, value, stored, disabled, error, onChange, onBusy, userOptions, defaultUserOptions, loadUsers }) {
   const control = customFieldControl(field); const id = `${kind}-custom-field-${field.id}`;
   if (control.type === 'file') return <MasterCustomFieldFile {...{ kind, field, value, stored, disabled, error, onChange, onBusy }} />;
   if (control.type === 'boolean') return <div className="mb-3">
@@ -48,7 +48,8 @@ function Field({ kind, field, value, stored, disabled, error, onChange, onBusy, 
   } else if (control.type === 'relation') {
     type = 'searchable-select';
     inputProps = { id, name: id, disabled, value: Array.isArray(value) ? value : [], multiple: true, clearable: !control.required,
-      options: userOptions, defaultOptions: userOptions, loadOptions: loadUsers, cacheOptions: false,
+      options: userOptions, defaultOptions: defaultUserOptions ?? userOptions, loadOptions: loadUsers, cacheOptions: false,
+      ...(kind === 'user' ? { bulkActionScope: 'visible' } : {}),
       placeholder: `Select ${field.label}`, invalid: Boolean(error), onChange };
   } else if (control.type === 'textarea') { type = 'textarea'; inputProps.rows = 3; }
   else {
@@ -91,7 +92,7 @@ export default function MasterCustomFields({ kind, fields, loading, loadError, v
   return <Profiler id={`${kind}-custom-fields`} onRender={(_id, phase, duration, _base, start) => performance.measure(`${kind}-fields:react-${phase}`, { start, duration })}>
     <div className="mt-4 pt-3 border-top"><div className="text-muted small fw-semibold mb-3 text-uppercase">Additional Data Fields</div>
     {fields.map((field) => {
-      const content = <Field kind={kind} field={field} value={values[field.id]} stored={storedById.get(field.id)} disabled={disabled} error={errors[field.id]}
+      const content = <CustomFieldControl kind={kind} field={field} value={values[field.id]} stored={storedById.get(field.id)} disabled={disabled} error={errors[field.id]}
         onChange={(value) => onChange(field.id, value)} onBusy={onBusy} userOptions={userOptions} loadUsers={loadUsers} />;
       return <div key={field.id}>{field.scheme ? <div className="d-flex align-items-end gap-3"><div className="flex-fill min-w-0">{content}</div>
         <button type="button" className="smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center flex-shrink-0"

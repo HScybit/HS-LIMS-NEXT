@@ -122,7 +122,7 @@ function MenuList(props) {
   const allVisibleSelected = visibleSelectableOptions.length > 0
     && selectedVisibleCount === visibleSelectableOptions.length;
   const partiallyVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
-  const hasFilter = Boolean(selectProps.inputValue?.trim());
+  const hasFilter = Boolean(selectProps.inputValue?.trim()) || selectProps.bulkActionScope === 'visible';
   const selectedCount = Array.isArray(selectProps.value) ? selectProps.value.length : 0;
   const toggleLabel = allVisibleSelected
     ? (hasFilter ? 'Deselect visible' : 'Deselect all')

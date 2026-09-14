@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
@@ -8,9 +8,13 @@ import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import UserReferenceField from './UserReferenceField.jsx';
 import UserSignatureField from './UserSignatureField.jsx';
+import UserCustomFields from './UserCustomFields.jsx';
 import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
 import { userFormDraft, userFormErrors, userFormPayload, userReturnPath } from '../../users/form-model.js';
 import { saveUserSignature } from '../../users/signature-client.js';
+import { userCustomFieldDraft, userCustomFieldPayload, userCustomFieldErrors } from '../../users/custom-field-form.js';
+
+const emptyFields = [];
 
 export default function UserForm({ data, canManage, currentUserId, onReload }) {
   const router = useRouter(); const search = useSearchParams(); const returnPath = userReturnPath(search.get('from'));
@@ -18,21 +22,56 @@ export default function UserForm({ data, canManage, currentUserId, onReload }) {
   const [draft, setDraft] = useState(() => userFormDraft(data)); const [saving, setSaving] = useState(false); const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({}); const [unknown, setUnknown] = useState(false); const [created, setCreated] = useState(false);
   const [signatureFile, setSignatureFile] = useState(null); const [signaturePending, setSignaturePending] = useState(false);
+  const [custom, setCustom] = useState({ fields: [], values: {}, refreshKey: 0 });
+  const [customLoading, setCustomLoading] = useState(true); const [customLoadError, setCustomLoadError] = useState(''); const [customReload, setCustomReload] = useState(0);
+  const [uploadingFields, setUploadingFields] = useState(() => new Set());
+  const uploadBusy = useRef(new Set());
+  const storedFields = data?.fieldCapture?.customFields ?? emptyFields;
   const blocked = !canManage || saving || unknown || created; const identityBlocked = blocked || data?.account.canEditIdentity === false;
+  const canRefreshFields = !blocked && !uploadingFields.size;
+  const reloadFields = useCallback(() => setCustomReload(value => value + 1), []);
+  const onUploadBusy = useCallback((id, busy) => {
+    if (busy) uploadBusy.current.add(id); else uploadBusy.current.delete(id);
+    setUploadingFields(new Set(uploadBusy.current));
+  }, []);
+  useEffect(() => {
+    if (!canRefreshFields) return undefined;
+    const controller = new AbortController();
+    apiRequest('/api/users/custom-fields', { signal: controller.signal }).then(({ fields }) => {
+      if (!controller.signal.aborted && !request.current?.pending && !createdUser.current && !uploadBusy.current.size) {
+        setCustom(current => ({ fields, values: userCustomFieldDraft(fields, storedFields, current.values), refreshKey: current.refreshKey + 1 }));
+        setCustomLoading(false); setCustomLoadError('');
+      }
+    }).catch(failure => { if (!controller.signal.aborted && !request.current?.pending && !createdUser.current && !uploadBusy.current.size) { setCustomLoading(false); setCustomLoadError(failure.message); } });
+    return () => controller.abort();
+  }, [canRefreshFields, storedFields, customReload]);
+  useEffect(() => {
+    if (!canRefreshFields) return undefined;
+    const refresh = () => { if (document.visibilityState !== 'hidden') reloadFields(); };
+    const timer = window.setInterval(refresh, 10_000); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [canRefreshFields, reloadFields]);
   const change = (key, value) => { setDraft(current => ({ ...current, [key]: value })); setFieldErrors(current => ({ ...current, [key]: '' })); };
+  const changeCustom = (key, value) => {
+    if (Array.isArray(value) && value.length > 500) { setFieldErrors(current => ({ ...current, [key]: 'Select at most 500 items.' })); return; }
+    setCustom(current => ({ ...current, values: { ...current.values, [key]: value } })); setFieldErrors(current => ({ ...current, [key]: '' }));
+  };
   async function save(event) {
-    event.preventDefault(); if (saving || !canManage || signaturePending) return;
+    event.preventDefault(); if (saving || !canManage || signaturePending || uploadingFields.size) return;
     if (!unknown && !created) {
-      const errors = userFormErrors(draft, Boolean(data)); setFieldErrors(errors); if (Object.keys(errors).length) return;
+      if (customLoading || customLoadError) return;
+      const errors = { ...userFormErrors(draft, Boolean(data)), ...userCustomFieldErrors(custom.fields, custom.values, data ? 'edit' : 'create') };
+      setFieldErrors(errors); if (Object.keys(errors).length) return;
       newId.current ??= crypto.randomUUID();
-      const content = JSON.stringify(userFormPayload(draft, data, { id: newId.current }));
+      const content = JSON.stringify({ ...userFormPayload(draft, data, { id: newId.current }), ...userCustomFieldPayload(custom.fields, custom.values,
+        { revision: data ? data.fieldCapture.revision : undefined, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
       if (request.current?.content !== content) request.current = { content, body: { ...JSON.parse(content), requestId: crypto.randomUUID() } };
     }
-    setSaving(true); setError(null);
+    request.current.pending = true; setSaving(true); setError(null);
     try {
       if (!createdUser.current) {
         const result = await apiRequest(data ? `/api/users/${data.user.id}` : '/api/users', { method: data ? 'PATCH' : 'POST', body: request.current.body });
-        setUnknown(false);
+        request.current.pending = false; setUnknown(false);
         if (!data) { createdUser.current = result.user.id; setCreated(true); }
         if (data?.user.id === currentUserId && result.passwordChanged) { notifySessionChange(); router.replace('/login'); router.refresh(); return; }
       }
@@ -43,7 +82,7 @@ export default function UserForm({ data, canManage, currentUserId, onReload }) {
       notifySessionChange(); router.push(returnPath); router.refresh();
     } catch (failure) {
       setError(failure);
-      if (!createdUser.current) setUnknown(![400, 401, 403, 404, 409, 413, 422].includes(failure.status));
+      if (!createdUser.current) { request.current.pending = ![400, 401, 403, 404, 409, 413, 422].includes(failure.status); setUnknown(request.current.pending); }
     } finally { setSaving(false); }
   }
   function textField(key, label, placeholder, maxLength, type = 'text', required = false) {
@@ -59,6 +98,7 @@ export default function UserForm({ data, canManage, currentUserId, onReload }) {
       {error ? <div className="alert alert-danger" role="alert">{created ? 'The user was created, but the signature upload did not finish. ' : ''}{error.message}
         {unknown ? <div>Retry the same save to confirm its result. Your entries are retained.</div> : null}
         {error.code?.startsWith('stale_user_') && onReload ? <button type="button" className="btn btn-link" disabled={saving} onClick={onReload}>Reload saved user</button> : null}
+        {error.code === 'user_custom_fields_changed' ? <button type="button" className="btn btn-link" disabled={saving} onClick={reloadFields}>Reload additional fields</button> : null}
       </div> : null}
       {textField('displayName', 'Name', 'John Doe', 200, 'text', true)}
       {textField('email', 'Email', 'employee@company.com', 320, 'email', true)}
@@ -78,9 +118,11 @@ export default function UserForm({ data, canManage, currentUserId, onReload }) {
         onChange={value => change(key, value)} disabled={blocked} required={required} error={fieldErrors[key]} excludeUserId={data?.user.id} />)}
       <UserSignatureField userId={data?.user.id} signature={data?.signature} selectedFile={signatureFile} onSelect={setSignatureFile} disabled={blocked}
         onPendingChange={setSignaturePending} />
+      <UserCustomFields fields={custom.fields} values={custom.values} storedFields={storedFields} loading={customLoading} loadError={customLoadError}
+        errors={fieldErrors} disabled={blocked} refreshKey={custom.refreshKey} onChange={changeCustom} onBusy={onUploadBusy} onReload={reloadFields} />
       <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={saving}
         onClick={() => router.push(created ? `/user_management/${createdUser.current}/edit` : returnPath)}>{created ? 'Open saved user' : 'Cancel'}</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={saving || !canManage || signaturePending}>{saving ? 'Saving…' : created ? 'Retry signature upload' : unknown ? 'Retry save' : data ? 'Update' : 'Create'}</PrimaryButton></div>
+        <PrimaryButton type="submit" leftIcon="save" disabled={saving || !canManage || signaturePending || uploadingFields.size > 0 || !unknown && !created && (customLoading || Boolean(customLoadError))}>{saving ? 'Saving…' : created ? 'Retry signature upload' : unknown ? 'Retry save' : data ? 'Update' : 'Create'}</PrimaryButton></div>
     </form>
   </div></div></div></div></div>;
 }

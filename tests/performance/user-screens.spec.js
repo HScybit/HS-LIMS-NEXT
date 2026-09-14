@@ -38,25 +38,39 @@ test('user editors retain bounded visible navigation, input and save performance
         }, true);
         document.addEventListener('click', event => {
           const button = event.target.closest('button[type="submit"]');
-          if (button?.form?.querySelector('[name="phone"]')) window.userScreenTiming.saveAt = performance.now();
+          if (!button?.form?.querySelector('[name="phone"]')) return;
+          const userId = location.pathname.match(/^\/user_management\/([^/]+)\/edit$/)?.[1];
+          const returnPath = new URL(location.href).searchParams.get('from');
+          const save = { at: performance.now() }; window.userScreenTiming.save = save;
+          requestAnimationFrame(function painted() {
+            const cards = document.querySelectorAll('.user-directory-card');
+            const link = cards[0]?.querySelector('.user-directory-name');
+            if (userId && returnPath && location.pathname + location.search === returnPath && cards.length === 1
+              && link?.getAttribute('href')?.startsWith(`/user_management/${userId}/`)
+              && cards[0].getBoundingClientRect().width > 0 && cards[0].getBoundingClientRect().height > 0) {
+              save.frameMs = performance.now() - save.at;
+            } else if (performance.now() - save.at < 10_000) requestAnimationFrame(painted);
+          });
         }, true);
       });
       for (let index = 0; index < 6; index++) {
         const relevant = [];
-        const observe = response => { if (/\/api\/users\/(?:profile-references|[^/]+\/form)(?:\?|$)/.test(response.url())) relevant.push(response.finished()); };
+        const observe = response => { if (/\/api\/users\/(?:custom-fields|profile-references|[^/]+\/form)(?:\?|$)/.test(response.url())) relevant.push(response.finished()); };
         page.on('response', observe);
         await page.goto(url); await expect(page.getByLabel('Contact Number', { exact: true })).toBeVisible();
         await expect(page.getByText('Selected benchmark role', { exact: true })).toBeVisible(); await expect(page.getByText('Selected benchmark laboratory', { exact: true })).toBeVisible();
         await expect(page.locator('.user-reference-field[aria-busy="true"]')).toHaveCount(0);
         await expect(page.locator('form [role="alert"]')).toHaveCount(0);
-        await expect.poll(() => relevant.length).toBe(7); await Promise.all(relevant); page.off('response', observe);
+        await expect.poll(() => relevant.length).toBe(8); await Promise.all(relevant); page.off('response', observe);
+        await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeEnabled();
         const navigationMs = await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve(performance.now()))));
         const phone = `Measured contact ${roleCount}-${index}`; await page.getByLabel('Contact Number', { exact: true }).fill(phone);
         await expect.poll(() => page.evaluate(() => window.userScreenTiming.input?.frameMs)).toBeGreaterThan(0);
         const inputMs = await page.evaluate(() => window.userScreenTiming.input.frameMs);
         await page.getByRole('button', { name: 'Update', exact: true }).click(); await expect(page).toHaveURL(new RegExp(`/user_management\\?search=${person.username}$`));
         await expect(page.locator('.user-directory-card')).toHaveCount(1);
-        const saveMs = await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve(performance.now() - window.userScreenTiming.saveAt))));
+        await expect.poll(() => page.evaluate(() => window.userScreenTiming.save?.frameMs)).toBeGreaterThan(0);
+        const saveMs = await page.evaluate(() => window.userScreenTiming.save.frameMs);
         expect(Number.isFinite(saveMs)).toBe(true);
         const stored = await owner.query('SELECT phone FROM user_profiles WHERE organization_id=$1 AND user_id=$2', [org, person.userId]); expect(stored.rows[0].phone).toBe(phone);
         const sample = { navigationMs, inputMs, saveMs, editorRequests: relevant.length };
