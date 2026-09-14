@@ -7,6 +7,9 @@ import { customFieldTimeZone, customFieldTimeZoneDataVersion, customFieldDatePar
 const stores = Object.freeze({
   product: Object.freeze({ label: 'Product', fieldTable: 'product_version_custom_fields', valueTable: 'product_version_custom_field_values', idColumn: 'product_id' }),
   parameter: Object.freeze({ label: 'Parameter', fieldTable: 'parameter_version_custom_fields', valueTable: 'parameter_version_custom_field_values', idColumn: 'parameter_id' }),
+  user: Object.freeze({ label: 'User', fieldTable: 'user_version_custom_fields', valueTable: 'user_version_custom_field_values', idColumn: 'subject_user_id',
+    definitionTable: 'user_custom_field_versions', optionTable: 'user_custom_field_version_options', attachmentTable: 'user_custom_field_attachments',
+    userTable: 'user_directory', userIdColumn: 'id', frozenUsers: true, attachmentPath: '/api/users/custom-fields/attachments' }),
 });
 function storeFor(kind) {
   if (!Object.hasOwn(stores, kind)) throw new TypeError('Unsupported Custom Field master.');
@@ -34,7 +37,7 @@ export async function loadMasterCustomFieldValues(kind, client, identity, master
     field.position,field.is_array AS "isArray",field.value_count AS "valueCount",field.display_kind AS "displayKind",
     field.display_text AS "displayText",field.display_number AS "displayNumber",field.display_boolean AS "displayBoolean",
     field.time_zone AS "timeZone",field.time_zone_data_version AS "timeZoneDataVersion",field.date_parser_version AS "dateParserVersion",
-    definition.key,definition.label FROM ${store.fieldTable} field JOIN custom_field_versions definition
+    definition.key,definition.label FROM ${store.fieldTable} field JOIN ${store.definitionTable ?? 'custom_field_versions'} definition
       ON definition.organization_id=field.organization_id AND definition.field_id=field.field_id AND definition.revision=field.field_revision
     WHERE field.organization_id=$1 AND field.${store.idColumn}=$2 AND field.revision=$3 ORDER BY field.position LIMIT 501`,
   [identity.organization_id, masterId, revision])).rows;
@@ -43,12 +46,13 @@ export async function loadMasterCustomFieldValues(kind, client, identity, master
   const items = (await client.query(`SELECT item.field_id AS "fieldId",item.position,item.raw_kind AS "rawKind",item.raw_text AS "rawText",
     item.raw_number AS "rawNumber",item.raw_boolean AS "rawBoolean",item.interpretation_state AS "interpretationState",
     item.option_id AS "optionId",item.option_revision AS "optionRevision",choice.label AS "optionLabel",item.user_id AS "userId",
-    person.display_name AS "userName",item.attachment_id AS "attachmentId",file.original_name AS "fileName",file.media_type AS "fileMediaType"
+    ${store.frozenUsers ? 'item.user_name AS "userName",item.user_username AS "userUsername"' : 'person.display_name AS "userName"'},
+    item.attachment_id AS "attachmentId",file.original_name AS "fileName",file.media_type AS "fileMediaType"
     FROM ${store.valueTable} item
-    LEFT JOIN custom_field_version_options choice ON choice.organization_id=item.organization_id AND choice.field_id=item.field_id
+    LEFT JOIN ${store.optionTable ?? 'custom_field_version_options'} choice ON choice.organization_id=item.organization_id AND choice.field_id=item.field_id
       AND choice.revision=item.option_revision AND choice.id=item.option_id
-    LEFT JOIN method_access_user_labels person ON person.organization_id=item.organization_id AND person.user_id=item.user_id
-    LEFT JOIN custom_field_attachments file ON file.organization_id=item.organization_id AND file.id=item.attachment_id
+    ${store.frozenUsers ? '' : 'LEFT JOIN method_access_user_labels person ON person.organization_id=item.organization_id AND person.user_id=item.user_id'}
+    LEFT JOIN ${store.attachmentTable ?? 'custom_field_attachments'} file ON file.organization_id=item.organization_id AND file.id=item.attachment_id
     WHERE item.organization_id=$1 AND item.${store.idColumn}=$2 AND item.revision=$3 ORDER BY item.field_id,item.position LIMIT 5001`,
   [identity.organization_id, masterId, revision])).rows;
   if (items.length > 5000) throw incomplete();
@@ -58,9 +62,9 @@ export async function loadMasterCustomFieldValues(kind, client, identity, master
     if (!field || item.position !== field.items.length) throw incomplete();
     field.items.push({ value: primitive(item, 'raw', kind), interpretationState: item.interpretationState,
       optionId: item.optionId, optionRevision: item.optionRevision, optionLabel: item.optionLabel,
-      userId: item.userId, userName: item.userName, attachmentId: item.attachmentId,
+      userId: item.userId, userName: item.userName, ...(store.frozenUsers ? { userUsername: item.userUsername } : {}), attachmentId: item.attachmentId,
       attachment: item.attachmentId ? { id: item.attachmentId, originalName: item.fileName, mediaType: item.fileMediaType,
-        url: `/api/custom-fields/attachments/${item.attachmentId}` } : null });
+        url: `${store.attachmentPath ?? '/api/custom-fields/attachments'}/${item.attachmentId}` } : null });
   }
   return [...byId.values()].map((field) => {
     if (field.items.length !== field.valueCount) throw incomplete();
@@ -79,7 +83,7 @@ function postgresDate(value, includeTime = false) {
 
 // Entries have already passed customFieldValuesInput at the owning master command boundary.
 export async function prepareMasterCustomFieldValues(kind, client, identity, { definitions, entries, timeZone, previousFields = [] }) {
-  storeFor(kind);
+  const store = storeFor(kind);
   if (entries === undefined) {
     if (definitions.length) throw new HttpError(409, `${kind}_custom_fields_changed`, 'Custom Fields changed. Reload before saving.');
     if (timeZone !== null && timeZone !== undefined) throw new HttpError(400, 'invalid_custom_field_timezone', 'A Custom Field time zone requires captured date fields.');
@@ -136,11 +140,13 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
     }
   }
   if (userIds.size) {
-    const users = (await client.query('SELECT user_id FROM method_access_user_labels WHERE organization_id=$1 AND user_id=ANY($2::uuid[])', [identity.organization_id, [...userIds]])).rows;
+    const users = (await client.query(`SELECT ${store.userIdColumn ?? 'user_id'} AS user_id FROM ${store.userTable ?? 'method_access_user_labels'}
+      WHERE organization_id=$1 AND ${store.userIdColumn ?? 'user_id'}=ANY($2::uuid[])`, [identity.organization_id, [...userIds]])).rows;
     if (users.length !== userIds.size) throw new HttpError(400, `invalid_${kind}_custom_field_user`, 'Select users in this organization.');
   }
   if (attachmentIds.size) {
-    const files = (await client.query('SELECT id,field_id FROM custom_field_attachments WHERE organization_id=$1 AND id=ANY($2::uuid[])', [identity.organization_id, [...attachmentIds]])).rows;
+    const files = (await client.query(`SELECT id,field_id FROM ${store.attachmentTable ?? 'custom_field_attachments'}
+      WHERE organization_id=$1 AND id=ANY($2::uuid[])`, [identity.organization_id, [...attachmentIds]])).rows;
     const byId = new Map(files.map((file) => [file.id, file.field_id]));
     if (items.some((item) => item.attachmentId && byId.get(item.attachmentId) !== item.fieldId)) {
       throw new HttpError(400, `invalid_${kind}_custom_field_attachment`, 'Select attachments belonging to these Custom Fields.');
