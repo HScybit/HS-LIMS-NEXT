@@ -34,13 +34,13 @@ async function unchanged(f, action, error) {
 test('a source user form saves identity and the first laboratory profile together, while metadata reads stay bounded and omit file bytes', async () => {
   const f = await fixture(); let queries = 0;
   const saved = await withSession(f.admin.token, (client, identity) => updateUserForm({ query(...args) { queries++; return client.query(...args); } }, identity, f.person.userId, f.input));
-  assert.equal(queries, 2); assert.deepEqual(saved, { id: f.person.userId, revision: 2, passwordChanged: false, profileRevision: 1 });
+  assert.equal(queries, 3); assert.deepEqual(saved, { id: f.person.userId, revision: 2, passwordChanged: false, profileRevision: 1 });
   const content = Buffer.from('Original signature file that is not form metadata');
   await withSession(f.admin.token, (client, identity) => uploadUserSignature(client, identity, f.person.userId,
     { requestId: randomUUID(), revision: 0, originalName: 'signature.txt', mediaType: 'text/plain', content }));
   queries = 0;
   const form = await withSession(f.admin.token, (client, identity) => loadUserForm({ query(...args) { queries++; return client.query(...args); } }, identity, f.person.userId), { readOnly: true });
-  assert.equal(queries, 4); assert.equal(form.account.displayName, 'Form analyst'); assert.equal(form.profile.phone, '+91 123'); assert.equal(form.profile.laboratoryId, f.lab);
+  assert.equal(queries, 5); assert.equal(form.account.displayName, 'Form analyst'); assert.equal(form.profile.phone, '+91 123'); assert.equal(form.profile.laboratoryId, f.lab);
   assert.equal(form.signature.file.byteLength, content.length); assert.equal(JSON.stringify(form).includes(content.toString()), false); assert.equal(Object.hasOwn(form.signature.file, 'content'), false);
 });
 

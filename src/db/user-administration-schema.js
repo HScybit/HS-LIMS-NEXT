@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, integer, boolean, timestamp, primaryKey, unique, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, users, memberships } from './schema.js';
 import { userProfileVersions } from './user-profile-schema.js';
+import { userFieldValueVersions } from './user-custom-field-schema.js';
 
 const bytes = customType({ dataType: () => 'bytea' });
 const transactionId = customType({ dataType: () => 'xid8' });
@@ -20,6 +21,7 @@ export const platformAdministrators = pgTable('platform_administrators', {
 export const userAccountCommands = pgTable('user_account_commands', {
   organizationId: uuid('organization_id').notNull(), userId: uuid('user_id').notNull(), requestId: uuid('request_id').notNull(),
   fingerprint: bytes('fingerprint').notNull(), revision: integer('revision').notNull(), previousRevision: integer('previous_revision').notNull(),
+  formFingerprint: bytes('form_fingerprint'), formProfileRevision: integer('form_profile_revision'), formCustomFieldRevision: integer('form_custom_field_revision'),
   credentialRevision: integer('credential_revision').notNull(), previousCredentialRevision: integer('previous_credential_revision').notNull(),
   passwordChanged: boolean('password_changed').notNull(),
   username: text('username').notNull(), email: text('email').notNull(), displayName: text('display_name').notNull(),
@@ -32,6 +34,13 @@ export const userAccountCommands = pgTable('user_account_commands', {
   unique('user_account_revision_key').on(t.userId, t.revision),
   foreignKey({ name: 'user_account_member_fk', columns: [t.organizationId, t.userId], foreignColumns: [memberships.organizationId, memberships.userId] }),
   foreignKey({ name: 'user_account_actor_fk', columns: [t.organizationId, t.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  foreignKey({ name: 'user_account_form_profile_fk', columns: [t.organizationId, t.userId, t.formProfileRevision],
+    foreignColumns: [userProfileVersions.organizationId, userProfileVersions.userId, userProfileVersions.revision] }),
+  foreignKey({ name: 'user_account_form_field_fk', columns: [t.organizationId, t.userId, t.formCustomFieldRevision],
+    foreignColumns: [userFieldValueVersions.organizationId, userFieldValueVersions.subjectUserId, userFieldValueVersions.revision] }),
+  check('user_account_form_shape', sql`(${t.formFingerprint} is null and num_nonnulls(${t.formProfileRevision},${t.formCustomFieldRevision})=0)
+    or (${t.formFingerprint} is not null and octet_length(${t.formFingerprint})=32
+      and (${t.formProfileRevision} is null or ${t.formProfileRevision}>0) and (${t.formCustomFieldRevision} is null or ${t.formCustomFieldRevision}>0))`),
   check('user_account_revisions', sql`${t.previousRevision}>0 and ${t.revision}=${t.previousRevision}+1
     and ${t.previousCredentialRevision}>0 and ${t.credentialRevision}=${t.previousCredentialRevision}+case when ${t.passwordChanged} then 1 else 0 end`),
   check('user_account_identity', sql`octet_length(${t.fingerprint})=32 and length(trim(${t.username})) between 1 and 100

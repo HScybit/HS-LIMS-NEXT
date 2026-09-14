@@ -84,7 +84,7 @@ test('user file HTTP preserves empty and 20 MiB arbitrary originals, rejects ove
     const saved = await upload(page, f.field, randomUUID(), size, { 'content-type': 'application/x-synthetic', 'x-file-name': 'original.bin' });
     expect(saved.status).toBe(201); expect(saved.body.byteLength).toBe(size);
     const response = await page.request.get(saved.body.url); const bytes = await response.body(); expect(response.status()).toBe(200);
-    expect(bytes).toEqual(Buffer.alloc(size, 23)); expect(response.headers()['x-attachment-sha256']).toBe(createHash('sha256').update(bytes).digest('hex'));
+    expect(bytes.equals(Buffer.alloc(size, 23))).toBe(true); expect(response.headers()['x-attachment-sha256']).toBe(createHash('sha256').update(bytes).digest('hex'));
     expect((await page.request.get(saved.body.url + '?view=1')).headers()['content-disposition']).toMatch(/^attachment;/);
   }
   expect((await upload(page, f.field, randomUUID(), 20 * 1024 * 1024 + 1, { 'content-type': 'application/octet-stream' })).status).toBe(413);

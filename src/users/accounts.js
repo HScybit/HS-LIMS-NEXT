@@ -13,21 +13,28 @@ const errors = {
   user_account_stale: [409, 'stale_user_account', 'This account changed in another session. Reload before saving.'],
   user_account_protected: [403, 'protected_user_identity', 'This identity is shared or has platform access. Its owner or a platform administrator must change it.'],
   user_account_identifier_taken: [409, 'sign_in_identifier_taken', 'A username or email is already in use.'],
+  user_account_form_invalid: [400, 'invalid_user_form', 'The user form change is invalid.'],
+  user_custom_field_unique: [409, 'duplicate_user_custom_field', 'A unique Custom Field value is already in use.'],
   users_username_key: [409, 'sign_in_identifier_taken', 'A username or email is already in use.'],
 };
 
-export async function updateUserAccount(client, identity, userId, value) {
+async function writeUserAccount(client, identity, userId, value, form) {
   requirePermission(identity, 'users.manage'); const input = userAccountInput(userId, value);
   const fingerprint = userAccountFingerprint(input); const passwordHash = input.password === null ? null : await hashPassword(input.password);
   try {
-    const result = await client.query('SELECT users_write_account($1,$2,$3,$4,$5,$6,$7,$8) AS revision',
-      [input.id, input.revision, input.requestId, fingerprint, input.username, input.email, input.displayName, passwordHash]);
+    const args = [input.id, input.revision, input.requestId, fingerprint, input.username, input.email, input.displayName, passwordHash];
+    if (form) args.push(form.fingerprint, form.profileRevision, form.customFieldRevision);
+    const command = form ? 'users_write_form_account' : 'users_write_account';
+    const result = await client.query(`SELECT ${command}(${args.map((_, index) => `$${index + 1}`).join(',')}) AS revision`, args);
     return { id: input.id, revision: result.rows[0].revision, passwordChanged: input.password !== null };
   } catch (error) {
     if (errors[error.constraint]) throw new HttpError(...errors[error.constraint]);
     throw userProfileCommandError(error);
   }
 }
+
+export function updateUserAccount(client, identity, userId, value) { return writeUserAccount(client, identity, userId, value); }
+export function updateUserFormAccount(client, identity, userId, value, form) { return writeUserAccount(client, identity, userId, value, form); }
 
 export async function loadUserAccount(client, identity, userId) {
   requireRead(identity); const id = uuid(userId, 'User').toLowerCase();

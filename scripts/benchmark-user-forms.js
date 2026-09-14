@@ -9,7 +9,7 @@ import { updateUserProfile } from '../src/users/profiles.js';
 import { updateUserForm, loadUserForm } from '../src/users/forms.js';
 
 const owner = ownerPool(); const report = { status: 'running', startedAt: new Date().toISOString(), synthetic: true, node: process.version,
-  conditions: 'Run alone on isolated local PostgreSQL. One warmup and five measured samples. Includes actual authentication, validation, HMAC/scrypt, service SQL and driver parsing, deferred integrity checks for both commands, commit/rollback and JSON serialization. Fixtures, current-revision reads, HTTP and browser transfer are excluded. First-profile samples have distinct targets; existing edits change identity text and contact each time. Synthetic target measurements are not a source-performance or unrestricted-scale claim.', cases: [] };
+  conditions: 'Run alone on isolated local PostgreSQL. One warmup and five measured samples. Includes actual authentication, validation, HMAC/scrypt, service SQL and driver parsing, deferred integrity checks for the complete form, commit/rollback and JSON serialization. Fixtures, current-revision reads, HTTP and browser transfer are excluded. First-profile samples have distinct targets; existing edits change identity text and contact each time. Synthetic target measurements are not a source-performance or unrestricted-scale claim.', cases: [] };
 const percentile = (values) => [...values].sort((a, b) => a - b)[Math.ceil(values.length * 0.95) - 1];
 const command = (person, revision, profileRevision, extra = {}) => ({ requestId: randomUUID(), revision, profileRevision, username: person.username, email: person.email, displayName: `Form identity ${revision}`, ...extra });
 const account = async (options) => { const actor = await createAccount(owner, options); return { ...actor, ...await signIn({ identifier: actor.username, password: actor.password }) }; };
@@ -46,24 +46,24 @@ try {
   await save(admin, person.userId, initial(person));
   await measure(admin, (client, identity) => loadUserForm(client, identity, person.userId), result => {
     assert.equal(result.account.revision, 2); assert.equal(result.profile.revision, 1); assert.equal(result.signature.file, null);
-  }, { label: 'Read complete user-form metadata', budgetMs: 100, queries: 4 });
+  }, { label: 'Read complete user-form metadata', budgetMs: 100, queries: 5 });
   await measure(admin, (client, identity, fixture) => updateUserForm(client, identity, fixture.person.userId, fixture.input), result => {
     assert.equal(result.revision, 2); assert.equal(result.profileRevision, 1);
-  }, { label: 'Save identity and first laboratory profile', budgetMs: 200, queries: 2, readOnly: false, prepare: async () => {
+  }, { label: 'Save identity and first laboratory profile', budgetMs: 200, queries: 3, readOnly: false, prepare: async () => {
     const person = await createAccount(owner, { organizationId: admin.organizationId, permissions: ['users.read'] }); return { person, input: initial(person) };
   } });
   let revision = 2; let profileRevision = 1;
   await measure(admin, (client, identity, input) => updateUserForm(client, identity, person.userId, input), (result, input) => {
     assert.equal(result.revision, input.revision + 1); assert.equal(result.profileRevision, input.profileRevision + 1); revision = result.revision; profileRevision = result.profileRevision;
-  }, { label: 'Change identity and sparse laboratory profile together', budgetMs: 150, queries: 2, readOnly: false,
+  }, { label: 'Change identity and sparse laboratory profile together', budgetMs: 150, queries: 3, readOnly: false,
     prepare: () => command(person, revision, profileRevision, { phone: `Contact ${profileRevision}` }) });
   await measure(admin, (client, identity, input) => updateUserForm(client, identity, person.userId, input), (result, input) => {
     assert.equal(result.revision, input.revision + 1); assert.equal(result.profileRevision, input.profileRevision + 1); assert.equal(result.passwordChanged, true); revision = result.revision; profileRevision = result.profileRevision;
-  }, { label: 'Save identity, profile and a supplied password', budgetMs: 350, queries: 2, readOnly: false,
+  }, { label: 'Save identity, profile and a supplied password', budgetMs: 350, queries: 3, readOnly: false,
     prepare: () => command(person, revision, profileRevision, { phone: `Password contact ${profileRevision}`, password: 'Actual benchmark password' }) });
   const before = await withSession(admin.token, (client, identity) => loadUserForm(client, identity, person.userId), { readOnly: true });
   await measure(admin, (client, identity) => updateUserForm(client, identity, person.userId, command(person, revision, profileRevision, { email: admin.email, phone: 'Must roll back' })),
-    result => assert.equal(result.code, 'sign_in_identifier_taken'), { label: 'Roll back a profile after a late global alias collision', budgetMs: 200, queries: 2, readOnly: false, errorCode: 'sign_in_identifier_taken' });
+    result => assert.equal(result.code, 'sign_in_identifier_taken'), { label: 'Roll back a profile after a late global alias collision', budgetMs: 200, queries: 3, readOnly: false, errorCode: 'sign_in_identifier_taken' });
   assert.deepEqual(await withSession(admin.token, (client, identity) => loadUserForm(client, identity, person.userId), { readOnly: true }), before);
   const exact = command(person, revision, profileRevision, { phone: 'Original exact contact', password: 'Exact original form password' });
   const original = await save(admin, person.userId, exact);
@@ -71,7 +71,7 @@ try {
   await withSession(admin.token, (client, identity) => updateUserAccount(client, identity, person.userId, { requestId: randomUUID(), revision: original.revision,
     username: person.username, email: person.email, displayName: 'Later standalone identity', password: 'Later standalone password' }));
   await measure(admin, (client, identity) => updateUserForm(client, identity, person.userId, exact), result => assert.deepEqual(result, original),
-    { label: 'Exact combined password retry after later standalone changes', budgetMs: 350, queries: 2, readOnly: false });
+    { label: 'Exact combined password retry after later standalone changes', budgetMs: 350, queries: 3, readOnly: false });
   assert(report.cases.every(entry => entry.passed), 'At least one unchanged declared user-form budget failed.'); report.status = 'passed';
 } catch (error) { report.status = 'failed'; report.error = error.message; throw error; }
 finally { report.finishedAt = new Date().toISOString(); await writeFile('.local/user-form-performance.json', `${JSON.stringify(report, null, 2)}\n`); await closePool(); await owner.end(); }
