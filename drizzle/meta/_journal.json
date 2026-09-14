@@ -939,6 +939,13 @@
       "when": 1789390511767,
       "tag": "0133_user_account_administration",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1789394135403,
+      "tag": "0134_user_directory_screen_fields",
+      "breakpoints": true
     }
   ]
 }

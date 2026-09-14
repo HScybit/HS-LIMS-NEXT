@@ -1,5 +1,5 @@
 import { HttpError } from '../auth/errors.js';
-import { fieldsOnly, integer, requirePermission, text, uuid } from '../templates/input.js';
+import { bool, fieldsOnly, integer, requirePermission, text, uuid } from '../templates/input.js';
 import { userProfileInput } from './profile-input.js';
 
 function requireRead(identity) {
@@ -81,11 +81,12 @@ export async function listUserProfileHistory(client, identity, userId, value = {
 }
 
 export function userProfileReferenceInput(value) {
-  fieldsOnly(value, ['kind', 'search', 'pageSize', 'selectedIds', 'excludeUserId']);
+  fieldsOnly(value, ['kind', 'search', 'pageSize', 'selectedIds', 'excludeUserId', 'includeInactive']);
   if (!['roles', 'businessUnits', 'laboratories', 'managers'].includes(value.kind)) throw new HttpError(400, 'invalid_user_reference_kind', 'Select a user reference type.');
   const search = text(value.search, 'Search', 200, { optional: true }).trim();
   if (!search.isWellFormed() || search.includes('\0')) throw new HttpError(400, 'invalid_user_reference_search', 'Search contains invalid text.');
   const result = { kind: value.kind, search, pageSize: integer(value.pageSize ?? 50, 'Page size', 1, 100) };
+  if (Object.hasOwn(value, 'includeInactive')) result.includeInactive = bool(value.includeInactive, 'Include inactive references');
   if (value.excludeUserId !== undefined) result.excludeUserId = uuid(value.excludeUserId, 'User').toLowerCase();
   if (Object.hasOwn(value, 'selectedIds')) {
     if (!Array.isArray(value.selectedIds) || value.selectedIds.length > 100) throw new HttpError(400, 'invalid_user_reference_ids', 'Include at most 100 selected references.');
@@ -100,7 +101,7 @@ export async function listUserProfileReferences(client, identity, value) {
   const args = [identity.organization_id, input.kind]; let where = 'organization_id=$1 AND kind=$2';
   if (input.selectedIds !== undefined) { args.push(input.selectedIds); where += ` AND id=ANY($${args.length}::uuid[])`; }
   else {
-    where += ' AND active';
+    if (!input.includeInactive) where += ' AND active';
     if (input.search) { args.push(`%${input.search.replace(/[\\%_]/g, '\\$&')}%`); where += ` AND (name ILIKE $${args.length} OR code ILIKE $${args.length})`; }
     if (input.kind === 'managers' && input.excludeUserId) { args.push(input.excludeUserId); where += ` AND id<>$${args.length}`; }
   }

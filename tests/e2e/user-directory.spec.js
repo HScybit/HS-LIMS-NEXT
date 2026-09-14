@@ -17,7 +17,8 @@ test('user directory HTTP reads are bounded, uncached and reject malformed queri
   const result = await response.json(); expect(result.totalCount).toBe(1); expect(result.rows.map((row) => row.id)).toEqual([actor.userId]);
   const detail = await page.request.get(`/api/users/${actor.userId.toUpperCase()}`); expect(detail.status()).toBe(200);
   const person = await detail.json(); expect(person).toEqual(result.rows[0]); expect(person.lastLoginAt).toMatch(/^\d{4}-/); expect(person.lastLogoutAt).toBeNull();
-  expect(Object.keys(person).sort()).toEqual(['active', 'createdAt', 'displayName', 'email', 'id', 'identityActive', 'lastLoginAt', 'lastLogoutAt', 'membershipActive', 'organizationName', 'roles', 'statusRevision', 'username'].sort());
+  expect(Object.keys(person).sort()).toEqual(['active', 'createdAt', 'displayName', 'email', 'id', 'identityActive', 'lastLoginAt', 'lastLogoutAt', 'membershipActive', 'organizationName', 'roles', 'statusRevision', 'username',
+    'identityCreatedAt', 'defaultRoleId', 'defaultRoleName', 'defaultRoleDescription', 'businessUnitId', 'businessUnitName'].sort());
   for (const input of [null, [], { pageSize: 101 }, { organizationId: actor.organizationId }, { search: '\0' }, { search: '\ud800' },
     { sort: { key: 'username', dir: 'invalid' } }, { sort: { key: ['email'], dir: 'asc' } }, { sort: { key: { toString: null }, dir: 'asc' } }]) {
     expect((await page.request.get(`/api/users?query=${encodeURIComponent(JSON.stringify(input))}`)).status()).toBe(400);

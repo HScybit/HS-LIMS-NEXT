@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { signatureCanPreview } from './signature-policy.js';
 import { HttpError } from '../auth/errors.js';
 import { fieldsOnly, integer, requirePermission, uuid } from '../templates/input.js';
 import { customFieldAttachmentHeaders } from '../custom-fields/attachments.js';
@@ -79,5 +80,12 @@ export async function readUserSignatureFile(client, identity, fileId) {
   return { ...row, url: fileUrl(row.id), content };
 }
 
-// Preserve all original file types as downloads. Image previews/report rendering have a separate validation boundary.
-export const userSignatureFileHeaders = (file) => customFieldAttachmentHeaders(file);
+export function userSignatureFileHeaders(file, { view = false } = {}) {
+  const headers = customFieldAttachmentHeaders(file);
+  if (view && signatureCanPreview(file.mediaType)) {
+    headers['Content-Disposition'] = headers['Content-Disposition'].replace(/^attachment;/, 'inline;');
+    // SVG is displayed with scripts, external resources and same-origin privileges disabled.
+    headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+  }
+  return headers;
+}

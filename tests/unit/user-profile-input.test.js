@@ -34,6 +34,8 @@ test('profile input rejects malformed fields, global identity changes and ambigu
 
 test('profile reference queries bound selections and preserve empty selected sets', () => {
   assert.deepEqual(userProfileReferenceInput({ kind: 'roles', selectedIds: [] }), { kind: 'roles', search: '', pageSize: 50, selectedIds: [] });
+  assert.equal(userProfileReferenceInput({ kind: 'roles', includeInactive: true }).includeInactive, true);
+  for (const includeInactive of [null, 'true', 1, {}]) assert.throws(() => userProfileReferenceInput({ kind: 'roles', includeInactive }), { status: 400 });
   assert.deepEqual(userProfileReferenceInput({ kind: 'managers', excludeUserId: id.toUpperCase(), search: '  %_  ', pageSize: 100 }),
     { kind: 'managers', excludeUserId: id, search: '%_', pageSize: 100 });
   for (const input of [null, [], {}, { kind: 'passwords' }, { kind: 'roles', selectedIds: [id, id.toUpperCase()] },

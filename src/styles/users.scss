@@ -1,0 +1,46 @@
+.user-directory-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.user-directory-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #edf1f5;
+  color: #4d5561;
+  border: 1px solid #d6dee8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.user-directory-name { font-size: 14px; font-weight: 600; color: var(--smplfy-color-primary, #1a73e8); line-height: 1.4; text-decoration: none; }
+.user-directory-email { margin-top: 2px; }
+.user-directory-card > div:last-child { min-width: 0; }
+.user-status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: opacity .15s;
+  user-select: none;
+  cursor: pointer;
+  white-space: nowrap;
+  &.is-active { background: var(--smplfy-color-success-light, #dcfce7); color: var(--smplfy-color-success, #16a34a); border-color: currentColor; }
+  &.is-inactive { background: #f1f5f9; color: #64748b; border-color: #cbd5e1; }
+  &:disabled { opacity: .65; cursor: default; }
+  > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+}
+.user-signature-detail { display: flex; flex-direction: column; gap: 6px; }

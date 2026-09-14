@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { HttpError } from '../auth/errors.js';
 import { fieldsOnly, integer, uuid } from '../templates/input.js';
 import { customFieldAttachmentMetadata } from '../custom-fields/attachments.js';
-
-export const userSignatureByteLimit = 20 * 1024 * 1024;
+import { userSignatureByteLimit } from './signature-policy.js';
+export { userSignatureByteLimit } from './signature-policy.js';
 
 function changeIdentity(value) {
   return { requestId: uuid(value.requestId, 'Save request').toLowerCase(), revision: integer(value.revision, 'Signature revision', 0, 2_147_483_646) };
