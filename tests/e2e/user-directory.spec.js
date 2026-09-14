@@ -26,7 +26,8 @@ test('user directory HTTP reads are bounded, uncached and reject malformed queri
   expect((await page.request.get(`/api/users?query=${'x'.repeat(16_001)}`)).status()).toBe(413);
   expect((await page.request.get('/api/users/invalid')).status()).toBe(400);
   expect((await page.request.get(`/api/users/${randomUUID()}`)).status()).toBe(404);
-  for (const method of ['POST', 'PATCH', 'DELETE']) expect((await page.request.fetch('/api/users', { method, data: {} })).status()).toBe(405);
+  for (const method of ['PATCH', 'DELETE']) expect((await page.request.fetch('/api/users', { method, data: {} })).status()).toBe(405);
+  expect((await page.request.post('/api/users', { data: {} })).status()).toBe(403);
 });
 
 test('directory endpoints isolate tenants and reject unrelated, revoked and expired sessions', async ({ page }) => {

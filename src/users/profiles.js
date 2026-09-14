@@ -21,6 +21,10 @@ const errors = {
   user_profile_last_administrator: [409, 'last_user_administrator', 'At least one active user must retain each existing administration permission.'],
 };
 
+export function userProfileCommandError(error) {
+  return errors[error.constraint] ? new HttpError(...errors[error.constraint]) : error;
+}
+
 export async function updateUserProfile(client, identity, userId, value) {
   requirePermission(identity, 'users.manage'); const id = uuid(userId, 'User').toLowerCase(); const input = userProfileInput(value);
   const args = [id, input.revision, input.requestId];
@@ -32,8 +36,7 @@ export async function updateUserProfile(client, identity, userId, value) {
     const result = await client.query(`SELECT users_write_profile(${args.map((_, index) => `$${index + 1}`).join(',')}) AS revision`, args);
     return { id, revision: result.rows[0].revision };
   } catch (error) {
-    if (errors[error.constraint]) throw new HttpError(...errors[error.constraint]);
-    throw error;
+    throw userProfileCommandError(error);
   }
 }
 

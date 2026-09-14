@@ -80,6 +80,7 @@ export async function updateProfile(client, input) {
     const result = await client.query('SELECT auth_update_profile($1, $2, $3) AS updated', [name, username, input.revision]);
     if (!result.rows[0].updated) throw new HttpError(409, 'stale_profile', 'Your profile changed in another session. Reload and try again.');
   } catch (error) {
+    if (error.code === '28000') throw new HttpError(401, 'unauthenticated', 'Your session has expired. Please sign in again.');
     if (error.code === '23505') throw new HttpError(409, 'username_taken', 'That username is already in use.');
     throw error;
   }
