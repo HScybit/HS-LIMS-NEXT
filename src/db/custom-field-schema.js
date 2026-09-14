@@ -65,6 +65,7 @@ export const customFieldVersions = pgTable('custom_field_versions', {
 }, (table) => [
   primaryKey({ name: 'custom_field_version_pk', columns: versionColumns(table) }),
   unique('custom_field_save_request_key').on(table.organizationId, table.requestId),
+  index('custom_field_version_key_lookup').on(table.organizationId, table.key, table.fieldId, table.revision),
   foreignKey({ name: 'custom_field_version_parent_fk', columns: [table.organizationId, table.fieldId], foreignColumns: [customFieldDefinitions.organizationId, customFieldDefinitions.id] }),
   foreignKey({ name: 'custom_field_version_actor_fk', columns: [table.organizationId, table.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
   foreignKey({ name: 'custom_field_previous_version_fk', columns: [table.organizationId, table.fieldId, table.previousRevision], foreignColumns: versionColumns(table) }),
