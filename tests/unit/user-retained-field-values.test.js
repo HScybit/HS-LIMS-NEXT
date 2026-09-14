@@ -57,14 +57,26 @@ test('a user attachment from the previous saved key retains the exact original r
   const result = await prepare(field, id, saved, client); assert.equal(queries, 1); assert.equal(result.items[0].attachmentId, id); assert.equal(result.items[0].interpretationState, 'valid');
 });
 
-test('foreign, unavailable, other-key and newly introduced attachments cannot use retained-value fallback', async () => {
+test('foreign, unavailable and other-upload-key attachments cannot use absent retained-value evidence', async () => {
   const field = definition({ fieldType: 'attachment' }); const old = definition({ fieldType: 'attachment' }); const id = randomUUID();
   const saved = previous(old, id, { items: [{ value: id, attachmentId: id }] });
-  for (const [prior, rows] of [[null, [{ id, field_id: old.id }]], [{ ...saved, key: 'other_key' }, [{ id, field_id: old.id }]],
-    [{ ...saved, items: [] }, [{ id, field_id: old.id }]], [saved, []]]) {
+  for (const [prior, rows] of [[null, [{ id, field_id: old.id, upload_key: 'other' }]], [{ ...saved, key: 'other_key' }, [{ id, field_id: old.id, upload_key: 'other' }]],
+    [{ ...saved, items: [] }, [{ id, field_id: old.id, upload_key: 'other' }]], [saved, []]]) {
     await assert.rejects(prepare(field, id, prior, { async query() { return { rows }; } }), { code: 'invalid_user_custom_field_attachment' });
   }
   const result = await prepare(field, id, null, { async query() { return { rows: [{ id, field_id: field.id }] }; } }); assert.equal(result.items[0].attachmentId, id);
+});
+
+test('a fresh user file keeps its immutable upload-key provenance without fabricating previous capture evidence', async () => {
+  const field = definition({ fieldType: 'attachment' }); const original = definition({ fieldType: 'attachment' }); const id = randomUUID();
+  const rows = [{ id, field_id: original.id, upload_key: field.key }]; const before = structuredClone(rows); let queries = 0;
+  const client = { async query(sql, parameters) {
+    queries++; assert.match(sql, /uploaded\.revision=file\.field_revision/); assert.deepEqual(parameters, [identity.organization_id, [id]]); return { rows };
+  } };
+  const result = await prepare(field, id.toUpperCase(), null, client);
+  assert.equal(queries, 1); assert.equal(result.items[0].attachmentId, id); assert.equal(result.items[0].rawText, id.toUpperCase()); assert.deepEqual(rows, before);
+  assert.equal((await prepare(field, '', null)).items[0].interpretationState, 'empty');
+  await assert.rejects(prepare({ ...field, key: 'different' }, id, null, client), { code: 'invalid_user_custom_field_attachment' });
 });
 
 test('product and parameter captures retain their original definition-identity boundaries', async () => {
@@ -74,6 +86,6 @@ test('product and parameter captures retain their original definition-identity b
     const saved = previous(field); const retained = await prepare({ ...field, revision: 2 }, 'A', saved, noQueries, kind); assert.equal(retained.items[0].optionId, saved.items[0].optionId);
     const id = randomUUID(); const file = definition({ fieldType: 'attachment' });
     await assert.rejects(prepare(file, id, previous(old, id, { items: [{ value: id, attachmentId: id }] }),
-      { async query() { return { rows: [{ id, field_id: old.id }] }; } }, kind), { code: `invalid_${kind}_custom_field_attachment` });
+      { async query() { return { rows: [{ id, field_id: old.id, upload_key: file.key }] }; } }, kind), { code: `invalid_${kind}_custom_field_attachment` });
   }
 });

@@ -4,7 +4,7 @@ import { userCustomFields } from '../masters/custom-fields.js';
 import { loadMasterCustomFieldValues, prepareMasterCustomFieldValues, appendMasterCustomFieldValues } from '../masters/master-custom-field-values.js';
 import { userProfileCommandError } from './profiles.js';
 import { userCustomFieldInput, userFieldUserIds, userFieldUserSearch } from './custom-field-input.js';
-import { matchesUserFieldUserOption } from './custom-field-options.js';
+import { matchesUserFieldUserOption } from './custom-field-filter.js';
 
 function requireRead(identity) {
   if (!identity.permission_codes?.some(code => ['users.read', 'users.manage'].includes(code))) throw new HttpError(403, 'forbidden', 'You cannot view user fields.');

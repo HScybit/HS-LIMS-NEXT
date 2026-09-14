@@ -42,3 +42,18 @@ test('user choices enforce authentication, actual permission and strict query sh
   expect((await read(page, '?search=' + 'x'.repeat(200))).status).toBe(200);
   await owner.query('UPDATE sessions SET revoked_at=now() WHERE user_id=$1', [reader.userId]); expect((await read(page)).status).toBe(401);
 });
+
+test('server-side user filtering keeps React Select controls server-renderable before and after API calls', async ({ page }) => {
+  const manager = await createAccount(owner, { permissions: ['masters.manage', 'users.manage'] });
+  await owner.query('UPDATE users SET display_name=$2 WHERE id=$1', [manager.userId, 'Élodie_Straße']);
+  const errors = []; page.on('pageerror', error => errors.push(error.message)); await login(page, manager);
+  for (let index = 0; index < 2; index++) {
+    const choices = await read(page, '?search=elodie%20strase'); expect(choices.status).toBe(200);
+    expect(choices.body.rows).toEqual([{ id: manager.userId, name: 'Élodie_Straße' }]);
+    const response = await page.goto('/test_parameters/new'); expect(response.status()).toBe(200);
+    const html = await response.text(); expect(html).not.toContain('data-dgst='); expect(html).toContain('Lab Name');
+    await expect(page.getByLabel('Lab Name', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Parameter Name', { exact: true })).toBeVisible();
+  }
+  expect(errors).toEqual([]);
+});

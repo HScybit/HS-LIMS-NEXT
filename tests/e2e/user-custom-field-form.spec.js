@@ -121,7 +121,7 @@ test('definition refresh follows saved keys across UUID replacement and key rena
   expect((await record(page, f.person.userId)).fieldCapture.customFields[0]).toMatchObject({ fieldId: replacement.id, fieldRevision: 3, key: 'saved_key', value: 'Saved original' });
 });
 
-test('a lost user-file upload retries its original field revision after metadata refresh and keeps original bytes', async ({ page }) => {
+test('a lost user-file upload retries its original definition after same-key replacement and keeps original bytes', async ({ page }) => {
   const f = await fixture(page); const definition = await f.define('evidence', 'attachment', { label: 'Evidence' }); await edit(page, f);
   const requests = []; let uploaded;
   await page.route('**/api/users/custom-fields/attachments', async route => {
@@ -138,13 +138,44 @@ test('a lost user-file upload retries its original field revision after metadata
   await focus(page); await expect(page.locator('form').getByRole('alert').filter({ hasText: 'Metadata interrupted after upload.' })).toBeVisible();
   await page.unroute('**/api/users/custom-fields'); await page.getByRole('button', { name: 'Retry loading fields', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Retry upload', exact: true })).toBeVisible();
-  await f.define('evidence', 'attachment', { id: definition.id, revision: 1, label: 'Revised evidence' }); await focus(page);
-  await expect(page.getByLabel('Revised evidence', { exact: true })).toBeAttached();
+  await f.change((client, identity) => retireCustomField(client, identity, { id: definition.id, revision: 1, requestId: randomUUID() }));
+  const replacement = await f.define('evidence', 'attachment', { label: 'Replacement evidence' }); await focus(page);
+  await expect(page.getByLabel('Replacement evidence', { exact: true })).toBeAttached();
   await page.getByRole('button', { name: 'Retry upload', exact: true }).click(); await expect(page.getByRole('link', { name: 'Download File', exact: true })).toBeVisible();
   expect(requests).toHaveLength(2); expect(requests[1]).toEqual(requests[0]); expect(requests[1].revision).toBe('1');
   await page.getByRole('button', { name: 'Update', exact: true }).click(); await expect(page).toHaveURL(/\/user_management(?:\?|$)/);
-  expect((await record(page, f.person.userId)).fieldCapture.customFields[0]).toMatchObject({ fieldRevision: 2, value: uploaded.id });
+  expect((await record(page, f.person.userId)).fieldCapture.customFields[0]).toMatchObject({ fieldId: replacement.id, fieldRevision: 1, value: uploaded.id });
   expect(await (await page.request.get(uploaded.url)).text()).toBe('Original file bytes');
+});
+
+test('a new user keeps an uncaptured file through same-key replacement and exact creation retry', async ({ page }) => {
+  const f = await fixture(page); const definition = await f.define('created_evidence', 'attachment', { label: 'Created evidence' });
+  await page.goto('/user_management/new'); const username = `file-created-${randomUUID()}`;
+  await page.getByLabel('Name', { exact: true }).fill('Created with file'); await page.getByLabel('Email', { exact: true }).fill(`${username}@example.invalid`);
+  await page.getByLabel('Username/Employee ID', { exact: true }).fill(username); await page.getByLabel('Password', { exact: true }).fill('Synthetic file creation password');
+  await select(page, 'Default Role', 'Control role'); await select(page, 'Lab', 'Control laboratory');
+  await page.getByLabel('Created evidence', { exact: true }).setInputFiles({ name: 'Original zero-byte.txt', mimeType: 'text/plain', buffer: Buffer.alloc(0) });
+  await expect(page.getByRole('link', { name: 'Download File', exact: true })).toBeVisible();
+  const fileUrl = await page.getByRole('link', { name: 'Download File', exact: true }).getAttribute('href');
+  await f.change((client, identity) => retireCustomField(client, identity, { id: definition.id, revision: 1, requestId: randomUUID() }));
+  const replacement = await f.define('created_evidence', 'attachment', { label: 'Replacement created evidence' }); await focus(page);
+  await expect(page.getByLabel('Replacement created evidence', { exact: true })).toBeAttached();
+  await expect(page.getByRole('link', { name: 'Download File', exact: true })).toHaveAttribute('href', fileUrl);
+  const requests = [];
+  await page.route('**/api/users', async route => {
+    if (route.request().method() !== 'POST') return route.continue(); requests.push(route.request().postDataJSON());
+    if (requests.length === 1) { const response = await route.fetch(); expect(response.status()).toBe(201); return route.abort('failed'); }
+    return route.continue();
+  });
+  await page.getByRole('button', { name: 'Create', exact: true }).click(); await expect(page.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible();
+  await f.define('later_key', 'attachment', { id: replacement.id, revision: 1, label: 'Later field' }); await focus(page);
+  await page.getByRole('button', { name: 'Retry save', exact: true }).click(); await expect(page).toHaveURL(/\/user_management(?:\?|$)/);
+  expect(requests).toHaveLength(2); expect(requests[1]).toEqual(requests[0]);
+  const people = (await owner.query('SELECT id FROM users WHERE username=$1', [username])).rows; expect(people).toHaveLength(1);
+  const capture = (await record(page, people[0].id)).fieldCapture; expect(capture.revision).toBe(1);
+  expect(capture.customFields[0]).toMatchObject({ fieldId: replacement.id, fieldRevision: 1, key: 'created_evidence' });
+  expect(capture.customFields[0].items[0].attachment).toMatchObject({ originalName: 'Original zero-byte.txt', url: fileUrl });
+  const response = await page.request.get(fileUrl); expect(response.status()).toBe(200); expect((await response.body()).length).toBe(0);
 });
 
 test('zero active fields omit capture writes and permission refresh retains additional drafts', async ({ page }) => {

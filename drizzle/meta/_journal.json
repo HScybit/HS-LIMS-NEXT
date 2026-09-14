@@ -995,6 +995,13 @@
       "when": 1789415442938,
       "tag": "0141_user_retained_field_values",
       "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1789426399147,
+      "tag": "0142_user_draft_field_attachments",
+      "breakpoints": true
     }
   ]
 }

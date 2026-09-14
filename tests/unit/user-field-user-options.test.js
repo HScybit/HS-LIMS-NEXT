@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { userFieldUserSearch } from '../../src/users/custom-field-input.js';
-import { userFieldUserOption, matchesUserFieldUserOption } from '../../src/users/custom-field-options.js';
+import { userFieldUserOption } from '../../src/users/custom-field-options.js';
+import { matchesUserFieldUserOption } from '../../src/users/custom-field-filter.js';
 import { loadUserFieldUserOptions } from '../../src/users/custom-fields.js';
 
 test('user choices sanitize labels while retaining blank names and exact source filter behavior', () => {

@@ -6,7 +6,8 @@ import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { saveCustomField, retireCustomField } from '../../src/masters/custom-fields.js';
 import { saveUserCustomFields, loadUserCustomFields } from '../../src/users/custom-fields.js';
-import { uploadUserFieldAttachment } from '../../src/users/custom-field-attachments.js';
+import { uploadUserFieldAttachment, readUserFieldAttachment } from '../../src/users/custom-field-attachments.js';
+import { uploadCustomFieldAttachment } from '../../src/custom-fields/attachments.js';
 import { updateUserForm, loadUserForm } from '../../src/users/forms.js';
 import { createUser } from '../../src/users/create.js';
 
@@ -32,8 +33,8 @@ async function fixture(changes = {}) {
   return { author, manager, person, define, replace, field: () => field, input,
     save: (value, revision, requestId, target = person) => work(manager, (client, identity) => saveUserCustomFields(client, identity, target.userId, input(value, revision, requestId))),
     read: (options, target = person) => work(manager, (client, identity) => loadUserCustomFields(client, identity, target.userId, options), true),
-    upload: (name = 'Original.txt') => work(manager, (client, identity) => uploadUserFieldAttachment(client, identity, { requestId: randomUUID(), fieldId: field.id, fieldRevision: field.revision,
-      originalName: name, mediaType: 'text/plain', content: Buffer.from('Actual original ' + name) })) };
+    upload: (name = 'Original.txt', content = Buffer.from('Actual original ' + name)) => work(manager, (client, identity) => uploadUserFieldAttachment(client, identity, { requestId: randomUUID(), fieldId: field.id, fieldRevision: field.revision,
+      originalName: name, mediaType: 'text/plain', content })) };
 }
 async function unchanged(f, operation, error) {
   const before = await f.read(); const count = (await owner.query('SELECT count(*)::integer AS count FROM user_field_value_versions WHERE organization_id=$1 AND subject_user_id=$2', [f.author.organizationId, f.person.userId])).rows[0].count;
@@ -77,7 +78,8 @@ test('an intervening clear or a different subject cannot borrow older unresolved
 });
 
 test('a replacement attachment definition retains the actual same-key file and its immutable original metadata', async () => {
-  const f = await fixture({ fieldType: 'attachment', options: [] }); const original = f.field(); const file = await f.upload(); await f.save(file.id, 0);
+  const f = await fixture({ fieldType: 'attachment', options: [] }); const original = f.field(); const file = await f.upload();
+  await f.define({ key: 'captured_key' }); await f.save(file.id, 0);
   await f.replace({ options: [] }); const requestId = randomUUID(); const saved = await f.save(file.id, 1, requestId); await f.save(file.id, 2);
   const current = await f.read(); assert.equal(current.customFields[0].items[0].attachmentId, file.id); assert.equal(current.customFields[0].items[0].attachment.originalName, 'Original.txt');
   assert.deepEqual(await f.save(file.id, 1, requestId), saved); assert.deepEqual(await f.read(), current);
@@ -86,9 +88,10 @@ test('a replacement attachment definition retains the actual same-key file and i
   assert.equal((await f.read({ atRevision: 1 })).customFields[0].fieldId, original.id);
 });
 
-test('retained attachments require the immediate same-subject key and reject first use, other keys and cleared history', async () => {
+test('files uploaded under another key require immediate same-subject capture evidence after definition replacement', async () => {
   for (const mode of ['first', 'key', 'clear', 'subject']) {
     const f = await fixture({ fieldType: 'attachment', options: [] }); const file = await f.upload();
+    await f.define({ key: 'captured_key' });
     if (mode !== 'first') await f.save(file.id, 0);
     await f.replace({ options: [], ...(mode === 'key' ? { key: 'another_key' } : {}) });
     if (mode === 'clear') await f.save('', 1);
@@ -97,6 +100,76 @@ test('retained attachments require the immediate same-subject key and reject fir
       await assert.rejects(f.save(file.id, 0, undefined, other), { code: 'invalid_user_custom_field_attachment' });
     } else await unchanged(f, () => f.save(file.id, mode === 'first' ? 0 : mode === 'clear' ? 2 : 1), { code: 'invalid_user_custom_field_attachment' });
   }
+});
+
+test('fresh upload-key drafts survive definition replacement with no capture or a different previously captured file', async () => {
+  for (const priorCapture of [false, true]) {
+    const f = await fixture({ fieldType: 'attachment', options: [] }); const original = f.field();
+    const old = priorCapture ? await f.upload('Previous.txt') : null; if (old) await f.save(old.id, 0);
+    const bytes = priorCapture ? Buffer.from('New draft bytes') : Buffer.alloc(0); const file = await f.upload('Fresh draft.txt', bytes);
+    const originalFile = await work(f.manager, (c, i) => readUserFieldAttachment(c, i, file.id), true);
+    await f.replace({ options: [] }); const input = f.input(file.id.toUpperCase(), Number(priorCapture));
+    const save = () => work(f.manager, (c, i) => saveUserCustomFields(c, i, f.person.userId, input));
+    const result = await save(); const capture = await f.read(); assert.equal(capture.revision, Number(priorCapture) + 1);
+    assert.equal(capture.customFields[0].value, file.id.toUpperCase()); assert.equal(capture.customFields[0].items[0].attachmentId, file.id);
+    assert.equal(capture.customFields[0].fieldId, f.field().id);
+    if (old) assert.equal((await f.read({ atRevision: 1 })).customFields[0].value, old.id);
+    await f.save(file.id, capture.revision); const later = await f.read(); await f.define({ key: 'later_key' });
+    assert.deepEqual(await save(), result); assert.deepEqual(await f.read(), later);
+    const after = await work(f.manager, (c, i) => readUserFieldAttachment(c, i, file.id), true);
+    assert.deepEqual(after, originalFile); assert(after.content.equals(bytes)); assert.equal(after.fieldId, original.id); assert.equal(after.fieldRevision, 1);
+  }
+});
+
+test('an actual matching upload key permits explicit selection after a clear and for another scoped subject', async () => {
+  const f = await fixture({ fieldType: 'attachment', options: [] }); const file = await f.upload(); await f.replace({ options: [] });
+  await direct(f, { value: file.id, attachmentId: file.id, state: 'valid', revision: 0 });
+  await f.save('', 1); await f.save(file.id, 2); assert.equal((await f.read()).customFields[0].value, file.id);
+  const other = await createAccount(owner, { organizationId: f.author.organizationId, permissions: [] });
+  await f.save(file.id, 0, undefined, other); assert.equal((await f.read({}, other)).customFields[0].value, file.id);
+  assert.equal((await f.read({ atRevision: 2 })).customFields[0].value, '');
+});
+
+test('changing the upload definition current key cannot fabricate immutable same-key draft provenance', async () => {
+  const f = await fixture({ fieldType: 'attachment', options: [], key: 'uploaded_key' }); const file = await f.upload();
+  await f.define({ key: 'current_key' }); await f.replace({ options: [] });
+  await unchanged(f, () => f.save(file.id, 0), { code: 'invalid_user_custom_field_attachment' });
+  await unchanged(f, () => direct(f, { value: file.id, attachmentId: file.id, state: 'valid', revision: 0 }), { code: '23514', constraint: 'user_custom_value_attachment' });
+});
+
+test('matching upload keys never admit foreign-organization or master-only attachments through user captures', async () => {
+  const f = await fixture({ fieldType: 'attachment', options: [] }); const foreign = await fixture({ fieldType: 'attachment', options: [] }); const foreignFile = await foreign.upload();
+  const original = f.field(); await work(f.author, (c, i) => retireCustomField(c, i, { id: original.id, revision: 1, requestId: randomUUID() }));
+  const master = await work(f.author, (c, i) => saveCustomField(c, i, { id: randomUUID(), requestId: randomUUID(), revision: 0, key: original.key,
+    label: 'Master-only file', fieldType: 'attachment', associatedWith: 'product' }));
+  const masterFile = await work(f.author, (c, i) => uploadCustomFieldAttachment(c, i, { requestId: randomUUID(), fieldId: master.id, fieldRevision: 1,
+    originalName: 'Master.txt', mediaType: 'text/plain', content: Buffer.from('Only master authority') }));
+  await work(f.author, (c, i) => retireCustomField(c, i, { id: master.id, revision: 1, requestId: randomUUID() }));
+  await f.define({ id: randomUUID(), revision: 0 });
+  for (const file of [foreignFile, masterFile]) {
+    await unchanged(f, () => f.save(file.id, 0), { code: 'invalid_user_custom_field_attachment' });
+    await unchanged(f, () => direct(f, { value: file.id, attachmentId: file.id, state: 'valid', revision: 0 }), { code: '23514', constraint: 'user_custom_value_attachment' });
+  }
+});
+
+test('fresh file drafts participate in atomic account creation and full-form rollback without earlier capture evidence', async () => {
+  const f = await fixture({ fieldType: 'attachment', options: [] }); const file = await f.upload(); await f.replace({ options: [] });
+  const lab = randomUUID(); await owner.query("INSERT INTO laboratories(organization_id,id,code,name) VALUES($1,$2::uuid,$2::text,'Fresh-file laboratory')", [f.author.organizationId, lab]);
+  const fields = f.input(file.id, 0).customFields; const id = randomUUID();
+  const create = { id, requestId: randomUUID(), revision: 0, username: 'new-file-' + id, email: id + '@example.invalid', displayName: 'New file user',
+    password: 'Synthetic fresh-file password', defaultRoleId: f.person.roleId, laboratoryId: lab, customFields: fields };
+  await assert.rejects(work(f.manager, (c, i) => createUser(c, i, { ...create, customFields: [{ ...fields[0], value: randomUUID() }] })), { code: 'invalid_user_custom_field_attachment' });
+  assert.equal((await owner.query('SELECT 1 FROM users WHERE id=$1', [id])).rowCount, 0);
+  const created = await work(f.manager, (c, i) => createUser(c, i, create)); assert.equal(created.customFieldRevision, 1);
+  assert.deepEqual(await work(f.manager, (c, i) => createUser(c, i, create)), created);
+  const form = { requestId: randomUUID(), revision: 1, profileRevision: 0, username: f.person.username, email: f.person.email, displayName: 'Fresh file edit',
+    defaultRoleId: f.person.roleId, laboratoryId: lab, phone: 'Atomic draft contact', customFieldRevision: 0, customFields: fields };
+  const read = () => work(f.manager, (c, i) => loadUserForm(c, i, f.person.userId), true); const before = await read();
+  await assert.rejects(work(f.manager, (c, i) => updateUserForm(c, i, f.person.userId, { ...form, email: f.manager.email })), { code: 'sign_in_identifier_taken' });
+  assert.deepEqual(await read(), before);
+  const saved = await work(f.manager, (c, i) => updateUserForm(c, i, f.person.userId, form)); assert.equal(saved.customFieldRevision, 1);
+  assert.deepEqual(await work(f.manager, (c, i) => updateUserForm(c, i, f.person.userId, form)), saved);
+  assert.equal((await read()).fieldCapture.customFields[0].items[0].attachmentId, file.id); assert.equal((await read()).profile.phone, form.phone);
 });
 
 async function direct(f, { value, state = 'invalid', revision = 1, optionId = null, optionRevision = null, attachmentId = null }) {
@@ -129,7 +202,7 @@ test('native older-option guards enforce saved keys and preserve the real same-d
 
 test('native file guards reject an original absent from the previous capture and admit only the actual retained reference', async () => {
   const f = await fixture({ fieldType: 'attachment', options: [] }); const saved = await f.upload('Saved.txt'); const unrelated = await f.upload('Never selected.txt');
-  await f.save(saved.id, 0); await f.replace({ options: [] });
+  await f.define({ key: 'captured_key' }); await f.save(saved.id, 0); await f.replace({ options: [] });
   await unchanged(f, () => direct(f, { value: unrelated.id, attachmentId: unrelated.id, state: 'valid' }), { code: '23514', constraint: 'user_custom_value_attachment' });
   await direct(f, { value: saved.id, attachmentId: saved.id, state: 'valid' }); assert.equal((await f.read()).customFields[0].items[0].attachmentId, saved.id);
 });

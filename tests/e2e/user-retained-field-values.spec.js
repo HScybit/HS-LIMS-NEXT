@@ -14,16 +14,17 @@ async function fixture(type) {
   const authorSession = await signIn({ identifier: author.username, password: author.password }); const managerSession = await signIn({ identifier: manager.username, password: manager.password });
   const input = { id: randomUUID(), requestId: randomUUID(), revision: 0, key: 'kept_key', label: 'Original field', fieldType: type, associatedWith: 'users',
     ...(type === 'select' ? { options: [{ id: randomUUID(), key: 'A', label: 'Original choice A' }] } : {}) };
-  const field = await withSession(authorSession.token, (client, identity) => saveCustomField(client, identity, input));
+  let field = await withSession(authorSession.token, (client, identity) => saveCustomField(client, identity, input));
   const content = Buffer.from('Exact original retained file');
   const file = type === 'attachment' ? await withSession(managerSession.token, (client, identity) => uploadUserFieldAttachment(client, identity,
     { requestId: randomUUID(), fieldId: field.id, fieldRevision: 1, originalName: 'Kept original.txt', mediaType: 'text/plain', content })) : null;
+  if (file) field = await withSession(authorSession.token, (client, identity) => saveCustomField(client, identity, { ...input, requestId: randomUUID(), revision: 1, key: 'captured_key' }));
   const value = file?.id ?? 'A'; await withSession(managerSession.token, (client, identity) => saveUserCustomFields(client, identity, person.userId,
-    { requestId: randomUUID(), revision: 0, customFields: [{ fieldId: field.id, fieldRevision: 1, value }] }));
-  await withSession(authorSession.token, (client, identity) => saveCustomField(client, identity, { ...input, requestId: randomUUID(), revision: 1, key: 'renamed_key' }));
-  await withSession(authorSession.token, (client, identity) => retireCustomField(client, identity, { id: field.id, requestId: randomUUID(), revision: 2 }));
+    { requestId: randomUUID(), revision: 0, customFields: [{ fieldId: field.id, fieldRevision: field.revision, value }] }));
+  await withSession(authorSession.token, (client, identity) => saveCustomField(client, identity, { ...input, requestId: randomUUID(), revision: field.revision, key: 'renamed_key' }));
+  await withSession(authorSession.token, (client, identity) => retireCustomField(client, identity, { id: field.id, requestId: randomUUID(), revision: field.revision + 1 }));
   const current = await withSession(authorSession.token, (client, identity) => saveCustomField(client, identity, { ...input, id: randomUUID(), requestId: randomUUID(),
-    label: 'Replacement field', ...(type === 'select' ? { options: [{ id: randomUUID(), key: 'B', label: 'Replacement B' }] } : {}) }));
+    key: file ? 'captured_key' : input.key, label: 'Replacement field', ...(type === 'select' ? { options: [{ id: randomUUID(), key: 'B', label: 'Replacement B' }] } : {}) }));
   return { manager, person, value, file, content, current, fields: [{ fieldId: current.id, fieldRevision: 1, value }] };
 }
 async function login(page, actor) {
@@ -56,7 +57,7 @@ test('retained dropdown HTTP recovers a complete-form lost response without repl
   expect((await read(page, url + '/form')).fieldCapture.customFields[0].items[0]).toMatchObject({ value: 'B', interpretationState: 'valid', optionLabel: 'Replacement B' });
 });
 
-test('retained attachment HTTP keeps original bytes and cannot be introduced through another user without prior history', async ({ page }) => {
+test('retained attachment HTTP keeps original bytes and requires prior history when its uploaded key differs', async ({ page }) => {
   const f = await fixture('attachment'); await login(page, f.manager); const url = `/api/users/${f.person.userId}/custom-fields`;
   const input = { requestId: randomUUID(), revision: 1, customFields: f.fields }; const saved = await patch(page, url, input); expect(saved.status).toBe(200); expect(saved.body.revision).toBe(2);
   expect(await patch(page, url, input)).toEqual(saved); const current = await read(page, url); const attachment = current.customFields[0].items[0].attachment;

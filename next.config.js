@@ -1,10 +1,13 @@
 const nextConfig = {
   poweredByHeader: false,
   reactProductionProfiling: process.env.PROFILE_REACT === '1',
-  // The server reuses the source selection filter without bundling its React component graph.
-  serverExternalPackages: ['react-select'],
   experimental: { optimizePackageImports: ['@tabler/icons-react'] },
   outputFileTracingIncludes: {
+    // The Node-only user filter loads this existing dependency graph at runtime.
+    '/api/users{,/**}': [
+      './node_modules/{react-select,react,react-dom,react-is,memoize-one,hoist-non-react-statics,stylis,use-isomorphic-layout-effect}/**/*',
+      './node_modules/@babel/runtime/**/*', './node_modules/@emotion/**/*', './node_modules/@floating-ui/**/*',
+    ],
     '/api/masters/products/custom-field-generation': ['./src/custom-fields/*.js', './src/masters/custom-field-config.js', './src/auth/errors.js',
       './node_modules/moment/**', './node_modules/moment-timezone/**'],
   },
