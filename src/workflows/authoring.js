@@ -10,6 +10,7 @@ import { buildWorkflowCloneRows } from './clone.js';
 import { createWorkflowMaster } from './metadata.js';
 import { transitionChecklist } from './checklists.js';
 import { selectWorkflowTemplate } from './references.js';
+import { workflowStatePatchInput, workflowTransitionPatchInput } from './patch-input.js';
 import * as w from '../db/workflow-schema.js';
 
 const scope = (table, org, id) => and(eq(table.organizationId, org), eq(table.id, id));
@@ -53,6 +54,97 @@ async function requireRoles(client, org, roleIds) {
   if (result.rowCount !== distinct.length) throw new HttpError(422, 'invalid_workflow_role', 'A selected role is unavailable in this organization.');
 }
 
+async function lockPatch(client, identity, versionId, expected) {
+  await lockDraft(client, identity, versionId, expected);
+  // This application-callable scope validates the current session, credentials,
+  // membership and tenant. Recheck management permission after the lock wait.
+  const result = await client.query(`SELECT public.workflow_reference_organization()=$1::uuid
+    AND nullif(current_setting('app.user_id',true),'')::uuid=$2::uuid
+    AND public.app_has_permission('workflows.manage') AS allowed`, [identity.organization_id, identity.user_id]);
+  if (!result.rows[0]?.allowed) throw new HttpError(403, 'forbidden', 'Your workflow management access changed. Sign in again before saving.');
+}
+
+async function removeUnusedPorts(client, db, org, versionId, id, existing, value) {
+  if (value.inputCount < (existing.inputCount ?? 1) || value.outputCount < (existing.outputCount ?? 1)) {
+    const removed = await client.query(`SELECT id FROM workflow_transitions WHERE organization_id=$1 AND workflow_version_id=$2
+      AND ((target_state_id=$3 AND coalesce(target_port,1)>$4) OR (source_state_id=$3 AND coalesce(source_port,1)>$5))`,
+    [org, versionId, id, value.inputCount ?? existing.inputCount ?? 1, value.outputCount ?? existing.outputCount ?? 1]);
+    await removeTransitionDefinitions(db, org, removed.rows.map((transition) => transition.id));
+  }
+}
+
+export async function patchWorkflowState(client, identity, versionId, expected, stateId, input) {
+  uuid(stateId, 'State'); const org = identity.organization_id;
+  return mutation(async () => {
+    await lockPatch(client, identity, versionId, expected); const db = database(client);
+    const [existing] = await db.select().from(w.workflowStates).where(and(scope(w.workflowStates, org, stateId), eq(w.workflowStates.workflowVersionId, versionId)));
+    if (!existing) throw new HttpError(404, 'workflow_state_not_found', 'State was not found in this workflow version.');
+    const value = workflowStatePatchInput(existing, input);
+    const families = Object.keys(stateRoles).filter((field) => Object.hasOwn(value, field));
+    await requireRoles(client, org, families.flatMap((field) => value[field]));
+    if (value.templateId) await selectWorkflowTemplate(client, identity, value.templateId);
+    await removeUnusedPorts(client, db, org, versionId, stateId, existing, value);
+    for (const field of families) {
+      const parameters = [org, stateId, stateRoles[field], value[field]];
+      // Keep unchanged assignments intact; form saves may resubmit hundreds of
+      // selected roles while changing only a name or one permission choice.
+      await client.query(`DELETE FROM workflow_state_capability_roles WHERE organization_id=$1 AND workflow_state_id=$2
+        AND capability=$3 AND NOT (role_id=ANY($4::uuid[]))`, parameters);
+      if (value[field].length) await client.query(`INSERT INTO workflow_state_capability_roles(organization_id,workflow_state_id,capability,role_id)
+        SELECT $1::uuid,$2::uuid,$3::text,desired.role_id FROM unnest($4::uuid[]) AS desired(role_id)
+        WHERE NOT EXISTS (SELECT 1 FROM workflow_state_capability_roles existing WHERE existing.organization_id=$1
+          AND existing.workflow_state_id=$2 AND existing.capability=$3 AND existing.role_id=desired.role_id)`, parameters);
+      delete value[field];
+    }
+    if (Object.keys(value).length) await db.update(w.workflowStates).set(value).where(scope(w.workflowStates, org, stateId));
+    return { id: stateId, revision: await nextRevision(client, org, versionId) };
+  });
+}
+
+export async function patchWorkflowTransition(client, identity, versionId, expected, transitionId, input) {
+  uuid(transitionId, 'Transition'); const org = identity.organization_id;
+  return mutation(async () => {
+    await lockPatch(client, identity, versionId, expected); const db = database(client);
+    const [existing] = await db.select().from(w.workflowTransitions).where(and(scope(w.workflowTransitions, org, transitionId), eq(w.workflowTransitions.workflowVersionId, versionId)));
+    if (!existing) throw new HttpError(404, 'workflow_transition_not_found', 'Transition was not found in this workflow version.');
+    const stages = input?.approvalMode !== undefined && input?.approverStages === undefined
+      ? (await client.query(`SELECT stage_number AS "stageNumber",array_agg(role_id ORDER BY role_id) AS "roleIds"
+        FROM workflow_transition_approver_roles WHERE organization_id=$1 AND transition_id=$2 GROUP BY stage_number ORDER BY stage_number`, [org, transitionId])).rows : [];
+    const value = workflowTransitionPatchInput(existing, input, stages);
+    if (['sourceStateId', 'targetStateId', 'sourcePort', 'targetPort'].some((key) => Object.hasOwn(value, key))) {
+      const next = { ...existing, ...value };
+      const states = (await client.query('SELECT id,input_count,output_count FROM workflow_states WHERE organization_id=$1 AND workflow_version_id=$2 AND id=ANY($3::uuid[])',
+        [org, versionId, [next.sourceStateId, next.targetStateId]])).rows;
+      if (states.length !== 2) throw new HttpError(422, 'invalid_workflow_state', 'Both states must belong to this workflow version.');
+      if ((next.sourcePort ?? 1) > (states.find((state) => state.id === next.sourceStateId).output_count ?? 1)
+        || (next.targetPort ?? 1) > (states.find((state) => state.id === next.targetStateId).input_count ?? 1)) {
+        throw new HttpError(422, 'invalid_workflow_port', 'Select an available input and output port.');
+      }
+    }
+    await requireRoles(client, org, [...(value.creatorRoleIds ?? []), ...(value.ccRoleIds ?? []), ...(value.approverStages ?? []).flatMap((stage) => stage.roleIds)]);
+    if (Object.hasOwn(value, 'checklistMasterId')) {
+      const selected = await transitionChecklist(client, identity, existing, { ...value, checklist: [] }, input);
+      value.checklistMasterId = selected.checklistMasterId; value.checklistMasterRevision = selected.checklistMasterRevision;
+      await db.delete(w.workflowTransitionChecklistItems).where(detailScope(w.workflowTransitionChecklistItems, org, transitionId));
+      await insertBatch(db, w.workflowTransitionChecklistItems, selected.checklist.map((item) => ({ ...item, organizationId: org, transitionId })));
+    }
+    const base = { organizationId: org, transitionId };
+    const families = [
+      ['creatorRoleIds', w.workflowTransitionCreatorRoles, (roleId) => ({ ...base, roleId })],
+      ['ccRoleIds', w.workflowTransitionCcRoles, (roleId) => ({ ...base, roleId })],
+      ['ccEmails', w.workflowTransitionCcEmails, (email) => ({ ...base, email })],
+      ['approverStages', w.workflowTransitionApproverRoles, (stage) => stage.roleIds.map((roleId) => ({ ...base, roleId, stageNumber: stage.stageNumber }))],
+    ];
+    for (const [field, table, record] of families) {
+      if (!Object.hasOwn(value, field)) continue;
+      await db.delete(table).where(detailScope(table, org, transitionId));
+      await insertBatch(db, table, value[field].flatMap(record)); delete value[field];
+    }
+    if (Object.keys(value).length) await db.update(w.workflowTransitions).set(value).where(scope(w.workflowTransitions, org, transitionId));
+    return { id: transitionId, revision: await nextRevision(client, org, versionId) };
+  });
+}
+
 export async function createWorkflow(client, identity, input) {
   requirePermission(identity, 'workflows.manage'); fieldsOnly(input, ['code', 'name', 'description', 'appliesTo', 'active']);
   if (!['sample', 'test_request'].includes(input.appliesTo)) throw new HttpError(400, 'invalid_workflow_type', 'Select a supported workflow type.');
@@ -79,12 +171,7 @@ export async function saveWorkflowState(client, identity, versionId, expected, i
     }
     value.displayOrder ??= existing?.displayOrder ?? (await client.query('SELECT coalesce(max(display_order), -1)+1 AS position FROM workflow_states WHERE organization_id=$1 AND workflow_version_id=$2', [org, versionId])).rows[0].position;
     const id = stateId ?? randomUUID();
-    if (existing && (value.inputCount < (existing.inputCount ?? 1) || value.outputCount < (existing.outputCount ?? 1))) {
-      const removed = await client.query(`SELECT id FROM workflow_transitions WHERE organization_id=$1 AND workflow_version_id=$2
-        AND ((target_state_id=$3 AND coalesce(target_port,1)>$4) OR (source_state_id=$3 AND coalesce(source_port,1)>$5))`,
-      [org, versionId, id, value.inputCount ?? existing.inputCount ?? 1, value.outputCount ?? existing.outputCount ?? 1]);
-      await removeTransitionDefinitions(db, org, removed.rows.map((transition) => transition.id));
-    }
+    if (existing) await removeUnusedPorts(client, db, org, versionId, id, existing, value);
     if (existing) await db.update(w.workflowStates).set(value).where(scope(w.workflowStates, org, id));
     else await db.insert(w.workflowStates).values({ ...stateLayoutDefaults, ...value, id, organizationId: org, workflowVersionId: versionId });
     await db.delete(w.workflowStateCapabilityRoles).where(and(eq(w.workflowStateCapabilityRoles.organizationId, org), eq(w.workflowStateCapabilityRoles.workflowStateId, id)));

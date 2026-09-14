@@ -6,6 +6,7 @@ export const stateFlags = ['showSampleEdit', 'showSampleRetest', 'showSampleReis
 export const stateRoles = { accessRoleIds: 'view', editRoleIds: 'edit', allocateRoleIds: 'allocate', addResultRoleIds: 'execute', printCoaRoleIds: 'download_report' };
 export const conditionOperators = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'in', 'is_null', 'is_not_null'];
 export const stateLayoutDefaults = Object.freeze({ canvasX: 120, canvasY: 120, inputCount: 1, outputCount: 1, badgeStyle: 'light' });
+export const stateInputFields = Object.freeze(['code', 'name', 'description', 'stateType', 'color', 'templateId', 'displayOrder', 'legacyTrState', ...Object.keys(stateLayoutDefaults), ...stateFlags, ...Object.keys(stateRoles)]);
 
 function choice(value, choices, label) {
   if (!choices.includes(value)) throw new HttpError(400, 'invalid_workflow_input', `Select a valid ${label}.`);
@@ -21,7 +22,7 @@ export function roleIds(value, label = 'Roles') {
   return result;
 }
 export function workflowStateInput(input) {
-  fieldsOnly(input, ['code', 'name', 'description', 'stateType', 'color', 'templateId', 'displayOrder', 'legacyTrState', ...Object.keys(stateLayoutDefaults), ...stateFlags, ...Object.keys(stateRoles)]);
+  fieldsOnly(input, stateInputFields);
   const result = { code: text(input.code, 'Code', 64), name: text(input.name, 'Name', 150), description: text(input.description, 'Description', 10000, { optional: true }),
     stateType: choice(input.stateType ?? 'normal', ['initial', 'normal', 'final', 'cancelled'], 'state type'),
     color: input.color == null ? null : text(input.color, 'Color', 20, { optional: true }), templateId: input.templateId == null ? null : uuid(input.templateId, 'Template'),
