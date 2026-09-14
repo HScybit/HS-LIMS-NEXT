@@ -19,13 +19,18 @@ function requireRead(identity) {
 }
 
 async function masterCustomFields(association, client, identity, { forListing = false } = {}) {
-  requireRead(identity);
+  const userFields = association === 'users';
+  if (userFields) {
+    if (!identity.permission_codes?.some(permission => ['users.read', 'users.manage'].includes(permission))) throw new HttpError(403, 'forbidden', 'You cannot view user custom fields.');
+  } else requireRead(identity);
+  // Only fixed internal association readers select these tables; user reads use separately scoped views.
+  const prefix = userFields ? 'user_' : '';
   const fields = (await client.query(`SELECT definition.id,definition.revision,field.field_id AS "versionId",
     field.option_count AS "optionCount",${Object.entries(columns).map(([key, column]) => `field.${column} AS "${key}"`).join(',')}
-    FROM (SELECT id,revision,organization_id FROM custom_field_definitions
+    FROM (SELECT id,revision,organization_id FROM ${prefix}custom_field_definitions
       WHERE organization_id=$1 AND associated_with=$3 AND active ${forListing ? 'AND (show_in_list OR show_in_filter)' : ''}
       ORDER BY display_order,label,id LIMIT $2) definition
-    LEFT JOIN custom_field_versions field ON field.organization_id=definition.organization_id
+    LEFT JOIN ${prefix}custom_field_versions field ON field.organization_id=definition.organization_id
       AND field.field_id=definition.id AND field.revision=definition.revision`,
   [identity.organization_id, customFieldCaptureLimit + 1, association])).rows;
   if (fields.length > customFieldCaptureLimit) throw new HttpError(409, 'custom_field_limit', `This form supports at most ${customFieldCaptureLimit} Custom Fields.`);
@@ -36,7 +41,7 @@ async function masterCustomFields(association, client, identity, { forListing = 
   if (selectable.length) {
     const options = (await client.query(`SELECT option.field_id AS "fieldId",option.revision,option.id,option.key,option.label,option.position
       FROM unnest($2::uuid[],$3::integer[]) AS requested(field_id,revision)
-      JOIN custom_field_version_options option ON option.organization_id=$1
+      JOIN ${prefix}custom_field_version_options option ON option.organization_id=$1
         AND option.field_id=requested.field_id AND option.revision=requested.revision
       ORDER BY option.field_id,option.revision,option.position`,
     [identity.organization_id, selectable.map((field) => field.id), selectable.map((field) => field.revision)])).rows;
@@ -57,6 +62,7 @@ async function masterCustomFields(association, client, identity, { forListing = 
 
 export const productCustomFields = (...args) => masterCustomFields('product', ...args);
 export const parameterCustomFields = (...args) => masterCustomFields('parameter', ...args);
+export const userCustomFields = (...args) => masterCustomFields('users', ...args);
 
 export async function loadCustomField(client, identity, fieldId, { atRevision } = {}) {
   requireRead(identity); uuid(fieldId, 'Custom field');
