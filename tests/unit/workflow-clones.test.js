@@ -17,6 +17,7 @@ function graph() {
     return { organizationId: org, workflowVersionId: version, id, sourceStateId: states[index].id, targetStateId: states[1 - index].id,
       sourcePort: index ? null : 8, targetPort: 1, code: `edge-${index}`, name: 'Move', approvalMode: 'sequential', requireComment: false,
       checklistMasterId: randomUUID(), checklistMasterRevision: index ? null : 4,
+      autoMoveMode: index ? null : 'all_trs_approved', autoExecute: Boolean(index),
       creatorRoleIds: [role], ccRoleIds: [role], approverStages: [{ stageNumber: 1, roleIds: [role] }, { stageNumber: 3, roleIds: [role] }],
       ccEmails: ['review@example.invalid'], conditions: [
         { ...base, id: randomUUID(), comparisonText: '', comparisonNumber: null, comparisonBoolean: null, comparisonDate: null },
@@ -41,6 +42,7 @@ test('workflow clone assembly preserves typed values and shared references while
   for (const [index, edge] of rows.transitions.entries()) {
     assert.equal(edge.checklistMasterId, source.transitions[index].checklistMasterId);
     assert.equal(edge.checklistMasterRevision, source.transitions[index].checklistMasterRevision);
+    assert.equal(edge.autoMoveMode, source.transitions[index].autoMoveMode); assert.equal(edge.autoExecute, source.transitions[index].autoExecute);
   }
   assert.deepEqual(rows.approverRoles.map((item) => item.stageNumber), [1, 3, 1, 3]);
   assert.equal(rows.conditions[0].comparisonText, ''); assert.equal(rows.conditions[1].comparisonNumber, '0.000000000000000000000001');

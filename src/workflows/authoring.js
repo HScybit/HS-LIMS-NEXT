@@ -131,11 +131,18 @@ export async function saveWorkflowTransition(client, identity, versionId, expect
     await requireRoles(client, org, [...value.creatorRoleIds, ...value.ccRoleIds, ...value.approverStages.flatMap((stage) => stage.roleIds)]);
     const selectedChecklist = await transitionChecklist(client, identity, existing, value, input);
     value.checklist = selectedChecklist.checklist;
+    let autoMoveMode = existing?.autoMoveMode ?? null; let autoExecute = existing?.autoExecute ?? false;
+    // The source editor can send its previous boolean alongside a changed mode.
+    if (value.autoMoveMode !== undefined) { autoMoveMode = value.autoMoveMode; autoExecute = autoMoveMode === 'yes'; }
+    else if (input.autoExecute !== undefined) {
+      autoExecute = value.autoExecute;
+      if (!existing || autoExecute !== existing.autoExecute) autoMoveMode = autoExecute ? 'yes' : 'no';
+    } else if (!existing) autoMoveMode = 'no';
     const id = transitionId ?? randomUUID();
     const metadata = { code: value.code, name: value.name, sourceStateId: value.sourceStateId, targetStateId: value.targetStateId,
       sourcePort, targetPort,
       checklistMasterId: selectedChecklist.checklistMasterId, checklistMasterRevision: selectedChecklist.checklistMasterRevision,
-      approvalMode: value.approvalMode, autoExecute: value.autoExecute, requireComment: value.requireComment,
+      approvalMode: value.approvalMode, autoExecute, autoMoveMode, requireComment: value.requireComment,
       displayOrder: value.displayOrder ?? existing?.displayOrder ?? (await client.query('SELECT coalesce(max(display_order), -1)+1 AS position FROM workflow_transitions WHERE organization_id=$1 AND workflow_version_id=$2', [org, versionId])).rows[0].position };
     if (existing) await db.update(w.workflowTransitions).set(metadata).where(scope(w.workflowTransitions, org, id));
     else await db.insert(w.workflowTransitions).values({ ...metadata, id, organizationId: org, workflowVersionId: versionId });

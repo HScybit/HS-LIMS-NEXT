@@ -124,10 +124,12 @@ try {
     const final = await saveWorkflowState(client, identity, workflow.versionId, initial.revision,
       { code: 'final', name: 'Final', stateType: 'final', inputCount: 8, outputCount: 0, canvasX: 100000, canvasY: 100000 });
     const edge = await saveWorkflowTransition(client, identity, workflow.versionId, final.revision,
-      { code: 'finish', name: 'Finish', sourceStateId: initial.id, targetStateId: final.id, sourcePort: 8, targetPort: 8, checklistMasterId: checklist.id });
+      { code: 'finish', name: 'Finish', sourceStateId: initial.id, targetStateId: final.id, sourcePort: 8, targetPort: 8, checklistMasterId: checklist.id,
+        autoMoveMode: 'all_trs_approved', autoExecute: true });
     await publishWorkflow(client, identity, workflow.versionId, edge.revision, 'Fresh layout publication');
     const original = await loadWorkflowDefinition(client, identity, workflow.versionId);
     assert.equal(original.transitions[0].checklistMasterId, checklist.id); assert.equal(original.transitions[0].checklistMasterRevision, 1);
+    assert.equal(original.transitions[0].autoMoveMode, 'all_trs_approved'); assert.equal(original.transitions[0].autoExecute, false);
     await updateChecklist(client, identity, { id: checklist.id, requestId: randomUUID(), revision: 1, isActive: false });
     const copy = await cloneWorkflowDraft(client, identity, workflow.versionId);
     const cloned = await loadWorkflowDefinition(client, identity, copy.versionId);
@@ -135,6 +137,7 @@ try {
     assert.equal(first.canvasX, 0); assert.equal(first.inputCount, 0); assert.equal(first.badgeStyle, 'dark');
     assert.equal(cloned.transitions[0].sourcePort, 8); assert.equal(cloned.transitions[0].targetPort, 8);
     assert.equal(cloned.transitions[0].checklistMasterRevision, 1); assert.equal(cloned.transitions[0].checklist[0].prompt, checklist.items[0].prompt);
+    assert.equal(cloned.transitions[0].autoMoveMode, 'all_trs_approved'); assert.equal(cloned.transitions[0].autoExecute, false);
     await saveWorkflowState(client, identity, copy.versionId, 1, { ...initialInput, outputCount: 1 }, first.id);
     assert.equal((await loadWorkflowDefinition(client, identity, copy.versionId)).transitions.length, 0);
     assert.deepEqual(await loadWorkflowDefinition(client, identity, workflow.versionId), original);
@@ -144,6 +147,7 @@ try {
     const masterGraph = await loadWorkflowDefinition(client, identity, masterCopy.versionId);
     assert.equal(masterGraph.states.length, original.states.length); assert.equal(masterGraph.transitions[0].sourcePort, 8);
     assert.equal(masterGraph.transitions[0].checklistMasterId, checklist.id); assert.equal(masterGraph.transitions[0].checklistMasterRevision, 1);
+    assert.equal(masterGraph.transitions[0].autoMoveMode, 'all_trs_approved'); assert.equal(masterGraph.transitions[0].autoExecute, false);
     assert.notEqual(masterGraph.states[0].id, original.states[0].id);
     assert.equal((await client.query('SELECT source_version_id FROM workflow_clone_origins WHERE organization_id=$1 AND workflow_id=$2',
       [identity.organization_id, masterCopy.workflowId])).rows[0].source_version_id, workflow.versionId);

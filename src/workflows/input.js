@@ -36,7 +36,7 @@ export function workflowStateInput(input) {
   return result;
 }
 export function workflowTransitionInput(input) {
-  fieldsOnly(input, ['code', 'name', 'sourceStateId', 'targetStateId', 'sourcePort', 'targetPort', 'approvalMode', 'autoExecute', 'requireComment', 'displayOrder', 'creatorRoleIds', 'ccRoleIds', 'ccEmails', 'approverStages', 'checklistMasterId', 'checklist', 'conditions']);
+  fieldsOnly(input, ['code', 'name', 'sourceStateId', 'targetStateId', 'sourcePort', 'targetPort', 'approvalMode', 'autoExecute', 'autoMoveMode', 'requireComment', 'displayOrder', 'creatorRoleIds', 'ccRoleIds', 'ccEmails', 'approverStages', 'checklistMasterId', 'checklist', 'conditions']);
   const sourceStateId = uuid(input.sourceStateId, 'Source state').toLowerCase(); const targetStateId = uuid(input.targetStateId, 'Target state').toLowerCase();
   if (sourceStateId === targetStateId) throw new HttpError(400, 'invalid_workflow_input', 'Source and target states must differ.');
   const approvalMode = choice(input.approvalMode ?? 'none', ['none', 'any', 'all', 'sequential'], 'approval mode');
@@ -77,6 +77,7 @@ export function workflowTransitionInput(input) {
     ...(input.checklistMasterId === undefined ? {} : { checklistMasterId: input.checklistMasterId === null ? null : uuid(input.checklistMasterId, 'Checklist master').toLowerCase() }),
     ...(input.sourcePort === undefined ? {} : { sourcePort: integer(input.sourcePort, 'Source port', 1, 8) }),
     ...(input.targetPort === undefined ? {} : { targetPort: integer(input.targetPort, 'Target port', 1, 8) }),
+    ...(input.autoMoveMode === undefined ? {} : { autoMoveMode: choice(input.autoMoveMode, ['yes', 'no', 'all_trs_allocated', 'all_trs_approved'], 'auto move mode') }),
     autoExecute: bool(input.autoExecute ?? false, 'Automatic transition'), requireComment: bool(input.requireComment ?? false, 'Required comment'),
     ...(input.displayOrder === undefined ? {} : { displayOrder: integer(input.displayOrder, 'Position', 0, 100000) }),
     creatorRoleIds: roleIds(input.creatorRoleIds), ccRoleIds: roleIds(input.ccRoleIds), ccEmails, approverStages, checklist, conditions };

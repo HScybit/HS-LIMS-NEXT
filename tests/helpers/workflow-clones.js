@@ -20,7 +20,8 @@ export async function createWorkflowCloneFixture(client, identity, { edges = 1, 
   const transitions = Array.from({ length: edges }, (_, index) => ({
     organizationId, id: randomUUID(), workflowVersionId: workflow.versionId, code: `edge-${index}`, name: `Synthetic transition ${index}`,
     sourceStateId: states[index].id, targetStateId: states[index + 1].id, sourcePort: index % 2 ? null : 8, targetPort: index % 2 ? null : 8,
-    approvalMode: details ? 'sequential' : 'none', autoExecute: false, requireComment: index % 2 === 0, displayOrder: index,
+    approvalMode: details ? 'sequential' : 'none', autoExecute: index % 4 === 0,
+    autoMoveMode: ['yes', 'no', 'all_trs_allocated', 'all_trs_approved'][index % 4], requireComment: index % 2 === 0, displayOrder: index,
   }));
   await insertBatch(db, w.workflowStates, states);
   if (details) await insertBatch(db, w.workflowStateCapabilityRoles, states.map((state) => ({ organizationId, workflowStateId: state.id, capability: 'view', roleId })));

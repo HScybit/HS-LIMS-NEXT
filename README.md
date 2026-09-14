@@ -50,6 +50,8 @@ Checklists at `/checklists` includes the source list, form, detail view and dele
 
 Workflow authoring can select an active checklist master and copy its ordered prompts as required checks, recording the master revision when known. Explicit selection refreshes the copy; omitting the binding preserves it, and explicit null detaches it. Published workflows, both clone commands and actual approval answers retain their saved prompts through later master edits or deactivation. Referenced checklists cannot be deleted. Bounded choices at `/api/workflows/checklists` require workflow read/manage access without exposing Checklist Master contents. The complete workflow canvas remains under implementation.
 
+Workflow definitions also preserve the four source Auto Move choices: `yes`, `no`, `all_trs_allocated` and `all_trs_approved`. Historical modes remain unknown when only an older boolean was recorded. Explicit mode changes derive the matching boolean, while older clients retain unchanged conditional choices. Automatic progression and the remaining editor interactions are still under implementation.
+
 ## Run locally
 
 Requirements: Node **22.23.0**, npm, Docker Desktop and Google Chrome for browser tests.

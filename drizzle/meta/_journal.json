@@ -855,6 +855,13 @@
       "when": 1789341600417,
       "tag": "0121_workflow_checklist_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1789343886763,
+      "tag": "0122_workflow_auto_move_modes",
+      "breakpoints": true
     }
   ]
 }

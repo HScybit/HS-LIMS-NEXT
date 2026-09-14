@@ -5,6 +5,15 @@ import { workflowStateInput, workflowTransitionInput, workflowCommand, approvalD
 import { conditionValue, matchesCondition, workflowConditionsMatch } from '../../src/workflows/conditions.js';
 
 const input = () => ({ code: 'review', name: 'Review', sourceStateId: randomUUID(), targetStateId: randomUUID() });
+test('workflow input retains the four exact Auto Move choices and distinguishes an omitted historical mode', () => {
+  assert.equal(Object.hasOwn(workflowTransitionInput(input()), 'autoMoveMode'), false);
+  for (const autoMoveMode of ['yes', 'no', 'all_trs_allocated', 'all_trs_approved']) {
+    assert.equal(workflowTransitionInput({ ...input(), autoMoveMode }).autoMoveMode, autoMoveMode);
+  }
+  for (const autoMoveMode of [null, '', 'YES', 'true', true, 1, 'all_trs_completed']) {
+    assert.throws(() => workflowTransitionInput({ ...input(), autoMoveMode }), { code: 'invalid_workflow_input' });
+  }
+});
 test('workflow checklist selection distinguishes omission and detachment and accepts all 200 master prompts', () => {
   const id = randomUUID();
   assert.equal(Object.hasOwn(workflowTransitionInput(input()), 'checklistMasterId'), false);
