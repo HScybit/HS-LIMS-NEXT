@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import AppIcon from '../ui/AppIcon.jsx';
 import { workflowCanvasModel, workflowNodeWidth, workflowPortTop } from '../../workflows/canvas.js';
 
-export default function WorkflowCanvas({ states, transitions }) {
+export default function WorkflowCanvas({ states, transitions, onEditNode, onDeleteNode, disabled = false }) {
   const graph = useMemo(() => workflowCanvasModel(states, transitions), [states, transitions]);
   return <div className="workflow-canvas-shell" role="region" aria-label="Workflow canvas" tabIndex={0}>
     <div className="workflow-canvas" style={{ width: graph.width, height: graph.height }}>
@@ -20,6 +20,10 @@ export default function WorkflowCanvas({ states, transitions }) {
           style={{ top: workflowPortTop(node.layout.height, node.layout.inputCount, index), cursor: 'default' }} title={`input_${index + 1}`} />)}
         <div className="workflow-node__content"><div className="workflow-node__title" title={node.name}>{node.name}</div>
           <div className="workflow-node__meta"><span>{node.layout.inputCount} in</span><span>{node.layout.outputCount} out</span></div>
+          {onEditNode || onDeleteNode ? <div className="workflow-node__actions">
+            {onEditNode ? <button type="button" disabled={disabled} aria-label={`Edit ${node.name}`} onClick={() => onEditNode(node)}><AppIcon name="edit" /></button> : null}
+            {onDeleteNode ? <button type="button" disabled={disabled} aria-label={`Delete ${node.name}`} onClick={() => onDeleteNode(node)}><AppIcon name="trash" /></button> : null}
+          </div> : null}
         </div>
         {Array.from({ length: node.layout.outputCount }, (_, index) => <span key={index} className="workflow-port workflow-port--output"
           style={{ top: workflowPortTop(node.layout.height, node.layout.outputCount, index), cursor: 'default' }} title={`output_${index + 1}`} />)}

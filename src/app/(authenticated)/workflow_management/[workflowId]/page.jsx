@@ -9,5 +9,5 @@ export default async function Page({ params }) {
   if (!identity?.permissions.some((permission) => ['workflows.read', 'workflows.manage'].includes(permission))) {
     return <div className="alert alert-warning m-4" role="alert">You do not have permission to view workflows.</div>;
   }
-  return <Suspense fallback={<AppLoader />}><WorkflowPage key={workflowId} workflowId={workflowId} /></Suspense>;
+  return <Suspense fallback={<AppLoader />}><WorkflowPage key={workflowId} workflowId={workflowId} canManage={identity.permissions.includes('workflows.manage')} /></Suspense>;
 }

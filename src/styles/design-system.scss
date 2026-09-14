@@ -2136,6 +2136,18 @@
 }
 
 @media (max-width: 768px) {
+  .page-header--workflow-editor {
+    padding-block: 12px;
+
+    .page-header__start {
+      flex: 0 0 100%;
+    }
+
+    .page-header__row > .col-auto {
+      width: 100%;
+    }
+  }
+
   .workflow-page {
     padding: 14px;
   }
@@ -2153,6 +2165,14 @@
   .workflow-node-modal-layout,
   .workflow-connection-modal-layout {
     grid-template-columns: 1fr;
+  }
+
+  .workflow-modal--node .workflow-modal-section--actions .workflow-check-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workflow-modal--node .workflow-badge-color-list {
+    flex-wrap: wrap;
   }
 
   .workflow-node-modal-column {
