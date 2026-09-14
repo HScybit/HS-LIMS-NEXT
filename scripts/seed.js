@@ -34,6 +34,7 @@ try {
         ['samples.read', 'Read samples'], ['samples.create', 'Create samples'], ['samples.manage', 'Manage samples'],
         ['datasheets.execute', 'Enter datasheet results'],
         ['roles.read', 'View roles'], ['roles.manage', 'Manage roles'],
+        ['users.read', 'View users'], ['users.manage', 'Manage users'],
         ['checklists.read', 'View checklists'], ['checklists.manage', 'Manage checklists'],
         ['settings.read', 'View organization settings'], ['settings.manage', 'Manage organization settings'],
       ]) {
