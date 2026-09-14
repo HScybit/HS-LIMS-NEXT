@@ -3,7 +3,8 @@ import { fieldsOnly, integer, requirePermission, uuid } from '../templates/input
 import { userCustomFields } from '../masters/custom-fields.js';
 import { loadMasterCustomFieldValues, prepareMasterCustomFieldValues, appendMasterCustomFieldValues } from '../masters/master-custom-field-values.js';
 import { userProfileCommandError } from './profiles.js';
-import { userCustomFieldInput, userFieldUserIds } from './custom-field-input.js';
+import { userCustomFieldInput, userFieldUserIds, userFieldUserSearch } from './custom-field-input.js';
+import { matchesUserFieldUserOption } from './custom-field-options.js';
 
 function requireRead(identity) {
   if (!identity.permission_codes?.some(code => ['users.read', 'users.manage'].includes(code))) throw new HttpError(403, 'forbidden', 'You cannot view user fields.');
@@ -31,6 +32,23 @@ export async function loadUserFieldUserLabels(client, identity, input) {
     FROM unnest($2::uuid[]) WITH ORDINALITY AS requested(id,position)
     JOIN user_directory person ON person.organization_id=$1 AND person.id=requested.id ORDER BY requested.position`, [identity.organization_id, ids]);
   return { rows: result.rows };
+}
+
+export async function loadUserFieldUserOptions(client, identity, input) {
+  requireRead(identity); const search = userFieldUserSearch(input);
+  const rows = []; let afterId = null;
+  while (true) {
+    // Keyset batches keep the exact source filter without loading the whole directory into memory.
+    const batch = (await client.query(`SELECT person.id,person.display_name AS name FROM user_directory person
+      WHERE person.organization_id=$1 ${afterId ? 'AND person.id>$2' : ''} ORDER BY person.id LIMIT 501`,
+    afterId ? [identity.organization_id, afterId] : [identity.organization_id])).rows;
+    for (const person of batch.slice(0, 500)) {
+      if (matchesUserFieldUserOption(person, search)) rows.push(person);
+      if (rows.length > 50) return { rows: rows.slice(0, 50), hasMore: true };
+    }
+    if (batch.length <= 500) return { rows, hasMore: false };
+    afterId = batch[499].id;
+  }
 }
 
 export async function loadUserCustomFields(client, identity, userId, { atRevision } = {}) {

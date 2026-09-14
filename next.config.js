@@ -1,6 +1,8 @@
 const nextConfig = {
   poweredByHeader: false,
   reactProductionProfiling: process.env.PROFILE_REACT === '1',
+  // The server reuses the source selection filter without bundling its React component graph.
+  serverExternalPackages: ['react-select'],
   experimental: { optimizePackageImports: ['@tabler/icons-react'] },
   outputFileTracingIncludes: {
     '/api/masters/products/custom-field-generation': ['./src/custom-fields/*.js', './src/masters/custom-field-config.js', './src/auth/errors.js',

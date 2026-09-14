@@ -9,6 +9,15 @@ export function userFieldUserIds(input) {
   return [...new Set(input.ids.map(id => uuid(id, 'Selected user').toLowerCase()))];
 }
 
+export function userFieldUserSearch(input = {}) {
+  fieldsOnly(input, ['search']);
+  const search = input.search === undefined ? '' : input.search;
+  if (typeof search !== 'string' || search.length > 200 || !search.isWellFormed() || search.includes('\0')) {
+    throw new HttpError(400, 'invalid_user_field_search', 'Search must contain at most 200 valid characters.');
+  }
+  return search;
+}
+
 export function userCustomFieldInput(userId, input) {
   fieldsOnly(input, ['requestId', 'revision', 'customFields', 'customFieldTimeZone']);
   return { id: uuid(userId, 'User').toLowerCase(), requestId: uuid(input.requestId, 'Save request').toLowerCase(),
