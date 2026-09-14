@@ -38,6 +38,8 @@ test('the master clone HTTP command recovers a lost success response and replays
   expect(cloned.name.endsWith(' - Copy')).toBe(true); expect(cloned.draftVersionId).toBe(retried.data.versionId); expect(cloned.createdBy).toBe(account.userId);
   expect((await owner.query('SELECT count(*)::int n FROM workflow_clone_origins WHERE organization_id=$1 AND request_id=$2', [account.organizationId, command.requestId])).rows[0].n).toBe(1);
   expect((await owner.query('SELECT count(*)::int n FROM workflow_transitions WHERE organization_id=$1 AND workflow_version_id=$2', [account.organizationId, retried.data.versionId])).rows[0].n).toBe(2);
+  expect((await owner.query('SELECT legacy_tr_state FROM workflow_states WHERE organization_id=$1 AND workflow_version_id=$2 ORDER BY display_order',
+    [account.organizationId, retried.data.versionId])).rows.map((state) => state.legacy_tr_state)).toEqual(['allocated', 'sent_for_approval', 'approved']);
   expect((await owner.query('SELECT auto_move_mode,auto_execute FROM workflow_transitions WHERE organization_id=$1 AND workflow_version_id=$2 ORDER BY display_order',
     [account.organizationId, retried.data.versionId])).rows).toEqual([{ auto_move_mode: 'yes', auto_execute: true }, { auto_move_mode: 'no', auto_execute: false }]);
   expect((await page.request.post(path, { headers: requestHeaders, data: { ...command, sourceVersionId: source.versionId } })).status()).toBe(409);

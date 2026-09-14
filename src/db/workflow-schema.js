@@ -76,6 +76,7 @@ export const workflowCloneOrigins = pgTable('workflow_clone_origins', {
 export const workflowStates = pgTable('workflow_states', {
   ...identity(), workflowVersionId: uuid('workflow_version_id').notNull(), code: text('code').notNull(), name: text('name').notNull(),
   description: text('description').notNull().default(''), stateType: text('state_type').notNull().default('normal'), displayOrder: integer('display_order').notNull().default(0), color: text('color'),
+  legacyTrState: text('legacy_tr_state'),
   // Earlier definitions did not record canvas layout. Preserve that absence in history and copies.
   canvasX: integer('canvas_x'), canvasY: integer('canvas_y'), inputCount: integer('input_count'), outputCount: integer('output_count'), badgeStyle: text('badge_style'),
   templateId: uuid('template_id'), showSampleEdit: boolean('show_sample_edit').notNull().default(false), showSampleRetest: boolean('show_sample_retest').notNull().default(false),
@@ -88,6 +89,7 @@ export const workflowStates = pgTable('workflow_states', {
 }, (t) => [key(t), link(t, t.workflowVersionId, workflowVersions), link(t, t.templateId, templates),
   unique('workflow_state_version_key').on(t.organizationId, t.workflowVersionId, t.id), unique('workflow_state_code_key').on(t.organizationId, t.workflowVersionId, t.code),
   uniqueIndex('workflow_single_state_type_key').on(t.organizationId, t.workflowVersionId, t.stateType).where(sql`${t.stateType} in ('initial', 'final', 'cancelled')`),
+  check('workflow_state_legacy_tr_state', sql`${t.legacyTrState} is null or length(${t.legacyTrState}) <= 150`),
   check('workflow_state_layout', sql`(${t.canvasX} is null or ${t.canvasX} between 0 and 100000) and (${t.canvasY} is null or ${t.canvasY} between 0 and 100000)
     and (${t.inputCount} is null or ${t.inputCount} between 0 and 8) and (${t.outputCount} is null or ${t.outputCount} between 0 and 8)
     and (${t.badgeStyle} is null or ${t.badgeStyle} in ('light','dark'))`),

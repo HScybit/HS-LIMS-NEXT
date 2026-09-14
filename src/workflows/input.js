@@ -21,13 +21,21 @@ export function roleIds(value, label = 'Roles') {
   return result;
 }
 export function workflowStateInput(input) {
-  fieldsOnly(input, ['code', 'name', 'description', 'stateType', 'color', 'templateId', 'displayOrder', ...Object.keys(stateLayoutDefaults), ...stateFlags, ...Object.keys(stateRoles)]);
+  fieldsOnly(input, ['code', 'name', 'description', 'stateType', 'color', 'templateId', 'displayOrder', 'legacyTrState', ...Object.keys(stateLayoutDefaults), ...stateFlags, ...Object.keys(stateRoles)]);
   const result = { code: text(input.code, 'Code', 64), name: text(input.name, 'Name', 150), description: text(input.description, 'Description', 10000, { optional: true }),
     stateType: choice(input.stateType ?? 'normal', ['initial', 'normal', 'final', 'cancelled'], 'state type'),
     color: input.color == null ? null : text(input.color, 'Color', 20, { optional: true }), templateId: input.templateId == null ? null : uuid(input.templateId, 'Template'),
     ...(input.displayOrder === undefined ? {} : { displayOrder: integer(input.displayOrder, 'Position', 0, 100000) }) };
   for (const field of stateFlags) result[field] = bool(input[field] ?? false, field);
   for (const field of Object.keys(stateRoles)) result[field] = roleIds(input[field], field);
+  // The source keeps this hidden identifier when a node's display name changes.
+  if (input.legacyTrState !== undefined) {
+    const value = input.legacyTrState;
+    if (value !== null && (typeof value !== 'string' || value.length > 150 || !value.isWellFormed() || value.includes('\0'))) {
+      throw new HttpError(400, 'invalid_workflow_input', 'The legacy test request state must be valid text of at most 150 characters.');
+    }
+    result.legacyTrState = value;
+  }
   // Omitted layout fields must survive edits from clients that predate the canvas.
   for (const [field, maximum] of [['canvasX', 100000], ['canvasY', 100000], ['inputCount', 8], ['outputCount', 8]]) {
     if (input[field] !== undefined) result[field] = integer(input[field], field, 0, maximum);

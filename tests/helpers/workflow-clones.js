@@ -12,6 +12,7 @@ export async function createWorkflowCloneFixture(client, identity, { edges = 1, 
   const states = Array.from({ length: edges + 1 }, (_, index) => ({
     organizationId, id: randomUUID(), workflowVersionId: workflow.versionId, code: `state-${index}`, name: `Synthetic state ${index}`,
     description: index ? 'Measured synthetic graph' : '', stateType: index === 0 ? 'initial' : index === edges ? 'final' : 'normal',
+    legacyTrState: ['allocated', 'sent_for_approval', 'approved', null][index % 4],
     displayOrder: index, canvasX: index * 20 % 100001, canvasY: index % 2 ? null : 0,
     inputCount: index === 0 ? 0 : 8, outputCount: index === edges ? 0 : 8, badgeStyle: index % 2 ? null : 'dark',
     color: index % 2 ? null : 'blue', templateId,

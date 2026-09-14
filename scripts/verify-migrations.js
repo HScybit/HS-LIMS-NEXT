@@ -119,15 +119,16 @@ try {
       items: [{ id: randomUUID(), prompt: 'Verify frozen checklist' }, { id: randomUUID(), prompt: '0' }] };
     await createChecklist(client, identity, checklist);
     const workflow = await createWorkflow(client, identity, { code: randomUUID(), name: 'Fresh workflow layout', appliesTo: 'sample' });
-    const initialInput = { code: 'initial', name: 'Initial', stateType: 'initial', canvasX: 0, canvasY: 0, inputCount: 0, outputCount: 8, badgeStyle: 'dark' };
+    const initialInput = { code: 'initial', name: 'Initial', stateType: 'initial', canvasX: 0, canvasY: 0, inputCount: 0, outputCount: 8, badgeStyle: 'dark', legacyTrState: 'allocated' };
     const initial = await saveWorkflowState(client, identity, workflow.versionId, 1, initialInput);
     const final = await saveWorkflowState(client, identity, workflow.versionId, initial.revision,
-      { code: 'final', name: 'Final', stateType: 'final', inputCount: 8, outputCount: 0, canvasX: 100000, canvasY: 100000 });
+      { code: 'final', name: 'Final', stateType: 'final', inputCount: 8, outputCount: 0, canvasX: 100000, canvasY: 100000, legacyTrState: 'approved' });
     const edge = await saveWorkflowTransition(client, identity, workflow.versionId, final.revision,
       { code: 'finish', name: 'Finish', sourceStateId: initial.id, targetStateId: final.id, sourcePort: 8, targetPort: 8, checklistMasterId: checklist.id,
         autoMoveMode: 'all_trs_approved', autoExecute: true });
     await publishWorkflow(client, identity, workflow.versionId, edge.revision, 'Fresh layout publication');
     const original = await loadWorkflowDefinition(client, identity, workflow.versionId);
+    assert.deepEqual(original.states.map((state) => state.legacyTrState), ['allocated', 'approved']);
     assert.equal(original.transitions[0].checklistMasterId, checklist.id); assert.equal(original.transitions[0].checklistMasterRevision, 1);
     assert.equal(original.transitions[0].autoMoveMode, 'all_trs_approved'); assert.equal(original.transitions[0].autoExecute, false);
     await updateChecklist(client, identity, { id: checklist.id, requestId: randomUUID(), revision: 1, isActive: false });
@@ -145,6 +146,7 @@ try {
     const masterCopy = await cloneWorkflowMaster(client, identity, workflow.workflowId, cloneInput);
     assert.equal(masterCopy.metadataRevision, 1); assert.equal(masterCopy.revision, 2);
     const masterGraph = await loadWorkflowDefinition(client, identity, masterCopy.versionId);
+    assert.deepEqual(masterGraph.states.map((state) => state.legacyTrState), ['allocated', 'approved']);
     assert.equal(masterGraph.states.length, original.states.length); assert.equal(masterGraph.transitions[0].sourcePort, 8);
     assert.equal(masterGraph.transitions[0].checklistMasterId, checklist.id); assert.equal(masterGraph.transitions[0].checklistMasterRevision, 1);
     assert.equal(masterGraph.transitions[0].autoMoveMode, 'all_trs_approved'); assert.equal(masterGraph.transitions[0].autoExecute, false);
