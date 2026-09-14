@@ -23,6 +23,7 @@ const commandErrors = {
   role_protected: [409, 'protected_role', 'This system role cannot be deleted.'],
   role_assigned: [409, 'role_assigned', 'This role is assigned to users. Remove those assignments before deleting it.'],
   role_last_administrator: [409, 'last_role_administrator', 'At least one active user must retain permission to manage roles.'],
+  user_profile_last_administrator: [409, 'last_user_administrator', 'At least one active user must retain permission to manage users.'],
 };
 
 async function writeRole(client, identity, operation, input) {

@@ -904,6 +904,13 @@
       "when": 1789377514364,
       "tag": "0128_user_directory",
       "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1789380123778,
+      "tag": "0129_user_membership_profiles",
+      "breakpoints": true
     }
   ]
 }
