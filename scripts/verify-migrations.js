@@ -57,7 +57,7 @@ import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
 import { loadReportRenderer } from '../src/reports/renderer.js';
 import { createReportWorkerPool, verifyReportWorkerRole, processNextReportJob } from '../src/reports/worker.js';
 import { createRole, updateRole, retireRole, loadRole, listRoles, loadRoleSettings } from '../src/roles/service.js';
-import { saveLaboratorySettings } from '../src/organization-settings/service.js';
+import { loadLaboratorySettings, saveLaboratorySettings } from '../src/organization-settings/service.js';
 import { createChecklist, updateChecklist, retireChecklist, loadChecklist, listChecklists } from '../src/checklists/service.js';
 
 process.loadEnvFile('.env.worker.local');
@@ -176,7 +176,11 @@ try {
     assert.deepEqual(await loadRole(client, identity, command.id, { atRevision: 1 }), original);
     assert.equal((await listRoles(client, identity, { search: 'Fresh edited role' })).totalCount, 0);
     assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, false);
-    await saveLaboratorySettings(client, identity, { revision: 0, autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: null, selfAllocationEnabled: true });
+    await saveLaboratorySettings(client, identity, { revision: 0, autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: null, selfAllocationEnabled: true,
+      dateFormat: 'Do MMMM YYYY', datetimeFormat: 'MMMM Do YYYY | hh:mm A' });
+    const settings = (await loadLaboratorySettings(client, identity)).settings;
+    assert.equal(settings.dateFormat, 'Do MMMM YYYY'); assert.equal(settings.datetimeFormat, 'MMMM Do YYYY | hh:mm A');
+    assert.equal(settings.updatedBy, account.userId);
     assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, true);
   }, { csrfToken: session.csrfToken });
   // Enrollment must work from an empty schema using only the restricted app role.

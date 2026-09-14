@@ -7,6 +7,8 @@ import Checkbox from '../ui/Checkbox.jsx';
 import { AppLoader } from '../ui/AppLoader.jsx';
 import { showToast } from '../ui/toast.jsx';
 import { apiRequest } from '../../lib/api-client.js';
+import { customFieldDateFormats, customFieldDateTimeFormats } from '../../masters/custom-field-config.js';
+import { organizationDateFormatDefaults } from '../../organization-settings/date-formats.js';
 
 const tabs = [{ id: 'tr_settings', label: 'TR Settings' }, { id: 'nabl_settings', label: 'NABL Settings' },
   { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }, { id: 'settings', label: 'Tenant Settings' }];
@@ -29,7 +31,9 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
     async function load() {
       try {
         const result = await apiRequest('/api/organization-settings/laboratory', { signal: controller.signal });
-        if (!controller.signal.aborted) { setData(result); setDraft({ ...result.settings, schemeMonthFormat: result.settings.schemeMonthFormat || 'short' }); setError(''); }
+        if (!controller.signal.aborted) { setData(result); setDraft({ ...result.settings, schemeMonthFormat: result.settings.schemeMonthFormat || 'short',
+          dateFormat: result.settings.dateFormat || organizationDateFormatDefaults.dateFormat,
+          datetimeFormat: result.settings.datetimeFormat || organizationDateFormatDefaults.datetimeFormat }); setError(''); }
       } catch (failure) { if (!controller.signal.aborted) setError(failure.message); }
     }
     void load(); return () => controller.abort();
@@ -43,7 +47,7 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
         resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: draft.jobWorkflowId,
         schemeCurrentYearDigits: draft.schemeCurrentYearDigits ?? '', schemeNextYearDigits: draft.schemeNextYearDigits ?? '',
         schemeSeparator: draft.schemeSeparator ?? '', schemeMonthFormat: draft.schemeMonthFormat,
-        schemeNonNablStartNumber: draft.schemeNonNablStartNumber ?? '' } });
+        schemeNonNablStartNumber: draft.schemeNonNablStartNumber ?? '', dateFormat: draft.dateFormat, datetimeFormat: draft.datetimeFormat } });
       setDraft((current) => ({ ...current, revision: result.revision })); showToast('Settings saved successfully.');
     } catch (failure) { setError(failure.message); }
     finally { setSaving(false); }
@@ -112,6 +116,15 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
               <div className="col-md-6"><FormElement type="dropdown" label="Current Month Format" inputProps={{ id: 'current_month_format', value: draft.schemeMonthFormat,
                 options: [{ value: 'short', label: 'Short' }, { value: 'long', label: 'Long' }, { value: 'number', label: 'Number' }], disabled,
                 onChange: (event) => setDraft((current) => ({ ...current, schemeMonthFormat: event.target.value })) }} /></div>
+            </div></section>
+            <section className="settings-section"><h6 className="settings-section__title">Display &amp; Format</h6><div className="row gx-3">
+              {[
+                ['dateFormat', 'date_format', 'Date Format', customFieldDateFormats],
+                ['datetimeFormat', 'datetime_format', 'Date-Time Format', customFieldDateTimeFormats],
+              ].map(([key, id, label, formats]) => <div className="col-md-6" key={id}><div className="mb-3"><FormElement type="dropdown" label={label}
+                inputProps={{ id, value: draft[key], disabled,
+                  options: formats.some((option) => option.value === draft[key]) ? formats : [{ value: draft[key], label: draft[key] }, ...formats],
+                  onChange: (event) => setDraft((current) => ({ ...current, [key]: event.target.value })) }} /></div></div>)}
             </div></section>
           </div>
         </div>

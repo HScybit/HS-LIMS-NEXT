@@ -14,6 +14,7 @@ export const organizationLaboratorySettings = pgTable('organization_laboratory_s
   // GenericForm scheme settings are source text-input lexemes; parseInt prefixes and absent fallbacks are meaningful.
   schemeCurrentYearDigits: text('scheme_current_year_digits'), schemeNextYearDigits: text('scheme_next_year_digits'),
   schemeSeparator: text('scheme_separator'), schemeMonthFormat: text('scheme_month_format'), schemeNonNablStartNumber: text('scheme_non_nabl_start_number'),
+  dateFormat: text('date_format'), datetimeFormat: text('datetime_format'),
   revision: integer('revision').notNull().default(1), updatedBy: uuid('updated_by').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 }, (t) => [
@@ -22,6 +23,8 @@ export const organizationLaboratorySettings = pgTable('organization_laboratory_s
   foreignKey({ name: 'lab_settings_job_workflow_fk', columns: [t.organizationId, t.jobWorkflowId], foreignColumns: [workflows.organizationId, workflows.id] }),
   foreignKey({ name: 'lab_settings_actor_fk', columns: [t.organizationId, t.updatedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
   check('lab_settings_revision', sql`${t.revision}>0`),
+  check('lab_settings_date_format', sql`length(${t.dateFormat})<=40`),
+  check('lab_settings_datetime_format', sql`length(${t.datetimeFormat})<=60`),
   check('lab_settings_scheme_values', sql`length(${t.schemeCurrentYearDigits})<=128 and length(${t.schemeNextYearDigits})<=128
     and length(${t.schemeSeparator})<=250 and length(${t.schemeNonNablStartNumber})<=128
     and (${t.schemeMonthFormat} is null or ${t.schemeMonthFormat} in ('','number','short','long'))`),
