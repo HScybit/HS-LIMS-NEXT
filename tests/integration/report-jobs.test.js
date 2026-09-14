@@ -12,7 +12,9 @@ import { createReportWorkerPool, verifyReportWorkerRole, processNextReportJob } 
 
 process.loadEnvFile('.env.worker.local');
 const workerUrl = new URL(process.env.WORKER_DATABASE_URL);
-if (workerUrl.hostname !== '127.0.0.1' || workerUrl.port !== '55442' || workerUrl.pathname !== '/sampleify_local') throw new Error('Worker tests require the isolated synthetic database.');
+const databaseName = process.env.SAMPLEIFY_TEST_DATABASE_NAME ?? 'sampleify_local';
+if (databaseName !== 'sampleify_local' && !/^sampleify_verify_[a-f0-9]{32}$/.test(databaseName)
+  || workerUrl.hostname !== '127.0.0.1' || workerUrl.port !== '55442' || workerUrl.pathname !== `/${databaseName}`) throw new Error('Worker tests require the isolated synthetic database.');
 const owner = ownerPool(); const worker = createReportWorkerPool(); let account;
 const permissions = ['samples.create', 'samples.read', 'samples.manage', 'templates.manage', 'test_requests.allocate', 'datasheets.execute'];
 const work = (action, options = {}, user = account) => withSession(user.token, action, { csrfToken: user.csrfToken, ...options });

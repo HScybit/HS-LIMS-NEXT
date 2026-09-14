@@ -12,6 +12,7 @@ import { contextWidgetPreview, contextWidgetValue, isContextWidget } from '../..
 import { fieldDefaultValue } from '../../templates/defaults.js';
 import TemplateImageWidget from './TemplateImageWidget.jsx';
 import TextWidget from './TextWidget.jsx';
+import TrDataWidget from './TrDataWidget.jsx';
 import ParameterDetailWidget from './ParameterDetailWidget.jsx';
 import SampleLineWidget from './SampleLineWidget.jsx';
 import { resolveParameterTitle, verticalTitleValue } from '../../templates/parameter-title.js';
@@ -27,6 +28,7 @@ export const TemplateWidget = memo(function TemplateWidget({ field, mode = 'view
     parameter={parameter ?? report?.parameterDetailFallback} onRefresh={onRefreshDetail} occurrenceId={occurrenceId} disabled={disabled} />;
   if (field.widget === 'sample_line_item_data_widget') return <SampleLineWidget field={field} mode={mode} lineItem={report?.lineItem} onCommand={onCommand} disabled={disabled} />;
   if (field.widget === 'sno_widget') return <div data-ms-id={sectionId}>{contextWidgetValue(field, report, parameter, serialNumber)}</div>;
+  if (field.widget === 'tr_data_widget') return <TrDataWidget field={field} mode={mode} report={report} parameter={parameter} />;
   if (!plan && field.widget === 'tr_result_widget' && report) return <ReportResult report={report} parameter={parameter} serialNumber={serialNumber} />;
   if (isContextWidget(field.widget)) return <div className={plan ? 'text-muted small' : 'text-break'}>{plan ? contextWidgetPreview[field.widget] : contextWidgetValue(field, report, parameter, serialNumber)}</div>;
   if (field.widget === 'text_widget') return <TextWidget field={field} mode={mode} value={value} parameter={parameter?.parameterTitleValues} occurrenceId={occurrenceId} disabled={disabled} onBeginEdit={onBeginEdit} onChange={onChange} onCommit={onCommit} />;
