@@ -54,7 +54,9 @@ Workflow Master at `/workflow_management` includes the source list, Name/Descrip
 
 Workflow role/template lookups expose only names, IDs and active status to workflow readers and managers. Searches return at most 100 choices; a separate batch resolves up to 500 selected IDs, including inactive selections. Large selections use a bounded POST with normal origin and CSRF protection. Workflow managers can select active templates without receiving template-definition access; concurrent deactivation or session revocation prevents the save.
 
-Partial workflow authoring services preserve omitted node flags, legacy layout, role families, typed conditions and copied checklist history. Explicit edits validate the draft revision and current session after acquiring locks. Role selections update only added or removed assignments; reducing a port count removes its affected draft connections. These services are being connected to the editable canvas and command retry handling.
+Partial workflow authoring services preserve omitted node flags, legacy layout, role families, typed conditions and copied checklist history. Explicit edits validate the draft revision and current session after acquiring locks. Role selections update only added or removed assignments; reducing a port count removes its affected draft connections.
+
+The workflow command endpoint atomically creates a draft on the first submitted edit of a published graph and applies that edit. Typed receipts let an identical request retry return its original outcome after a lost response; changed reuse and stale revisions are rejected. The editor must reload the current graph after a receipt, since later edits may have advanced it. Publication retains the existing strict graph validation. Node/connection controls are still under implementation.
 
 Workflow authoring services can select an active checklist master and copy its ordered prompts as required checks, recording the master revision when known. Explicit selection refreshes the copy; omitting the binding preserves it, and explicit null detaches it. Published workflows, both clone commands and actual approval answers retain their saved prompts through later master edits or deactivation. Referenced checklists cannot be deleted. Bounded choices at `/api/workflows/checklists` require workflow read/manage access without exposing Checklist Master contents.
 
@@ -65,6 +67,8 @@ Run `npx playwright test --config=playwright.performance.config.js tests/perform
 The same command with `tests/performance/workflow-references.spec.js` measures role/template lookups over synthetic 1/100/1,000-entry catalogs, including 500 selected IDs and browser response parsing. Results are written to `.local/workflow-reference-performance.json`; picker rendering is outside this benchmark.
 
 Run `node --env-file=.env.local scripts/benchmark-workflow-patches.js` alone to measure partial saves on synthetic 1/100/1,000-connection graphs. It checks hidden data and published-history preservation and writes `.local/workflow-patch-performance.json`. The 500-role case records initial insertion as a warm-up, then measures resubmitting that selection while changing the node name; it does not measure replacement with 500 different roles or browser editing.
+
+Run `node --env-file=.env.local scripts/benchmark-workflow-commands.js` alone to measure draft edits, exact retries and published graph cloning with a first edit over those graph sizes. It writes `.local/workflow-command-performance.json` and checks that published source definitions remain unchanged. These are service measurements; they exclude HTTP transport and editable-canvas rendering.
 
 ## Run locally
 

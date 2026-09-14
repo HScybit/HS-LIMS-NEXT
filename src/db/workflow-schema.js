@@ -12,6 +12,7 @@ const key = (t) => primaryKey({ columns: [t.organizationId, t.id] });
 const link = (t, column, target) => foreignKey({ columns: [t.organizationId, column], foreignColumns: [target.organizationId, target.id] });
 const actor = (t, column) => foreignKey({ columns: [t.organizationId, column], foreignColumns: [memberships.organizationId, memberships.userId] });
 const transactionId = customType({ dataType: () => 'xid8' });
+const bytes = customType({ dataType: () => 'bytea' });
 
 export const workflowRoleLabels = pgView('workflow_role_labels', {
   organizationId: uuid('organization_id'), id: uuid('id'), name: text('name'), active: boolean('active'),
@@ -90,6 +91,28 @@ export const workflowCloneOrigins = pgTable('workflow_clone_origins', {
   foreignKey({ name: 'workflow_clone_actor_fk', columns: [t.organizationId, t.createdBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
   check('workflow_clone_origin_identity', sql`${t.workflowId}<>${t.sourceWorkflowId} and ${t.workflowVersionId}<>${t.sourceVersionId}
     and ${t.clonedRevision}>0 and ${t.sourceRevision}>0 and ${t.sourceMetadataRevision}>=0`),
+]);
+
+export const workflowEditorCommands = pgTable('workflow_editor_commands', {
+  organizationId: tenant(), requestId: uuid('request_id').notNull(), workflowId: uuid('workflow_id').notNull(),
+  sourceVersionId: uuid('source_version_id').notNull(), sourceRevision: integer('source_revision').notNull(),
+  workflowVersionId: uuid('workflow_version_id').notNull(), revision: integer('revision').notNull(),
+  operation: text('operation').notNull(), sourceElementId: uuid('source_element_id'), elementId: uuid('element_id'),
+  fingerprint: bytes('fingerprint').notNull(), savedBy: uuid('saved_by').notNull(), savedAt: time('saved_at').notNull().defaultNow(),
+  createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, (t) => [primaryKey({ name: 'workflow_editor_command_pk', columns: [t.organizationId, t.requestId] }),
+  unique('workflow_editor_command_revision_key').on(t.organizationId, t.workflowVersionId, t.revision),
+  link(t, t.workflowId, workflows), link(t, t.sourceVersionId, workflowVersions), link(t, t.workflowVersionId, workflowVersions), actor(t, t.savedBy),
+  check('workflow_editor_command_operation', sql`${t.operation} in ('create_state','patch_state','delete_state','create_transition','patch_transition','delete_transition','publish')`),
+  check('workflow_editor_command_revision', sql`${t.sourceRevision}>0 and ${t.revision}>1 and (
+    (${t.sourceVersionId}=${t.workflowVersionId} and ${t.revision}=${t.sourceRevision}+1)
+    or (${t.sourceVersionId}<>${t.workflowVersionId} and ${t.revision}=2 and ${t.operation}<>'publish'))`),
+  check('workflow_editor_command_elements', sql`(
+    (${t.operation} in ('patch_state','delete_state','patch_transition','delete_transition') and ${t.sourceElementId} is not null and ${t.elementId} is not null
+      and (${t.sourceVersionId}<>${t.workflowVersionId} or ${t.sourceElementId}=${t.elementId}))
+    or (${t.operation} in ('create_state','create_transition') and ${t.sourceElementId} is null and ${t.elementId} is not null)
+    or (${t.operation}='publish' and ${t.sourceElementId} is null and ${t.elementId} is null))`),
+  check('workflow_editor_command_fingerprint', sql`octet_length(${t.fingerprint})=32`),
 ]);
 
 export const workflowStates = pgTable('workflow_states', {

@@ -54,14 +54,19 @@ async function requireRoles(client, org, roleIds) {
   if (result.rowCount !== distinct.length) throw new HttpError(422, 'invalid_workflow_role', 'A selected role is unavailable in this organization.');
 }
 
-async function lockPatch(client, identity, versionId, expected) {
-  await lockDraft(client, identity, versionId, expected);
+export async function requireWorkflowAuthor(client, identity) {
+  requirePermission(identity, 'workflows.manage');
   // This application-callable scope validates the current session, credentials,
   // membership and tenant. Recheck management permission after the lock wait.
   const result = await client.query(`SELECT public.workflow_reference_organization()=$1::uuid
     AND nullif(current_setting('app.user_id',true),'')::uuid=$2::uuid
     AND public.app_has_permission('workflows.manage') AS allowed`, [identity.organization_id, identity.user_id]);
   if (!result.rows[0]?.allowed) throw new HttpError(403, 'forbidden', 'Your workflow management access changed. Sign in again before saving.');
+}
+
+async function lockPatch(client, identity, versionId, expected) {
+  await lockDraft(client, identity, versionId, expected);
+  await requireWorkflowAuthor(client, identity);
 }
 
 async function removeUnusedPorts(client, db, org, versionId, id, existing, value) {
