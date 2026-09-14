@@ -3,7 +3,7 @@ import { fieldsOnly, integer, requirePermission, uuid } from '../templates/input
 import { userCustomFields } from '../masters/custom-fields.js';
 import { loadMasterCustomFieldValues, prepareMasterCustomFieldValues, appendMasterCustomFieldValues } from '../masters/master-custom-field-values.js';
 import { userProfileCommandError } from './profiles.js';
-import { userCustomFieldInput } from './custom-field-input.js';
+import { userCustomFieldInput, userFieldUserIds } from './custom-field-input.js';
 
 function requireRead(identity) {
   if (!identity.permission_codes?.some(code => ['users.read', 'users.manage'].includes(code))) throw new HttpError(403, 'forbidden', 'You cannot view user fields.');
@@ -23,6 +23,15 @@ const errors = {
 const historyColumns = `version.previous_revision AS "previousRevision",version.custom_field_count AS "customFieldCount",version.time_zone AS "customFieldTimeZone",
   version.username,version.display_name AS "displayName",version.saved_by AS "savedBy",version.saved_by_username AS "savedByUsername",
   version.saved_by_name AS "savedByName",version.saved_at AS "savedAt"`;
+
+export async function loadUserFieldUserLabels(client, identity, input) {
+  requireRead(identity); const ids = userFieldUserIds(input);
+  if (!ids.length) return { rows: [] };
+  const result = await client.query(`SELECT person.id,person.display_name AS name
+    FROM unnest($2::uuid[]) WITH ORDINALITY AS requested(id,position)
+    JOIN user_directory person ON person.organization_id=$1 AND person.id=requested.id ORDER BY requested.position`, [identity.organization_id, ids]);
+  return { rows: result.rows };
+}
 
 export async function loadUserCustomFields(client, identity, userId, { atRevision } = {}) {
   requireRead(identity); const id = uuid(userId, 'User').toLowerCase();
