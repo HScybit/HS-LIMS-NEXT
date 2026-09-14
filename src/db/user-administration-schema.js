@@ -6,6 +6,39 @@ import { userProfileVersions } from './user-profile-schema.js';
 const bytes = customType({ dataType: () => 'bytea' });
 const transactionId = customType({ dataType: () => 'xid8' });
 
+// Explicit operator-managed platform grants, independent of editable laboratory roles.
+export const platformAdministrators = pgTable('platform_administrators', {
+  organizationId: uuid('organization_id').notNull(), userId: uuid('user_id').notNull().references(() => users.id),
+  grantedAt: timestamp('granted_at', { withTimezone: true, mode: 'date' }).notNull(), grantedBy: text('granted_by').notNull(),
+}, (t) => [
+  primaryKey({ name: 'platform_administrator_pk', columns: [t.organizationId, t.userId] }),
+  foreignKey({ name: 'platform_administrator_member_fk', columns: [t.organizationId, t.userId], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('platform_administrator_operator', sql`length(trim(${t.grantedBy})) between 1 and 200`),
+]);
+
+// Only actual administrative commands. Global revisions may have gaps from My Account actions.
+export const userAccountCommands = pgTable('user_account_commands', {
+  organizationId: uuid('organization_id').notNull(), userId: uuid('user_id').notNull(), requestId: uuid('request_id').notNull(),
+  fingerprint: bytes('fingerprint').notNull(), revision: integer('revision').notNull(), previousRevision: integer('previous_revision').notNull(),
+  credentialRevision: integer('credential_revision').notNull(), previousCredentialRevision: integer('previous_credential_revision').notNull(),
+  passwordChanged: boolean('password_changed').notNull(),
+  username: text('username').notNull(), email: text('email').notNull(), displayName: text('display_name').notNull(),
+  previousUsername: text('previous_username').notNull(), previousEmail: text('previous_email').notNull(), previousDisplayName: text('previous_display_name').notNull(),
+  savedBy: uuid('saved_by').notNull(), savedByUsername: text('saved_by_username').notNull(), savedByName: text('saved_by_name').notNull(),
+  savedAt: timestamp('saved_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, (t) => [
+  primaryKey({ name: 'user_account_request_pk', columns: [t.organizationId, t.requestId] }),
+  unique('user_account_revision_key').on(t.userId, t.revision),
+  foreignKey({ name: 'user_account_member_fk', columns: [t.organizationId, t.userId], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  foreignKey({ name: 'user_account_actor_fk', columns: [t.organizationId, t.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('user_account_revisions', sql`${t.previousRevision}>0 and ${t.revision}=${t.previousRevision}+1
+    and ${t.previousCredentialRevision}>0 and ${t.credentialRevision}=${t.previousCredentialRevision}+case when ${t.passwordChanged} then 1 else 0 end`),
+  check('user_account_identity', sql`octet_length(${t.fingerprint})=32 and length(trim(${t.username})) between 1 and 100
+    and length(trim(${t.email})) between 1 and 320 and length(trim(${t.displayName})) between 1 and 200
+    and length(trim(${t.savedByUsername})) between 1 and 100 and length(trim(${t.savedByName})) between 1 and 200`),
+]);
+
 // Actual native creation events only. Imported/existing identities do not acquire an invented creation event.
 export const userCreationCommands = pgTable('user_creation_commands', {
   organizationId: uuid('organization_id').notNull().references(() => organizations.id), userId: uuid('user_id').notNull().references(() => users.id),

@@ -932,6 +932,13 @@
       "when": 1789387495941,
       "tag": "0132_user_signature_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1789390511767,
+      "tag": "0133_user_account_administration",
+      "breakpoints": true
     }
   ]
 }
