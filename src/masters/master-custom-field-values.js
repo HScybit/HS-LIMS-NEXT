@@ -97,11 +97,13 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
   const zone = hasDates ? customFieldTimeZone(timeZone) : null;
   if (!hasDates && timeZone !== null && timeZone !== undefined) throw new HttpError(400, 'invalid_custom_field_timezone', 'A Custom Field time zone requires captured date fields.');
   const previousById = new Map(previousFields.map((field) => [field.fieldId, field]));
+  const previousByKey = kind === 'user' ? new Map(previousFields.map((field) => [field.key, field])) : null;
   const userIds = new Set(); const attachmentIds = new Set(); const fields = []; const items = [];
   for (const [position, entry] of entries.entries()) {
     const field = definitionsById.get(entry.fieldId); const validation = customFieldValidationError(field, entry.value);
     if (validation) throw new HttpError(400, 'invalid_custom_field_value', `${field.label}: ${validation}`);
     const options = new Map(field.options.map((option) => [option.key, option]));
+    const previousField = kind === 'user' ? previousByKey.get(field.key) : previousById.get(field.id);
     const values = Array.isArray(entry.value) ? entry.value : [entry.value];
     const display = typedPrimitive(customFieldFormDisplayValue(entry.value, field, [], (value, definition) => customFieldDateDisplayInZone(value, definition, zone)));
     fields.push({ fieldId: field.id, fieldRevision: field.revision, fieldType: field.fieldType, position, isArray: Array.isArray(entry.value), valueCount: values.length,
@@ -127,9 +129,14 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
           }
         } else if (field.fieldType === 'select') {
           const option = options.get(String(value));
-          const previous = !option && previousById.get(field.id)?.items.find((item) => item.value === value && item.optionId && item.optionRevision);
+          const previous = !option && previousField?.items.find((item) => item.value === value && (kind === 'user' || item.optionId && item.optionRevision));
           if (!option && !previous) throw new HttpError(400, `invalid_${kind}_custom_field_option`, `${field.label}: Select an available option.`);
-          item.optionId = option?.id ?? previous.optionId; item.optionRevision = option ? field.revision : previous.optionRevision;
+          if (option || previousField.fieldId === field.id && previous.optionId && previous.optionRevision) {
+            item.optionId = option?.id ?? previous.optionId; item.optionRevision = option ? field.revision : previous.optionRevision;
+          } else {
+            // A reused user key can retain raw text without claiming an option belonging to another definition.
+            item.interpretationState = 'invalid';
+          }
         } else if (field.fieldType === 'multi_user_select') {
           item.userId = uuid(value, field.label).toLowerCase(); userIds.add(item.userId);
         } else if (field.fieldType === 'attachment') {
@@ -148,7 +155,11 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
     const files = (await client.query(`SELECT id,field_id FROM ${store.attachmentTable ?? 'custom_field_attachments'}
       WHERE organization_id=$1 AND id=ANY($2::uuid[])`, [identity.organization_id, [...attachmentIds]])).rows;
     const byId = new Map(files.map((file) => [file.id, file.field_id]));
-    if (items.some((item) => item.attachmentId && byId.get(item.attachmentId) !== item.fieldId)) {
+    if (items.some((item) => {
+      if (!item.attachmentId) return false;
+      const retained = kind === 'user' && previousByKey.get(definitionsById.get(item.fieldId).key)?.items.some(previous => previous.attachmentId === item.attachmentId);
+      return !byId.has(item.attachmentId) || byId.get(item.attachmentId) !== item.fieldId && !retained;
+    })) {
       throw new HttpError(400, `invalid_${kind}_custom_field_attachment`, 'Select attachments belonging to these Custom Fields.');
     }
   }
