@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { HttpError } from '../auth/errors.js';
 import { fieldsOnly, text, uuid } from '../templates/input.js';
 import { userProfileInput } from './profile-input.js';
+import { userCustomFieldInput } from './custom-field-input.js';
 
 const profileFields = ['employeeCode', 'phone', 'designation', 'canManagePeople', 'businessUnitId', 'defaultRoleId', 'laboratoryId', 'reportingManagerId', 'roleIds'];
 function identityText(value, label, maximum) {
@@ -11,7 +12,7 @@ function identityText(value, label, maximum) {
 }
 
 export function userCreationInput(value) {
-  fieldsOnly(value, ['id', 'requestId', 'revision', 'username', 'email', 'displayName', 'password', ...profileFields]);
+  fieldsOnly(value, ['id', 'requestId', 'revision', 'username', 'email', 'displayName', 'password', ...profileFields, 'customFields', 'customFieldTimeZone']);
   const id = uuid(value.id, 'New user').toLowerCase();
   if (value.revision !== 0) throw new HttpError(400, 'invalid_user_creation_revision', 'New accounts start at revision zero.');
   const username = identityText(value.username, 'Username', 100); const email = identityText(value.email, 'Email', 320);
@@ -26,7 +27,12 @@ export function userCreationInput(value) {
   const profile = userProfileInput({ requestId: value.requestId, revision: 0,
     ...Object.fromEntries(profileFields.filter((field) => Object.hasOwn(value, field)).map((field) => [field, value[field]])),
   });
-  return { id, username, email, displayName, password: value.password, ...profile };
+  const suppliedFields = Object.hasOwn(value, 'customFields');
+  if (!suppliedFields && Object.hasOwn(value, 'customFieldTimeZone')) throw new HttpError(400, 'invalid_custom_field_values', 'A Custom Field time zone requires supplied fields.');
+  const fields = suppliedFields ? userCustomFieldInput(id, { requestId: profile.requestId, revision: 0,
+    customFields: value.customFields, customFieldTimeZone: value.customFieldTimeZone }) : null;
+  return { id, username, email, displayName, password: value.password, ...profile,
+    ...(fields ? { customFields: fields.customFields, customFieldTimeZone: fields.customFieldTimeZone } : {}) };
 }
 
 export function userCreationFingerprint(value, key = process.env.MFA_ENCRYPTION_KEY) {

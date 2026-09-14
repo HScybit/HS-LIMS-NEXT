@@ -12,6 +12,6 @@ export const GET = endpoint(async (request) => {
 });
 
 export const POST = endpoint(async (request) => {
-  const input = await readInput(request);
+  const input = await readInput(request, { maxBytes: 8 * 1_048_576 });
   return json(await authenticated(request, (client, identity) => createUser(client, identity, input), { permission: 'users.manage' }), 201);
 });

@@ -967,6 +967,13 @@
       "when": 1789403653388,
       "tag": "0137_user_custom_field_values",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1789406296636,
+      "tag": "0138_user_creation_field_capture",
+      "breakpoints": true
     }
   ]
 }

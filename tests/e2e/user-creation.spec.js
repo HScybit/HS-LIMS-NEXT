@@ -52,7 +52,7 @@ test('creation HTTP enforces origin, CSRF, typed fields, references, global alia
   }
   const missingLab = { ...input }; delete missingLab.laboratoryId;
   expect((await page.request.post('/api/users', { data: missingLab, headers })).status()).toBe(422);
-  expect((await page.request.post('/api/users', { data: { ...input, displayName: 'x'.repeat(20_000) }, headers })).status()).toBe(413);
+  expect((await page.request.post('/api/users', { data: { ...input, displayName: 'x'.repeat(20_000) }, headers })).status()).toBe(400);
   const badReference = await page.request.post('/api/users', { data: { ...input, laboratoryId: randomUUID() }, headers }); expect(badReference.status()).toBe(422); expect((await badReference.json()).error.code).toBe('invalid_laboratory');
   for (const extra of [{ username: foreign.username }, { username: foreign.email }, { email: foreign.email }]) {
     const collision = await page.request.post('/api/users', { data: { ...input, ...extra }, headers }); expect(collision.status()).toBe(409);
