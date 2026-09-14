@@ -52,11 +52,15 @@ Checklists at `/checklists` includes the source list, form, detail view and dele
 
 Workflow Master at `/workflow_management` includes the source list, Name/Description dialog, cloning, deletion and a read-only graph canvas. Details-only edits preserve workflow type and code. Failed commands retain their request identity for retry; stale details require an explicit reload. Managers open the draft when available; readers open the published version first. Graph versions are checked against the active workflow and tenant before loading. Node/connection editing remains under implementation.
 
+Workflow role/template lookups expose only names, IDs and active status to workflow readers and managers. Searches return at most 100 choices; a separate batch resolves up to 500 selected IDs, including inactive selections. Large selections use a bounded POST with normal origin and CSRF protection. Workflow managers can select active templates without receiving template-definition access; concurrent deactivation or session revocation prevents the save.
+
 Workflow authoring services can select an active checklist master and copy its ordered prompts as required checks, recording the master revision when known. Explicit selection refreshes the copy; omitting the binding preserves it, and explicit null detaches it. Published workflows, both clone commands and actual approval answers retain their saved prompts through later master edits or deactivation. Referenced checklists cannot be deleted. Bounded choices at `/api/workflows/checklists` require workflow read/manage access without exposing Checklist Master contents.
 
 Workflow definitions also preserve the four source Auto Move choices: `yes`, `no`, `all_trs_allocated` and `all_trs_approved`. Historical modes remain unknown when only an older boolean was recorded. Explicit mode changes derive the matching boolean, while older clients retain unchanged conditional choices. Automatic progression and the remaining editor interactions are still under implementation.
 
 Run `npx playwright test --config=playwright.performance.config.js tests/performance/workflows.spec.js` after building to measure synthetic 1/100/1,000-connection graph loading and Chrome rendering. It writes `.local/workflow-screen-performance.json` and requires the dedicated local synthetic database. Run it alone for comparable timings; graph editing is outside this benchmark.
+
+The same command with `tests/performance/workflow-references.spec.js` measures role/template lookups over synthetic 1/100/1,000-entry catalogs, including 500 selected IDs and browser response parsing. Results are written to `.local/workflow-reference-performance.json`; picker rendering is outside this benchmark.
 
 ## Run locally
 

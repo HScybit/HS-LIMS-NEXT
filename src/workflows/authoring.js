@@ -9,6 +9,7 @@ import { loadWorkflowDefinition } from './definition.js';
 import { buildWorkflowCloneRows } from './clone.js';
 import { createWorkflowMaster } from './metadata.js';
 import { transitionChecklist } from './checklists.js';
+import { selectWorkflowTemplate } from './references.js';
 import * as w from '../db/workflow-schema.js';
 
 const scope = (table, org, id) => and(eq(table.organizationId, org), eq(table.id, id));
@@ -71,9 +72,7 @@ export async function saveWorkflowState(client, identity, versionId, expected, i
     const existing = stateId ? (await db.select().from(w.workflowStates).where(and(scope(w.workflowStates, org, stateId), eq(w.workflowStates.workflowVersionId, versionId))))[0] : null;
     if (stateId && !existing) throw new HttpError(404, 'workflow_state_not_found', 'State was not found in this workflow version.');
     await requireRoles(client, org, Object.keys(stateRoles).flatMap((field) => value[field]));
-    if (value.templateId && !(await client.query('SELECT id FROM templates WHERE organization_id=$1 AND id=$2 AND active', [org, value.templateId])).rowCount) {
-      throw new HttpError(422, 'invalid_workflow_template', 'The selected template is inactive or unavailable.');
-    }
+    if (value.templateId) await selectWorkflowTemplate(client, identity, value.templateId);
     const roles = [];
     for (const [field, capability] of Object.entries(stateRoles)) {
       roles.push(...value[field].map((roleId) => ({ organizationId: org, workflowStateId: stateId, capability, roleId }))); delete value[field];

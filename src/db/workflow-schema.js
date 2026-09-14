@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
+import { pgTable, pgView, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships, roles } from './schema.js';
 import { templates } from './template-schema.js';
 import { sampleCategories } from './master-schema.js';
@@ -12,6 +12,25 @@ const key = (t) => primaryKey({ columns: [t.organizationId, t.id] });
 const link = (t, column, target) => foreignKey({ columns: [t.organizationId, column], foreignColumns: [target.organizationId, target.id] });
 const actor = (t, column) => foreignKey({ columns: [t.organizationId, column], foreignColumns: [memberships.organizationId, memberships.userId] });
 const transactionId = customType({ dataType: () => 'xid8' });
+
+export const workflowRoleLabels = pgView('workflow_role_labels', {
+  organizationId: uuid('organization_id'), id: uuid('id'), name: text('name'), active: boolean('active'),
+}).with({ securityBarrier: true, securityInvoker: false }).as(sql`
+  SELECT organization_id,id,name,active FROM public.roles
+  WHERE organization_id=(SELECT public.workflow_reference_organization())
+`);
+
+export const workflowTemplateLabels = pgView('workflow_template_labels', {
+  organizationId: uuid('organization_id'), id: uuid('id'), name: text('name'), active: boolean('active'),
+}).with({ securityBarrier: true, securityInvoker: false }).as(sql`
+  SELECT template.organization_id,template.id,version.name,template.active FROM public.templates template
+  JOIN LATERAL (
+    SELECT name FROM public.template_versions version
+    WHERE version.organization_id=template.organization_id AND version.template_id=template.id AND version.status<>'building'
+    ORDER BY (version.status='draft') DESC,version.number DESC LIMIT 1
+  ) version ON true
+  WHERE template.organization_id=(SELECT public.workflow_reference_organization())
+`);
 
 export const workflows = pgTable('workflows', {
   ...identity(), code: text('code').notNull(), name: text('name').notNull(), description: text('description').notNull().default(''),

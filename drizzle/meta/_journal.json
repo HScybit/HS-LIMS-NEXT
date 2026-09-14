@@ -883,6 +883,13 @@
       "when": 1789350697779,
       "tag": "0125_workflow_legacy_tr_state",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1789358983860,
+      "tag": "0126_workflow_reference_access",
+      "breakpoints": true
     }
   ]
 }
