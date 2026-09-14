@@ -12,6 +12,13 @@ export function workflowPortTop(height, count, index) {
   return (height - (ports * 10 + (ports - 1) * 6)) / 2 + index * 16;
 }
 
+export function workflowDragPosition(origin, start, pointer) {
+  const dx = pointer.x - start.x; const dy = pointer.y - start.y;
+  if (dx === 0 && dy === 0) return { x: origin.x, y: origin.y };
+  const coordinate = (value) => Math.min(100000, Math.max(8, Math.round(value)));
+  return { x: coordinate(origin.x + dx), y: coordinate(origin.y + dy) };
+}
+
 export function workflowCanvasModel(states = [], transitions = []) {
   const nodes = states.map((state) => ({ ...state, layout: workflowNodeLayout(state) }));
   const byId = new Map(nodes.map((state) => [state.id, state]));

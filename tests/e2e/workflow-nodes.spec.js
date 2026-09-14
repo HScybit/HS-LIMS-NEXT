@@ -140,9 +140,14 @@ test('port reduction and node deletion remove affected draft connections while i
   });
   await login(page, manager); await page.goto(`/workflow_management/${graph.workflowId}`); await page.getByRole('button', { name: 'Edit Initial', exact: true }).click();
   await dialog(page).getByRole('spinbutton', { name: /^Outputs/ }).fill('0'); await dialog(page).getByRole('button', { name: 'Save Node' }).click(); await expect(dialog(page)).toHaveCount(0);
-  expect((await load(manager, graph.versionId)).transitions).toHaveLength(0);
-  await page.getByRole('button', { name: 'Save Flow', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('workflow');
-  expect((await load(manager, graph.versionId)).version.status).toBe('draft');
+  const incomplete = await load(manager, graph.versionId); expect(incomplete.transitions).toHaveLength(0);
+  const publication = page.waitForResponse((response) => response.url().endsWith(`/api/workflows/${graph.workflowId}/commands`)
+    && response.request().method() === 'POST' && response.request().postDataJSON().operation === 'publish');
+  await page.getByRole('button', { name: 'Save Flow', exact: true }).click();
+  const rejected = await publication; expect(rejected.status()).toBe(422); expect((await rejected.json()).error.code).toBe('workflow_validation_failed');
+  await expect(page.getByRole('alert').filter({ hasText: 'Add exactly one initial and final state' }))
+    .toHaveText('Add exactly one initial and final state, and connect every initial or normal state.');
+  expect((await load(manager, graph.versionId)).version).toMatchObject({ status: 'draft', revision: incomplete.version.revision });
   page.once('dialog', (question) => question.accept()); await page.getByRole('button', { name: 'Delete Final', exact: true }).click();
   await expect(page.locator('.workflow-node')).toHaveCount(1); expect((await load(manager, graph.versionId)).states.map((state) => state.id)).toEqual([nodes.first.id]);
 });

@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { workflowCanvasModel, workflowNodeLayout, workflowPortTop } from '../../src/workflows/canvas.js';
+import { workflowCanvasModel, workflowDragPosition, workflowNodeLayout, workflowPortTop } from '../../src/workflows/canvas.js';
+
+test('node movement retains grab offsets and rounds and bounds the source scroll-aware pointer delta', () => {
+  const origin = { x: 120, y: 300 }; const start = { x: 137.25, y: 326.75 };
+  assert.deepEqual(workflowDragPosition(origin, start, { x: 180.75, y: 227 }), { x: 164, y: 200 });
+  assert.deepEqual(workflowDragPosition(origin, start, { x: -1000, y: -1000 }), { x: 8, y: 8 });
+  assert.deepEqual(workflowDragPosition(origin, start, { x: 200000, y: 200000 }), { x: 100000, y: 100000 });
+  const initial = workflowNodeLayout({ canvasX: 0, canvasY: null });
+  assert.deepEqual(workflowDragPosition(initial, start, start), { x: 0, y: 120 });
+  assert.deepEqual(workflowDragPosition(initial, start, { x: start.x + 60, y: start.y + 80 }), { x: 60, y: 200 });
+  assert.deepEqual(origin, { x: 120, y: 300 });
+});
 
 test('workflow canvas preserves the source dimensions, zero coordinates and all eight ports', () => {
   assert.deepEqual(workflowCanvasModel(), { nodes: [], connections: [], width: 1200, height: 720 });
