@@ -26,7 +26,7 @@ test('user directory readers and managers get bounded typed identities with two 
     const result = await listUsers(measured, identity, { pageSize: 1 });
     assert.equal(count, 2); assert.equal(result.totalCount, 3); assert.equal(result.rows.length, 1);
     const person = await loadUser(measured, identity, manager.userId.toUpperCase()); assert.equal(count, 3);
-    assert.deepEqual(Object.keys(person).sort(), ['active', 'createdAt', 'displayName', 'email', 'id', 'lastLoginAt', 'lastLogoutAt', 'organizationName', 'roles', 'username'].sort());
+    assert.deepEqual(Object.keys(person).sort(), ['active', 'createdAt', 'displayName', 'email', 'id', 'identityActive', 'lastLoginAt', 'lastLogoutAt', 'membershipActive', 'organizationName', 'roles', 'statusRevision', 'username'].sort());
     assert.equal(person.email, manager.email); assert.equal(person.active, true); assert(person.lastLoginAt instanceof Date); assert.equal(person.lastLogoutAt, null);
     assert.deepEqual(person.roles.map((role) => role.id), [manager.roleId]); assert.equal(person.roles[0].active, true);
   });

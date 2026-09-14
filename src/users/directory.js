@@ -10,6 +10,7 @@ function requireRead(identity) {
 
 const literalSearch = (value) => `%${value.replace(/[\\%_]/g, '\\$&')}%`;
 const fields = `person.id,person.username,person.email,person.display_name AS "displayName",person.active,
+  person.membership_active AS "membershipActive",person.identity_active AS "identityActive",person.status_revision AS "statusRevision",
   person.created_at AS "createdAt",person.organization_name AS "organizationName",
   coalesce(roles.ids,ARRAY[]::uuid[]) AS "roleIds",coalesce(roles.names,ARRAY[]::text[]) AS "roleNames",
   coalesce(roles.descriptions,ARRAY[]::text[]) AS "roleDescriptions",coalesce(roles.active,ARRAY[]::boolean[]) AS "roleActive",
