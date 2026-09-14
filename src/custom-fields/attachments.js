@@ -47,10 +47,16 @@ export async function uploadCustomFieldAttachment(client, identity, input) {
     throw new HttpError(404, 'attachment_field_not_found', 'The attachment field was not found.');
   }
   if (field.revision !== fieldRevision) throw new HttpError(409, 'stale_custom_field', 'The Custom Field changed. Reload before uploading.');
-  const row = (await client.query(`INSERT INTO custom_field_attachments(organization_id,id,field_id,field_revision,original_name,media_type,content,byte_length,sha256,uploaded_by)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${columns}`, [identity.organization_id, id, fieldId, fieldRevision,
-    details.originalName, details.mediaType, input.content, input.content.length, sha256, identity.user_id])).rows[0];
-  return { ...metadata(row), replayed: false };
+  try {
+    const row = (await client.query(`INSERT INTO custom_field_attachments(organization_id,id,field_id,field_revision,original_name,media_type,content,byte_length,sha256,uploaded_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${columns}`, [identity.organization_id, id, fieldId, fieldRevision,
+      details.originalName, details.mediaType, input.content, input.content.length, sha256, identity.user_id])).rows[0];
+    return { ...metadata(row), replayed: false };
+  } catch (error) {
+    // A users-only file may occupy this request UUID without being readable through the master boundary.
+    if (error.constraint === 'custom_field_attachment_pk') throw new HttpError(409, 'attachment_request_reused', 'This upload request was already used with different details.');
+    throw error;
+  }
 }
 
 export async function readCustomFieldAttachment(client, identity, attachmentId) {
