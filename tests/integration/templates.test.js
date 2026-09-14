@@ -311,9 +311,13 @@ test('a fresh repeated capture avoids comparing every value against every occurr
   await work(async (client, identity) => {
     const statements = [];
     const observed = { query: (sql, parameters) => { statements.push({ sql, parameters }); return client.query(sql, parameters); } };
-    const loaded = await loadCapture(observed, identity.organization_id, capture.instanceId);
+    const pinnedValues = initial.values.map(({ fieldId, occurrenceId, revision }) => ({ instanceId: capture.instanceId, fieldId, occurrenceId, revision }));
+    const loaded = await loadCapture(observed, identity.organization_id, capture.instanceId, undefined, { pinnedValues });
     assert.equal(statements.length, 3); assert.equal(loaded.occurrences.length, 201);
     assert.ok(loaded.values.length >= 400);
+    assert.equal(loaded.pinnedValues.size, initial.values.length);
+    assert.deepEqual(new Map([...loaded.pinnedValues].map(([key, { state, numberValue }]) => [key, { state, numberValue }])),
+      new Map(initial.values.map(({ fieldId, occurrenceId, revision, state, numberValue }) => [`${capture.instanceId}:${fieldId}:${occurrenceId}:${revision}`, { state, numberValue }])));
     const statement = statements[2];
     const result = await client.query(`EXPLAIN (ANALYZE, FORMAT JSON) ${statement.sql}`, statement.parameters);
     const visits = maximumPlanRowVisits(result.rows[0]['QUERY PLAN'][0].Plan);

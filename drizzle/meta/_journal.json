@@ -869,6 +869,13 @@
       "when": 1789345826284,
       "tag": "0123_organization_date_formats",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1789347778236,
+      "tag": "0124_tr_data_readonly",
+      "breakpoints": true
     }
   ]
 }

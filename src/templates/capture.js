@@ -34,7 +34,7 @@ async function appendCaptureValues(client, identity, instanceId, versionId, next
 function defaults(model, occurrences) {
   const fieldsByGroup = new Map();
   for (const field of Object.values(model.fieldsById)) {
-    if (['formula_widget', 'product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
+    if (['formula_widget', 'product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget', 'tr_data_widget'].includes(field.widget) || field.defaultState === 'absent') continue;
     const group = field.repeatGroupId ?? null;
     if (!fieldsByGroup.has(group)) fieldsByGroup.set(group, []);
     fieldsByGroup.get(group).push(field);
@@ -263,7 +263,7 @@ export async function changeRepeat(client, identity, instanceId, expectedRevisio
       }
     }
     occurrences = [...capture.occurrences, ...copies];
-    additions = command.withData ? capture.values.filter((value) => mapping.has(value.occurrenceId) && value.origin !== 'calculated')
+    additions = command.withData ? capture.values.filter((value) => mapping.has(value.occurrenceId) && value.origin !== 'calculated' && model.fieldsById[value.fieldId]?.widget !== 'tr_data_widget')
       .map(({ revision: _revision, savedAt: _savedAt, savedBy: _savedBy, ...value }) => {
         // Static defaults remain tied to the frozen field on the new row;
         // promoting them to entered data changes Text titles or rejects images.

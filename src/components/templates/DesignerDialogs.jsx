@@ -30,7 +30,7 @@ export function DesignerModal({ panel, model, onClose, onCommand, busy }) {
       ...(field.widget === 'sample_line_item_data_widget' ? { attributeKey: field.attributeKey ?? '' } : {}),
       ...(field.widget === 'template_image_widget' ? { image: Object.fromEntries(Object.keys(imageLayoutLabels).map((key) => [key, field.image?.[key] ?? ''])) } : {}),
       ...(field.widget === 'result_widget' ? { defaultValue: fieldDefaultValue(field) ?? '' } : {}),
-      ...(['product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) ? { defaultValue: field.defaultText ?? '' } : {}),
+      ...(['product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget', 'tr_data_widget'].includes(field.widget) ? { defaultValue: field.defaultText ?? '' } : {}),
       ...(field.widget === 'formula_widget' ? { formula: field.formula ?? '' } : {}), options: field.options.map((option) => option.value) };
     if (panel.type === 'column') return { type: 'configureColumn', id: column.id, span: column.span, cssClass: column.cssClass || 'col', widget: field?.widget || 'text_widget', isFinalResult: column.isFinalResult };
     if (panel.type === 'sectionSettings') return { type: 'configureSection', id: section.id, name: section.name, cssClass: section.cssClass, visible: section.visible, isHeader: section.isHeader, isFooter: section.isFooter, isFinalResult: section.isFinalResult, isParameterLoop: section.isParameterLoop, isParameterLoopHeader: section.isParameterLoopHeader };
@@ -52,10 +52,10 @@ export function DesignerModal({ panel, model, onClose, onCommand, busy }) {
       {panel.type === 'widget' ? <>
         <section className="template-designer-form-section"><div className="template-designer-form-section__header"><h3>Behavior</h3><p>Configure the widget key and how this field behaves inside the template.</p></div><Toggle label="Required" checked={form.required} onChange={(value) => update('required', value)} /></section>
         <section className="template-designer-form-section"><div className="template-designer-form-section__header"><h3>Fields</h3><p>Identifiers must be unique across the template.</p></div><div className="template-designer-form-grid template-designer-form-grid--single">
-          {['text_widget', 'vertical_text_widget', 'product_detail_widget', 'parameter_detail_widget'].includes(form.widget) ? input('label', 'Title') : null}{input('alias', 'Key')}
+          {['text_widget', 'vertical_text_widget', 'product_detail_widget', 'parameter_detail_widget', 'tr_data_widget'].includes(form.widget) ? input('label', 'Title') : null}{input('alias', 'Key')}
           {form.widget === 'product_detail_widget' ? input('defaultValue', 'Default Value') : null}
           {form.widget === 'sample_line_item_data_widget' ? input('attributeKey', 'Attribute Name/Key') : null}
-          {['vertical_text_widget', 'parameter_detail_widget', 'sample_line_item_data_widget'].includes(form.widget) ? <FormElement type="text" label="Default Value" inputProps={{ value: form.defaultValue, placeholder: 'Default value', onChange: (event) => update('defaultValue', event.target.value) }}
+          {['vertical_text_widget', 'parameter_detail_widget', 'sample_line_item_data_widget', 'tr_data_widget'].includes(form.widget) ? <FormElement type="text" label="Default Value" inputProps={{ value: form.defaultValue, placeholder: 'Default value', onChange: (event) => update('defaultValue', event.target.value) }}
             helperText={<small className="text-muted">Use &quot;-&quot; to keep this default as blank / null.</small>} /> : null}
           {form.widget === 'text_widget' ? <FormElement type="text" label="Default Value" inputProps={{ value: form.label || field.defaultText || '', placeholder: 'Default value', disabled: true }}
             helperText={<small className="text-muted">For text widgets, default value is always the title.</small>} /> : null}

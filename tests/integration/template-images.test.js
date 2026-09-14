@@ -10,7 +10,7 @@ import { closePool, getPool } from '../../src/db/pool.js';
 import { uploadTemplateImage, withTemplateImages } from '../../src/template-assets/service.js';
 import { freezeTemplate, createDraft, editTemplate } from '../../src/templates/authoring.js';
 import { loadDefinition, loadCapture } from '../../src/templates/loader.js';
-import { createCapture, saveCapture, changeRepeat } from '../../src/templates/capture.js';
+import { createCapture, saveCapture, changeRepeat, recalculateCapture } from '../../src/templates/capture.js';
 
 const owner = ownerPool(); let account;
 const work = (callback, options) => withSession(account.token, callback, { csrfToken: account.csrfToken, ...options });
@@ -115,8 +115,13 @@ test('image read/write policies, immutable bytes, tenant foreign keys and direct
   await work((client, identity) => freezeTemplate(client, identity, created.versionId, 2));
   const capture = await work((client, identity) => createCapture(client, identity, created.versionId));
   const original = (await owner.query('SELECT * FROM template_values WHERE organization_id=$1 AND instance_id=$2', [account.organizationId, capture.instanceId])).rows[0];
-  await assert.rejects(owner.query(`INSERT INTO template_values(organization_id,instance_id,version_id,field_id,occurrence_id,revision,value_type,state,origin,image_id,saved_by)
-    VALUES($1,$2,$3,$4,$5,1,'image','present','entered',$6,$7)`, [account.organizationId, capture.instanceId, created.versionId, created.fieldId, original.occurrence_id, image.requestId, account.userId]), { code: '23514' });
+  await assert.rejects(work(async (client, identity) => {
+    const next = await recalculateCapture(client, identity, capture.instanceId, 1);
+    await client.query(`INSERT INTO template_values(organization_id,instance_id,version_id,field_id,occurrence_id,revision,value_type,state,origin,image_id,saved_by)
+      VALUES($1,$2,$3,$4,$5,$6,'image','present','entered',$7,$8)`,
+    [account.organizationId, capture.instanceId, created.versionId, created.fieldId, original.occurrence_id, next.revision, image.requestId, account.userId]);
+  }), { code: '23514', message: 'Template images are frozen defaults' });
+  assert.deepEqual((await owner.query('SELECT * FROM template_values WHERE organization_id=$1 AND instance_id=$2', [account.organizationId, capture.instanceId])).rows, [original]);
   const second = await fixture();
   await assert.rejects(work((client) => client.query("UPDATE template_fields SET default_state='present',default_image_id=$3 WHERE organization_id=$1 AND version_id=$2", [account.organizationId, second.versionId, randomUUID()])), { code: '23503' });
 });

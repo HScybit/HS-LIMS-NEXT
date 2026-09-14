@@ -137,7 +137,7 @@ export function calculateCapture(model, occurrences, savedValues) {
         }
       }
       if (value?.state === 'invalid') result.errors.push({ code: value.errorCode, message: value.errorMessage });
-      if (field.widget !== 'product_detail_widget' && result.required && (!value || ['absent', 'empty'].includes(value.state) || (value.state === 'present' && value.textValue === ''))) result.errors.push({ code: 'required', message: 'This field is required.' });
+      if (!['product_detail_widget', 'tr_data_widget'].includes(field.widget) && result.required && (!value || ['absent', 'empty'].includes(value.state) || (value.state === 'present' && value.textValue === ''))) result.errors.push({ code: 'required', message: 'This field is required.' });
       if (value?.state === 'present' && value.numberValue != null && ['numeric', 'result'].includes(field.valueType)) {
         const numeric = Number(value.numberValue);
         if (field.numeric?.minimum != null && numeric < Number(field.numeric.minimum)) result.errors.push({ code: 'below_minimum', message: `Value must be at least ${field.numeric.minimum}.` });

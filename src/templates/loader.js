@@ -151,6 +151,8 @@ export async function loadCaptures(client, organizationId, requests, { pinnedVal
   // otherwise repeats that scan per occurrence under the application RLS plan.
   // Project membership once to avoid rechecking every occurrence for each value.
   // NULLS LAST matches template_value_latest; revision itself is NOT NULL.
+  // The final bounded primary-key lookups prevent fresh estimates from
+  // rescanning the tenant's value history for each current or pinned key.
   const values = await client.query(`WITH active_occurrences AS MATERIALIZED (
     SELECT occurrence.instance_id,occurrence.id FROM template_occurrences occurrence
     JOIN unnest($2::uuid[],$3::integer[]) requested(instance_id,revision) ON requested.instance_id=occurrence.instance_id
@@ -168,14 +170,17 @@ export async function loadCaptures(client, organizationId, requests, { pinnedVal
   ), current_keys AS MATERIALIZED (
     SELECT latest.instance_id,latest.field_id,latest.occurrence_id,latest.revision FROM latest_keys latest WHERE latest.is_active
     ORDER BY latest.instance_id,latest.field_id,latest.occurrence_id LIMIT 200001
-  ) (SELECT ${valueColumns},false AS pinned FROM current_keys selected JOIN template_values value
-    ON value.organization_id=$1 AND value.instance_id=selected.instance_id AND value.field_id=selected.field_id
-      AND value.occurrence_id=selected.occurrence_id AND value.revision=selected.revision
+  ) (SELECT ${valueColumns},false AS pinned FROM current_keys selected CROSS JOIN LATERAL (
+    SELECT * FROM template_values value WHERE value.organization_id=$1 AND value.instance_id=selected.instance_id AND value.field_id=selected.field_id
+      AND value.occurrence_id=selected.occurrence_id AND value.revision=selected.revision LIMIT 1
+    ) value
     ORDER BY value.instance_id,value.field_id,value.occurrence_id)
-    UNION ALL SELECT ${valueColumns},true AS pinned FROM template_values value
-      JOIN unnest($4::uuid[],$5::uuid[],$6::uuid[],$7::integer[]) selected(instance_id,field_id,occurrence_id,revision)
-        ON selected.instance_id=value.instance_id AND selected.field_id=value.field_id AND selected.occurrence_id=value.occurrence_id AND selected.revision=value.revision
-      WHERE value.organization_id=$1 LIMIT 200001`, [...parameters, pinnedValues.map((value) => value.instanceId), pinnedValues.map((value) => value.fieldId),
+    UNION ALL SELECT ${valueColumns},true AS pinned
+      FROM unnest($4::uuid[],$5::uuid[],$6::uuid[],$7::integer[]) selected(instance_id,field_id,occurrence_id,revision)
+      CROSS JOIN LATERAL (
+        SELECT * FROM template_values value WHERE value.organization_id=$1 AND value.instance_id=selected.instance_id AND value.field_id=selected.field_id
+          AND value.occurrence_id=selected.occurrence_id AND value.revision=selected.revision LIMIT 1
+      ) value LIMIT 200001`, [...parameters, pinnedValues.map((value) => value.instanceId), pinnedValues.map((value) => value.fieldId),
     pinnedValues.map((value) => value.occurrenceId), pinnedValues.map((value) => value.revision)]);
   if (values.rows.length > 200_000) throw new HttpError(422, 'capture_batch_limit', 'The combined captures exceed the supported report size.');
   const detailValues = values.rows.filter((value) => value.valueType === 'parameter_detail');

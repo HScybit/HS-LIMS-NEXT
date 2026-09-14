@@ -3,8 +3,30 @@ import assert from 'node:assert/strict';
 import { contextWidgetValue } from '../../src/templates/context-widgets.js';
 import { assembleDefinition } from '../../src/templates/model.js';
 import { reportRecords } from '../helpers/reports.js';
+import { calculateCapture } from '../../src/templates/calculations.js';
+import { validateSubmissionValues } from '../../src/datasheets/final-result.js';
 
 const field = (widget, sourceField) => ({ widget, sourceField });
+
+test('TR Data title and configured defaults do not replace its actual or missing source value', () => {
+  for (const defaultText of ['0', 'false', '-', 'Configured default', '<strong>Default</strong>']) {
+    const configured = { ...field('tr_data_widget', 'requestNumber'), alias: 'request_label', label: 'Configured title', defaultState: 'present', defaultText, required: true };
+    assert.equal(contextWidgetValue(configured, { results: [{ requestNumber: 'TR-001' }] }), 'TR-001');
+    assert.equal(contextWidgetValue(configured, { results: [{ requestNumber: '' }] }), '');
+    assert.equal(contextWidgetValue(configured, { results: [] }), '');
+  }
+});
+
+test('TR Data Required remains configuration without demanding an entered result', () => {
+  const records = { ...reportRecords(), version: { kind: 'report' } };
+  for (const field of records.fields.filter((field) => field.widget === 'tr_data_widget')) Object.assign(field, { required: true, defaultState: 'present', defaultText: '0' });
+  const model = assembleDefinition(records); const capture = { occurrences: [{ id: 'root', groupId: null, parentId: null, position: '0' }], values: [] };
+  const calculation = calculateCapture(model, capture.occurrences, capture.values);
+  for (const field of records.fields.filter((field) => field.widget === 'tr_data_widget')) {
+    assert.equal(calculation.validation[`${field.id}:root`].required, true); assert.deepEqual(calculation.validation[`${field.id}:root`].errors, []);
+  }
+  assert.doesNotThrow(() => validateSubmissionValues(model, capture, calculation));
+});
 
 test('report widgets preserve zero, false, NA and empty values without arbitrary object traversal', () => {
   const report = { sample: { sampleNumber: 'SYN-001', description: '', customerName: null }, results: [

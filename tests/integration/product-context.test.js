@@ -19,7 +19,9 @@ import { editTemplate } from '../../src/templates/authoring.js';
 
 process.loadEnvFile('.env.worker.local');
 const workerUrl = new URL(process.env.WORKER_DATABASE_URL);
-if (workerUrl.hostname !== '127.0.0.1' || workerUrl.port !== '55442' || workerUrl.pathname !== '/sampleify_local') throw new Error('Product context worker tests require the synthetic local database.');
+const databaseName = process.env.SAMPLEIFY_TEST_DATABASE_NAME ?? 'sampleify_local';
+if (databaseName !== 'sampleify_local' && !/^sampleify_verify_[a-f0-9]{32}$/.test(databaseName)
+  || workerUrl.hostname !== '127.0.0.1' || workerUrl.port !== '55442' || workerUrl.pathname !== `/${databaseName}`) throw new Error('Product context worker tests require the synthetic local database.');
 const owner = ownerPool(); const worker = createReportWorkerPool();
 after(async () => { await closePool(); await worker.end(); await owner.end(); });
 const permissions = ['masters.manage', 'samples.create', 'samples.manage', 'templates.manage', 'test_requests.allocate', 'datasheets.execute', 'settings.manage'];

@@ -106,15 +106,15 @@ async function configureField(db, base, model, command) {
     if (config.minimum !== null && config.maximum !== null && Number(config.minimum) > Number(config.maximum)) throw new HttpError(400, 'invalid_bounds', 'Minimum cannot exceed maximum.');
   }
   if (command.defaultValue !== undefined) {
-    if (['product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget)) {
+    if (['product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget', 'tr_data_widget'].includes(field.widget)) {
       const configured = text(command.defaultValue, 'Default Value', 16000, { optional: true });
-      if (configured.includes('\0')) throw new HttpError(400, 'invalid_input', 'Default Value cannot contain null characters.');
+      if (configured.includes('\0') || !configured.isWellFormed()) throw new HttpError(400, 'invalid_input', 'Default Value must be valid text without null characters.');
       Object.assign(field, { defaultState: configured === '' ? 'absent' : 'present', defaultText: configured === '' ? null : configured });
     } else {
       if (field.widget !== 'result_widget') throw new HttpError(400, 'unsupported_default', 'Default configuration is not available for this widget.');
       Object.assign(field, resultDefaultFields({ ...field, numeric: config }, command.defaultValue));
     }
-  } else if (['product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget'].includes(field.widget) && previous) {
+  } else if (['product_detail_widget', 'sample_line_item_data_widget', 'vertical_text_widget', 'parameter_detail_widget', 'tr_data_widget'].includes(field.widget) && previous) {
     Object.assign(field, { defaultState: previous.defaultState, defaultText: previous.defaultText });
   } else if (field.widget === 'result_widget' && previous?.defaultState === 'present') {
     // A bounds/precision edit cannot publish a default that the new field rejects.

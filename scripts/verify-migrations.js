@@ -195,13 +195,19 @@ try {
   assert.deepEqual(await withSession(session.token, loadMfaStatus, { readOnly: true, accountAction: true }), { enabled: false, revision: 2 });
   await withSession(session.token, async (client, identity) => {
     const template = await createAnalyticalTemplate(client, identity);
-    await freezeTemplate(client, identity, template.versionId, 1);
+    const added = await editTemplate(client, identity, template.versionId, 1, { type: 'addColumn', rowId: template.records.rows[0].id });
+    const configured = await editTemplate(client, identity, template.versionId, added.model.version.revision, { type: 'configureField',
+      columnId: added.model.rowsById[template.records.rows[0].id].columnIds.at(-1), widget: 'tr_data_widget', alias: 'tr_context',
+      sourceField: 'requestNumber', label: 'Request context', required: true, defaultValue: 'Do not capture configuration' });
+    const field = Object.values(configured.model.fieldsById).find((field) => field.alias === 'tr_context');
+    await freezeTemplate(client, identity, template.versionId, configured.model.version.revision);
     const capture = await createCapture(client, identity, template.versionId);
     const definition = await loadDefinition(client, identity.organization_id, template.versionId);
     const loaded = await loadCapture(client, identity.organization_id, capture.instanceId);
     assert.equal(definition.model.version.status, 'frozen');
     assert.equal(loaded.instance.version_id, template.versionId);
     assert.equal(loaded.occurrences.length, 3);
+    assert(!loaded.values.some((value) => value.fieldId === field.id));
   }, { csrfToken: session.csrfToken });
   const laboratory = await createLaboratoryFixture(owner, account);
   const masterGrid = updateUncertaintyGrid(emptyUncertaintyGrid(), { headers: ['Sr. no.', 'Text', 'Notes'], data: [['1', '000.00', '=A1*2'], ['2', '  exact text  ', '']] });

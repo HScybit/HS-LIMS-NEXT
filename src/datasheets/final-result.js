@@ -115,9 +115,9 @@ export function resolveFinalResult(model, occurrences, savedValues) {
 export function validateSubmissionValues(model, capture, calculation) {
   const saved = new Map(capture.values.map((value) => [valueKey(value.fieldId, value.occurrenceId), value]));
   for (const [key, validation] of Object.entries(calculation.validation)) {
-    // Product output comes from its recorded domain context. The source's
+    // These widgets display their domain context. The source's
     // shared Required setting does not turn it into an entered result.
-    if (model.fieldsById[key.split(':')[0]]?.widget === 'product_detail_widget') continue;
+    if (['product_detail_widget', 'tr_data_widget'].includes(model.fieldsById[key.split(':')[0]]?.widget)) continue;
     if (validation.required == null) unresolved();
     if (!validation.required) continue;
     const value = saved.get(key);
