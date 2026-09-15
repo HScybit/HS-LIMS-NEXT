@@ -76,6 +76,21 @@ test('current uniqueness settings inspect saved-key values even when they were c
   await f.save(a.userId, command([entry(disabled, 'duplicate')], 2)); assert.equal((await f.load(a.userId)).revision, 3);
 });
 
+test('a new organization captures 500 unique fields before ANALYZE and still rejects an inactive member duplicate', async () => {
+  const f = await fixture(); const ids = Array.from({ length: 500 }, () => randomUUID());
+  await work(f.author, (client, identity) => client.query(`INSERT INTO custom_field_definitions
+    (organization_id,id,key,label,associated_with,field_type,validate_uniqueness,save_request_id,display_order)
+    SELECT $1,id,'bulk_'||position,'Bulk field '||position,'users','text',true,gen_random_uuid(),position
+    FROM unnest($2::uuid[]) WITH ORDINALITY AS fields(id,position)`, [identity.organization_id, ids]));
+  const a = await f.person(); const b = await f.person();
+  const fields = value => ids.map(fieldId => ({ fieldId, fieldRevision: 1, value }));
+  await f.save(a.userId, command(fields('one'))); await f.save(b.userId, command(fields('two')));
+  await owner.query('UPDATE memberships SET active=false WHERE organization_id=$1 AND user_id=$2', [f.author.organizationId, a.userId]);
+  await assert.rejects(f.save(b.userId, command(fields('one'), 1)), { code: 'duplicate_user_custom_field' });
+  const current = await f.load(b.userId); assert.equal(current.revision, 1); assert.equal(current.customFields.length, 500);
+  assert(current.customFields.every(field => field.value === 'two'));
+});
+
 function signal() { let resolve; return { promise: new Promise(done => { resolve = done; }), resolve: value => resolve(value) }; }
 async function waitForAdvisory(pid) {
   for (let attempt = 0; attempt < 200; attempt++) {

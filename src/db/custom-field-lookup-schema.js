@@ -41,7 +41,8 @@ export const customFieldLookupLines = pgTable('custom_field_lookup_lines', {
   labelKind: text('label_kind').notNull(), labelText: text('label_text'), labelNumber: doublePrecision('label_number'), labelBoolean: boolean('label_boolean'),
 }, table => [
   primaryKey({ name: 'custom_lookup_line_pk', columns: [...versionColumns(table), table.originalLineId] }),
-  unique('custom_lookup_line_position').on(...versionColumns(table), table.position),
+  // Keep cached line-ID foreign-key checks on the full primary key instead of scanning source positions.
+  unique('custom_lookup_line_position').on(table.position, ...versionColumns(table)),
   foreignKey({ name: 'custom_lookup_line_version_fk', columns: versionColumns(table), foreignColumns: versionColumns(customFieldLookupVersions) }),
   check('custom_lookup_line_shape', sql`length(trim(${table.originalLineId}))>0 and length(${table.originalLineId})<=200 and ${table.position} between 0 and 9999
     and num_nonnulls(${table.labelText},${table.labelNumber},${table.labelBoolean})=1

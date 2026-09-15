@@ -38,11 +38,11 @@ try {
     await owner.query('ANALYZE custom_field_lookup_sources,custom_field_lookup_versions,custom_field_lookup_lines,users,memberships,roles,membership_roles');
     const fixture = { count, organizationId: actor.organizationId, sourceId: input.id, setupMs: performance.now() - at }; report.fixtures.push(fixture);
     const f = { actor, session, input }; let revision = 1;
-    await measure(f, 'append observation', saveBudget, 7, (c, i) => saveLookupSourceObservation(c, i, { ...input, revision: revision++, requestId: randomUUID() }), false,
+    await measure(f, 'append observation', saveBudget, 8, (c, i) => saveLookupSourceObservation(c, i, { ...input, revision: revision++, requestId: randomUUID() }), false,
       result => { assert.equal(result.lines.length, count); assert.deepEqual(result.lines, input.lines); });
     await measure(f, 'complete observation read', readBudget, 2, (c, i) => loadLookupSourceObservation(c, i, input.id), true,
       result => { assert.equal(result.revision, 7); assert.deepEqual(result.lines, input.lines); });
-    if (count === 10000) await measure(f, 'old exact observation retry', 1000, 4, (c, i) => saveLookupSourceObservation(c, i, input), false,
+    if (count === 10000) await measure(f, 'old exact observation retry', 1000, 5, (c, i) => saveLookupSourceObservation(c, i, input), false,
       result => assert.deepEqual(result, first));
   }
   report.status = report.cases.every(record => record.passed) ? 'passed' : 'failed';

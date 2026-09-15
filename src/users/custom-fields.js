@@ -90,7 +90,8 @@ export async function saveUserCustomFields(client, identity, userId, value) {
   } catch (error) {
     if (errors[error.constraint]) throw new HttpError(...errors[error.constraint]);
     if (['user_custom_value_option', 'user_custom_value_option_fk', 'user_custom_value_user', 'user_custom_value_user_fk',
-      'user_custom_value_attachment', 'user_custom_value_attachment_fk'].includes(error.constraint)) {
+      'user_custom_value_attachment', 'user_custom_value_attachment_fk', 'user_custom_value_lookup', 'user_custom_value_lookup_fk',
+      'user_custom_value_lookup_reference'].includes(error.constraint)) {
       throw new HttpError(400, 'invalid_user_custom_field_reference', 'A Custom Field selection is no longer available.');
     }
     throw userProfileCommandError(error);

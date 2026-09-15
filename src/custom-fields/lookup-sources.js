@@ -31,6 +31,12 @@ export async function loadLookupSourceObservation(client, identity, id, { atRevi
 // Internal ingestion boundary: no standalone Data Master route or editor is exposed.
 export async function saveLookupSourceObservation(client, identity, value) {
   requirePermission(identity, 'masters.manage'); const input = lookupSourceInput(value);
+  // Serialize with captures and revalidate the actual observer after every wait, including retries.
+  try { await client.query('SELECT masters_lock_lookup_observer()'); }
+  catch (error) {
+    if (error.constraint === 'custom_lookup_session_required') throw new HttpError(403, 'forbidden', 'Your lookup management session is no longer available.');
+    throw error;
+  }
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended('custom-lookup-request:'||$1::text||':'||$2::text,0))", [identity.organization_id, input.requestId]);
   const prior = (await client.query(`SELECT source_id,revision,previous_revision,observed_by FROM custom_field_lookup_versions
     WHERE organization_id=$1 AND request_id=$2`, [identity.organization_id, input.requestId])).rows[0];

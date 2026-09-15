@@ -1009,6 +1009,34 @@
       "when": 1789436701703,
       "tag": "0143_custom_field_lookup_observations",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1789439304134,
+      "tag": "0144_user_lookup_field_values",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1789442720073,
+      "tag": "0145_user_lookup_line_reference_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1789445389286,
+      "tag": "0146_user_field_uniqueness_precheck",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1789447196307,
+      "tag": "0147_user_field_unique_probes",
+      "breakpoints": true
     }
   ]
 }

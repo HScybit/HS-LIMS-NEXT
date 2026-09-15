@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, integer, boolean, doublePrecision, date, timestamp, index, primaryKey, unique, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 import { customFieldVersions, customFieldVersionOptions, customFieldAttachments } from './custom-field-schema.js';
+import { customFieldLookupLines } from './custom-field-lookup-schema.js';
 import { customFieldTypes } from '../masters/custom-field-config.js';
 
 const transactionId = customType({ dataType: () => 'xid8' });
@@ -64,6 +65,7 @@ export const userVersionCustomFieldValues = pgTable('user_version_custom_field_v
   parsedDate: date('parsed_date', { mode: 'string' }), parsedTimestamp: timestamp('parsed_timestamp', { withTimezone: true, mode: 'string' }),
   optionId: uuid('option_id'), optionRevision: integer('option_revision'), userId: uuid('user_id'), attachmentId: uuid('attachment_id'),
   userUsername: text('user_username'), userName: text('user_name'),
+  lookupSourceId: uuid('lookup_source_id'), lookupRevision: integer('lookup_revision'), lookupLineId: text('lookup_line_id'),
 }, (table) => [
   primaryKey({ name: 'user_custom_value_pk', columns: [...capturedFieldColumns(table), table.position] }),
   foreignKey({ name: 'user_custom_value_field_fk', columns: capturedFieldColumns(table), foreignColumns: capturedFieldColumns(userVersionCustomFields) }),
@@ -71,6 +73,10 @@ export const userVersionCustomFieldValues = pgTable('user_version_custom_field_v
     foreignColumns: [customFieldVersionOptions.organizationId, customFieldVersionOptions.fieldId, customFieldVersionOptions.revision, customFieldVersionOptions.id] }),
   foreignKey({ name: 'user_custom_value_user_fk', columns: [table.organizationId, table.userId], foreignColumns: [memberships.organizationId, memberships.userId] }),
   foreignKey({ name: 'user_custom_value_attachment_fk', columns: [table.organizationId, table.attachmentId], foreignColumns: [customFieldAttachments.organizationId, customFieldAttachments.id] }),
+  foreignKey({ name: 'user_custom_value_lookup_fk', columns: [table.organizationId, table.lookupSourceId, table.lookupRevision, table.lookupLineId],
+    foreignColumns: [customFieldLookupLines.organizationId, customFieldLookupLines.sourceId, customFieldLookupLines.revision, customFieldLookupLines.originalLineId] }),
+  check('user_custom_value_lookup_reference', sql`num_nonnulls(${table.lookupSourceId},${table.lookupRevision},${table.lookupLineId})=0
+    or (${table.lookupSourceId} is not null and ${table.lookupRevision} is not null and ${table.lookupRevision}>0 and ${table.lookupLineId} is not null)`),
   check('user_custom_value_user_observation', sql`(${table.userId} is null and num_nonnulls(${table.userUsername},${table.userName})=0)
     or (${table.userId} is not null and ${table.userUsername} is not null and ${table.userName} is not null
       and length(trim(${table.userUsername})) between 1 and 100 and length(trim(${table.userName})) between 1 and 200)`),
@@ -88,7 +94,7 @@ export const userVersionCustomFieldValues = pgTable('user_version_custom_field_v
     and (${table.parsedNumber} is null or ${finiteNumber(table.parsedNumber)})
     and (${table.parsedTimestamp} is null or isfinite(${table.parsedTimestamp})) and (${table.parsedDate} is null or isfinite(${table.parsedDate}))
     and ((${table.optionId} is null and ${table.optionRevision} is null) or (${table.optionId} is not null and ${table.optionRevision} is not null and ${table.optionRevision}>0))
-    and (${table.interpretationState}='valid' or num_nonnulls(${table.parsedNumber},${table.parsedBoolean},${table.parsedDate},${table.parsedTimestamp},${table.optionId},${table.optionRevision},${table.userId},${table.attachmentId})=0)
+    and (${table.interpretationState}='valid' or num_nonnulls(${table.parsedNumber},${table.parsedBoolean},${table.parsedDate},${table.parsedTimestamp},${table.optionId},${table.optionRevision},${table.userId},${table.attachmentId},${table.lookupSourceId},${table.lookupRevision},${table.lookupLineId})=0)
     and ((${table.interpretationState}='empty')=(${table.rawKind}='text' and ${table.rawText}=''))`),
   index('user_custom_value_raw_search').on(table.organizationId, table.fieldId, sql`md5(${table.rawText})`, table.subjectUserId, table.revision).where(sql`${table.rawText} is not null`),
 ]);

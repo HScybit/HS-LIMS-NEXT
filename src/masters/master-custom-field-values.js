@@ -9,7 +9,7 @@ const stores = Object.freeze({
   parameter: Object.freeze({ label: 'Parameter', fieldTable: 'parameter_version_custom_fields', valueTable: 'parameter_version_custom_field_values', idColumn: 'parameter_id' }),
   user: Object.freeze({ label: 'User', fieldTable: 'user_version_custom_fields', valueTable: 'user_version_custom_field_values', idColumn: 'subject_user_id',
     definitionTable: 'user_custom_field_versions', optionTable: 'user_custom_field_version_options', attachmentTable: 'user_custom_field_attachments',
-    userTable: 'user_directory', userIdColumn: 'id', frozenUsers: true, attachmentPath: '/api/users/custom-fields/attachments' }),
+    userTable: 'user_directory', userIdColumn: 'id', frozenUsers: true, lookupValues: true, attachmentPath: '/api/users/custom-fields/attachments' }),
 });
 function storeFor(kind) {
   if (!Object.hasOwn(stores, kind)) throw new TypeError('Unsupported Custom Field master.');
@@ -47,6 +47,7 @@ export async function loadMasterCustomFieldValues(kind, client, identity, master
     item.raw_number AS "rawNumber",item.raw_boolean AS "rawBoolean",item.interpretation_state AS "interpretationState",
     item.option_id AS "optionId",item.option_revision AS "optionRevision",choice.label AS "optionLabel",item.user_id AS "userId",
     ${store.frozenUsers ? 'item.user_name AS "userName",item.user_username AS "userUsername"' : 'person.display_name AS "userName"'},
+    ${store.lookupValues ? 'item.lookup_source_id AS "lookupSourceId",item.lookup_revision AS "lookupRevision",item.lookup_line_id AS "lookupLineId",' : ''}
     item.attachment_id AS "attachmentId",file.original_name AS "fileName",file.media_type AS "fileMediaType"
     FROM ${store.valueTable} item
     LEFT JOIN ${store.optionTable ?? 'custom_field_version_options'} choice ON choice.organization_id=item.organization_id AND choice.field_id=item.field_id
@@ -63,6 +64,7 @@ export async function loadMasterCustomFieldValues(kind, client, identity, master
     field.items.push({ value: primitive(item, 'raw', kind), interpretationState: item.interpretationState,
       optionId: item.optionId, optionRevision: item.optionRevision, optionLabel: item.optionLabel,
       userId: item.userId, userName: item.userName, ...(store.frozenUsers ? { userUsername: item.userUsername } : {}), attachmentId: item.attachmentId,
+      ...(store.lookupValues ? { lookupSourceId: item.lookupSourceId, lookupRevision: item.lookupRevision, lookupLineId: item.lookupLineId } : {}),
       attachment: item.attachmentId ? { id: item.attachmentId, originalName: item.fileName, mediaType: item.fileMediaType,
         url: `${store.attachmentPath ?? '/api/custom-fields/attachments'}/${item.attachmentId}` } : null });
   }
@@ -79,6 +81,30 @@ function postgresDate(value, includeTime = false) {
   const year = value.year(); const era = year > 0 ? '' : ' BC';
   const day = String(year > 0 ? year : 1 - year).padStart(4, '0') + value.format('-MM-DD');
   return day + (includeTime ? value.format(' HH:mm:ss.SSS') + '+00' : '') + era;
+}
+
+async function currentUserLookupSelections(client, identity, definitions, entries) {
+  const bySource = new Map();
+  for (const entry of entries) {
+    const field = definitions.get(entry.fieldId);
+    if (field.fieldType !== 'lookup' || !field.lookupSourceId) continue;
+    if (!bySource.has(field.lookupSourceId)) bySource.set(field.lookupSourceId, new Map());
+    const values = bySource.get(field.lookupSourceId);
+    for (const value of Array.isArray(entry.value) ? entry.value : [entry.value]) if (value !== '') values.set(String(value), null);
+  }
+  const pairs = [...bySource].flatMap(([id, values]) => [...values.keys()].map(value => [id, value]));
+  if (!pairs.length) return bySource;
+  const rows = (await client.query(`SELECT line.source_id AS "sourceId",line.revision,line.original_line_id AS "lineId",
+    line.label_kind AS "labelKind",line.label_text AS "labelText",line.label_number AS "labelNumber",line.label_boolean AS "labelBoolean"
+    FROM unnest($2::uuid[],$3::text[]) AS requested(source_id,line_id)
+    JOIN user_custom_field_lookup_lines line ON line.organization_id=$1 AND line.source_id=requested.source_id AND line.original_line_id=requested.line_id`,
+  [identity.organization_id, pairs.map(([id]) => id), pairs.map(([, value]) => value)])).rows;
+  for (const row of rows) {
+    const source = bySource.get(row.sourceId);
+    if (!source?.has(row.lineId) || source.get(row.lineId) !== null) throw new HttpError(409, 'incomplete_user_custom_fields', 'Lookup choices are inconsistent. Reload before saving.');
+    source.set(row.lineId, { value: row.lineId, label: primitive(row, 'label', 'user'), revision: row.revision });
+  }
+  return bySource;
 }
 
 // Entries have already passed customFieldValuesInput at the owning master command boundary.
@@ -98,6 +124,7 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
   if (!hasDates && timeZone !== null && timeZone !== undefined) throw new HttpError(400, 'invalid_custom_field_timezone', 'A Custom Field time zone requires captured date fields.');
   const previousById = new Map(previousFields.map((field) => [field.fieldId, field]));
   const previousByKey = kind === 'user' ? new Map(previousFields.map((field) => [field.key, field])) : null;
+  const lookupSelections = store.lookupValues ? await currentUserLookupSelections(client, identity, definitionsById, entries) : new Map();
   const userIds = new Set(); const attachmentIds = new Set(); const fields = []; const items = [];
   for (const [position, entry] of entries.entries()) {
     const field = definitionsById.get(entry.fieldId); const validation = customFieldValidationError(field, entry.value);
@@ -105,7 +132,9 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
     const options = new Map(field.options.map((option) => [option.key, option]));
     const previousField = kind === 'user' ? previousByKey.get(field.key) : previousById.get(field.id);
     const values = Array.isArray(entry.value) ? entry.value : [entry.value];
-    const display = typedPrimitive(customFieldFormDisplayValue(entry.value, field, [], (value, definition) => customFieldDateDisplayInZone(value, definition, zone)));
+    const lookupSource = lookupSelections.get(field.lookupSourceId);
+    const lookupOptions = field.fieldType === 'lookup' ? [...new Set(values.map(String))].map(value => lookupSource?.get(value)).filter(Boolean) : [];
+    const display = typedPrimitive(customFieldFormDisplayValue(entry.value, field, lookupOptions, (value, definition) => customFieldDateDisplayInZone(value, definition, zone)));
     fields.push({ fieldId: field.id, fieldRevision: field.revision, fieldType: field.fieldType, position, isArray: Array.isArray(entry.value), valueCount: values.length,
       displayKind: display.kind, displayText: display.text, displayNumber: display.number, displayBoolean: display.boolean,
       timeZone: dateField(field) ? zone : null, timeZoneDataVersion: dateField(field) ? customFieldTimeZoneDataVersion : null,
@@ -114,7 +143,8 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
       const raw = typedPrimitive(value);
       const item = { fieldId: field.id, position: itemPosition, rawKind: raw.kind, rawText: raw.text, rawNumber: raw.number, rawBoolean: raw.boolean,
         rawNumberText: raw.kind === 'number' ? String(value) : null, interpretationState: value === '' ? 'empty' : 'valid',
-        parsedNumber: null, parsedBoolean: null, parsedDate: null, parsedTimestamp: null, optionId: null, optionRevision: null, userId: null, attachmentId: null };
+        parsedNumber: null, parsedBoolean: null, parsedDate: null, parsedTimestamp: null, optionId: null, optionRevision: null, userId: null, attachmentId: null,
+        ...(store.lookupValues ? { lookupSourceId: null, lookupRevision: null, lookupLineId: null } : {}) };
       if (value !== '') {
         if (field.fieldType === 'number') {
           const number = Number(value); item.parsedNumber = Number.isFinite(number) ? number : null;
@@ -141,7 +171,13 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
           item.userId = uuid(value, field.label).toLowerCase(); userIds.add(item.userId);
         } else if (field.fieldType === 'attachment') {
           item.attachmentId = uuid(value, field.label).toLowerCase(); attachmentIds.add(item.attachmentId);
-        } else if (field.fieldType === 'lookup') throw new HttpError(400, `invalid_${kind}_custom_field_lookup`, `${field.label}: This lookup has no configured source.`);
+        } else if (field.fieldType === 'lookup') {
+          const choice = store.lookupValues && lookupSource?.get(String(value));
+          if (choice) {
+            item.lookupSourceId = field.lookupSourceId; item.lookupRevision = choice.revision; item.lookupLineId = choice.value;
+          } else if (store.lookupValues && previousField?.items.some(previous => previous.value === value)) item.interpretationState = 'invalid';
+          else throw new HttpError(400, `invalid_${kind}_custom_field_lookup`, `${field.label}: Select an available lookup choice.`);
+        }
       }
       items.push(item);
     }
@@ -189,6 +225,7 @@ export async function appendMasterCustomFieldValues(kind, client, identity, mast
     rawNumber: ['raw_number', 'double precision'], rawBoolean: ['raw_boolean', 'boolean'], rawNumberText: ['raw_number_text', 'text'], interpretationState: ['interpretation_state', 'text'],
     parsedNumber: ['parsed_number', 'double precision'], parsedBoolean: ['parsed_boolean', 'boolean'], parsedDate: ['parsed_date', 'text'], parsedTimestamp: ['parsed_timestamp', 'text'],
     optionId: ['option_id', 'uuid'], optionRevision: ['option_revision', 'integer'], userId: ['user_id', 'uuid'], attachmentId: ['attachment_id', 'uuid'] };
+  if (store.lookupValues) Object.assign(itemColumns, { lookupSourceId: ['lookup_source_id', 'uuid'], lookupRevision: ['lookup_revision', 'integer'], lookupLineId: ['lookup_line_id', 'text'] });
   const columns = Object.entries(itemColumns);
   const dateFits = `(item.parsed_timestamp IS NULL OR (pg_input_is_valid(item.parsed_timestamp,'timestamp with time zone')
     AND (item.parsed_date IS NULL OR pg_input_is_valid(item.parsed_date,'date'))))`;
