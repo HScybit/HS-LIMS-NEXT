@@ -79,13 +79,13 @@ test('a fresh user file keeps its immutable upload-key provenance without fabric
   await assert.rejects(prepare({ ...field, key: 'different' }, id, null, client), { code: 'invalid_user_custom_field_attachment' });
 });
 
-test('master selections require the saved key and attachments keep their definition boundary', async () => {
+test('master selections and retained attachments cannot borrow a different saved key', async () => {
   for (const kind of ['product', 'parameter']) {
     const field = definition(); const old = definition({ key: 'other_key' });
     await assert.rejects(prepare(field, 'A', previous(old), noQueries, kind), { code: `invalid_${kind}_custom_field_option` });
     const saved = previous(field); const retained = await prepare({ ...field, revision: 2 }, 'A', saved, noQueries, kind); assert.equal(retained.items[0].optionId, saved.items[0].optionId);
     const id = randomUUID(); const file = definition({ fieldType: 'attachment' });
     await assert.rejects(prepare(file, id, previous(old, id, { items: [{ value: id, attachmentId: id }] }),
-      { async query() { return { rows: [{ id, field_id: old.id, upload_key: file.key }] }; } }, kind), { code: `invalid_${kind}_custom_field_attachment` });
+      { async query() { return { rows: [{ id, field_id: old.id, upload_key: 'another_key' }] }; } }, kind), { code: `invalid_${kind}_custom_field_attachment` });
   }
 });

@@ -200,19 +200,16 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
     if (users.length !== userIds.size) throw new HttpError(400, `invalid_${kind}_custom_field_user`, 'Select users in this organization.');
   }
   if (attachmentIds.size) {
-    const files = (await client.query(kind === 'user'
-      ? `SELECT file.id,file.field_id,uploaded.key AS upload_key FROM user_custom_field_attachments file
-        JOIN user_custom_field_versions uploaded ON uploaded.organization_id=file.organization_id
-          AND uploaded.field_id=file.field_id AND uploaded.revision=file.field_revision
-        WHERE file.organization_id=$1 AND file.id=ANY($2::uuid[])`
-      : `SELECT id,field_id FROM ${store.attachmentTable ?? 'custom_field_attachments'}
-        WHERE organization_id=$1 AND id=ANY($2::uuid[])`, [identity.organization_id, [...attachmentIds]])).rows;
+    const files = (await client.query(`SELECT file.id,file.field_id,uploaded.key AS upload_key FROM ${store.attachmentTable ?? 'custom_field_attachments'} file
+      JOIN ${store.definitionTable ?? 'custom_field_versions'} uploaded ON uploaded.organization_id=file.organization_id
+        AND uploaded.field_id=file.field_id AND uploaded.revision=file.field_revision
+      WHERE file.organization_id=$1 AND file.id=ANY($2::uuid[])`, [identity.organization_id, [...attachmentIds]])).rows;
     const byId = new Map(files.map((file) => [file.id, file]));
     if (items.some((item) => {
       if (!item.attachmentId) return false;
       const file = byId.get(item.attachmentId); const key = definitionsById.get(item.fieldId).key;
-      const matchingUploadKey = kind === 'user' && typeof file?.upload_key === 'string' && file.upload_key === key;
-      const retained = kind === 'user' && previousByKey.get(key)?.items.some(previous => previous.attachmentId === item.attachmentId);
+      const matchingUploadKey = typeof file?.upload_key === 'string' && file.upload_key === key;
+      const retained = previousByKey.get(key)?.items.some(previous => previous.attachmentId === item.attachmentId);
       return !file || file.field_id !== item.fieldId && !matchingUploadKey && !retained;
     })) {
       throw new HttpError(400, `invalid_${kind}_custom_field_attachment`, 'Select attachments belonging to these Custom Fields.');

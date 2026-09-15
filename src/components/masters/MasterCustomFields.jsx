@@ -65,7 +65,7 @@ export default function MasterCustomFields({ kind, fields, loading, loadError, v
   const resource = kind === 'parameter' ? 'test-parameters' : 'products';
   const requests = useRef(new Map()); const controllers = useRef(new Set());
   const [users, setUsers] = useState([]); const [userError, setUserError] = useState(''); const [moreUsers, setMoreUsers] = useState(false);
-  const storedById = useMemo(() => new Map(storedFields.map((field) => [field.fieldId, field])), [storedFields]);
+  const storedByKey = useMemo(() => new Map(storedFields.map((field) => [field.key, field])), [storedFields]);
   const selectedUsers = useMemo(() => storedFields.flatMap((field) => field.items.filter((item) => item.userId).map((item) => userOption(item.userId, item.userName))), [storedFields]);
   const userOptions = useMemo(() => [...new Map([...selectedUsers, ...users].map((option) => [option.value, option])).values()], [selectedUsers, users]);
   const hasUsers = fields.some((field) => field.fieldType === 'multi_user_select');
@@ -94,14 +94,14 @@ export default function MasterCustomFields({ kind, fields, loading, loadError, v
     <div className="mt-4 pt-3 border-top"><div className="text-muted small fw-semibold mb-3 text-uppercase">Additional Data Fields</div>
     {fields.map((field) => {
       const source = lookupSources?.get(field.lookupSourceId);
-      const content = <CustomFieldControl kind={kind} field={field} value={values[field.id]} stored={storedById.get(field.id)} disabled={disabled} error={errors[field.id]}
+      const content = <CustomFieldControl kind={kind} field={field} value={values[field.id]} stored={storedByKey.get(field.key)} disabled={disabled} error={errors[field.id]}
         lookupOptions={source?.options} lookupSelectOptions={source?.selectOptions}
         onChange={(value) => onChange(field.id, value)} onBusy={onBusy} userOptions={userOptions} loadUsers={loadUsers} />;
-      return <div key={field.id}>{field.scheme ? <div className="d-flex align-items-end gap-3"><div className="flex-fill min-w-0">{content}</div>
-        <button type="button" className="smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center flex-shrink-0"
+      return <div key={field.fieldType === 'attachment' ? `attachment:${field.key}` : field.id}>{field.scheme || field.fieldType === 'attachment' ? <div className="d-flex align-items-end gap-3"><div className="flex-fill min-w-0">{content}</div>
+        {field.scheme ? <button type="button" className="smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center flex-shrink-0"
           title="Generate value from scheme" aria-label={`Generate ${field.label} value from scheme`} disabled={disabled || Boolean(generatingId)} onClick={() => onGenerate(field)}>
           {generatingId === field.id ? <span className="spinner-border spinner-border-sm" aria-hidden="true" /> : <AppIcon name="refresh" size={14} />}
-        </button></div> : content}</div>;
+        </button> : null}</div> : content}</div>;
     })}
     {hasUsers && moreUsers ? <div className="smplfy-form-text form-text">More users match. Refine your search to find a user.</div> : null}
     {hasUsers && userError ? <div className="smplfy-form-element__message smplfy-form-element__message--error" role="alert">{userError}</div> : null}

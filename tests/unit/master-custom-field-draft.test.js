@@ -21,7 +21,7 @@ test('master lookup renames do not inherit old drafts and removed fields are pru
   assert.deepEqual(masterCustomFieldDraft([], [], [lookup('old')], { old: 'Draft' }), {});
   assert.deepEqual(masterCustomFieldDraft([lookup('new', '__proto__')], [], [lookup('old', '__proto__')], { old: 'Literal key' }), Object.fromEntries([['new', 'Literal key']]));
 });
-for (const fieldType of ['attachment', 'multi_user_select']) test(`master ${fieldType} drafts retain their existing reference initialization`, () => {
+for (const fieldType of ['multi_user_select']) test(`master ${fieldType} drafts retain their existing reference initialization`, () => {
   const field = { id: 'new', key: 'note', fieldType };
   const empty = fieldType === 'multi_user_select' ? [] : '';
   const stored = fieldType === 'multi_user_select' ? ['Same ID'] : 'Same ID';

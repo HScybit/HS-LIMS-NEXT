@@ -7,7 +7,7 @@ import { uploadCustomFieldFile } from '../../custom-fields/attachment-client.js'
 export default function MasterCustomFieldFile({ kind, field, value, stored, disabled, error, onChange, onBusy }) {
   const input = useRef(null); const request = useRef(null); const controller = useRef(null);
   const [uploading, setUploading] = useState(false); const [failure, setFailure] = useState(''); const [uploaded, setUploaded] = useState(null);
-  const id = `${kind}-custom-field-${field.id}`; const fileId = String(value ?? '').trim();
+  const id = `${kind}-custom-field-${field.id}`; const fileId = String(value ?? '').trim().toLowerCase();
   const file = uploaded?.id === fileId ? uploaded : stored?.items.find((item) => item.attachmentId === fileId)?.attachment;
   const name = file?.originalName || fileId;
   const url = fileId ? `${kind === 'user' ? '/api/users/custom-fields/attachments' : '/api/custom-fields/attachments'}/${encodeURIComponent(fileId)}` : '';
