@@ -35,7 +35,18 @@ export async function generateTestRequests(client, identity, sampleId, input = {
   const dueAt = sampleTimestamp(input.dueAt, 'Due date', true);
   const locked = await client.query('SELECT laboratory_lock_sample($1) AS found', [sampleId]);
   if (!locked.rows[0].found) throw new HttpError(404, 'sample_not_found', 'Sample was not found.');
-  const sample = (await client.query('SELECT sample_category_id, sample_type, due_at::text AS due_at FROM samples WHERE organization_id = $1 AND id = $2', [identity.organization_id, sampleId])).rows[0];
+  let sample;
+  try {
+    // Validate and retain PostgreSQL precision in the existing sample read,
+    // before allocating specifications, numbers or dependent records.
+    sample = (await client.query(`SELECT sample_category_id, sample_type, coalesce($3::timestamptz,due_at)::text AS due_at,
+      ($3::timestamptz IS NULL OR extract(year FROM ($3::timestamptz AT TIME ZONE 'UTC')) BETWEEN 1 AND 9999) AS valid_due_at
+      FROM samples WHERE organization_id=$1 AND id=$2`, [identity.organization_id, sampleId, dueAt])).rows[0];
+  } catch (error) {
+    if (['22007', '22008', '22009'].includes(error.code)) throw new HttpError(400, 'invalid_sample', 'Due date contains an invalid date, time or timezone.');
+    throw error;
+  }
+  if (!sample.valid_due_at) throw new HttpError(400, 'invalid_sample', 'Due date must normalize to a year between 0001 and 9999.');
   if (automatic && sample.sample_type === 'amendment') return { items: [], jobs: [] };
   if (!automatic) {
     const access = await requireWorkflowAction(client, identity, { type: 'sample', id: sampleId }, 'allocate');
@@ -53,7 +64,7 @@ export async function generateTestRequests(client, identity, sampleId, input = {
   const numbers = await client.query("SELECT laboratory_next_number('test_request', extract(year FROM now() AT TIME ZONE 'UTC')::integer::text) AS number FROM generate_series(1, $1::integer)", [tests.rowCount]);
   const records = tests.rows.map((test, index) => ({ organizationId: identity.organization_id, id: randomUUID(), sampleTestId: test.id,
     requestNumber: numbers.rows[index].number, specificationId: specifications.get(test.id).id, datasheetTemplateId: specifications.get(test.id).templateId,
-    priority, dueAt: dueAt ? new Date(dueAt) : sample.due_at == null ? null : sql`${sample.due_at}::timestamptz`, createdBy: identity.user_id }));
+    priority, dueAt: sample.due_at == null ? null : sql`${sample.due_at}::timestamptz`, createdBy: identity.user_id }));
   await insertBatch(database(client), testRequests, records);
   await client.query("UPDATE sample_tests SET status = 'requested' WHERE organization_id = $1 AND id = ANY($2::uuid[])", [identity.organization_id, tests.rows.map((test) => test.id)]);
   await database(client).insert(sampleEvents).values({ organizationId: identity.organization_id, sampleId, eventType: 'test_requests_generated', actorUserId: identity.user_id,
