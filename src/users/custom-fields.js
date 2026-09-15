@@ -5,6 +5,7 @@ import { loadMasterCustomFieldValues, prepareMasterCustomFieldValues, appendMast
 import { userProfileCommandError } from './profiles.js';
 import { userCustomFieldInput, userFieldUserIds, userFieldUserSearch } from './custom-field-input.js';
 import { matchesUserFieldUserOption } from './custom-field-filter.js';
+import { lookupSourceLineLimit } from '../custom-fields/lookup-source-input.js';
 
 function requireRead(identity) {
   if (!identity.permission_codes?.some(code => ['users.read', 'users.manage'].includes(code))) throw new HttpError(403, 'forbidden', 'You cannot view user fields.');
@@ -24,6 +25,27 @@ const errors = {
 const historyColumns = `version.previous_revision AS "previousRevision",version.custom_field_count AS "customFieldCount",version.time_zone AS "customFieldTimeZone",
   version.username,version.display_name AS "displayName",version.saved_by AS "savedBy",version.saved_by_username AS "savedByUsername",
   version.saved_by_name AS "savedByName",version.saved_at AS "savedAt"`;
+
+export async function loadUserFieldLookupOptions(client, identity, input) {
+  requireRead(identity); fieldsOnly(input, ['sourceId', 'revision', 'knownOrganizationId']);
+  const sourceId = uuid(input.sourceId, 'Lookup source').toLowerCase();
+  if (input.revision !== undefined) integer(input.revision, 'Known lookup revision', 1, 2_147_483_647);
+  const knownOrganizationId = input.knownOrganizationId === undefined ? null : uuid(input.knownOrganizationId, 'Known lookup organization').toLowerCase();
+  const context = { organizationId: identity.organization_id, sourceId };
+  const current = (await client.query(`SELECT revision FROM user_custom_field_lookup_lines
+    WHERE organization_id=$1 AND source_id=$2 LIMIT 1`, [identity.organization_id, sourceId])).rows[0];
+  if (!current) return { ...context, revision: null, options: [] };
+  if (knownOrganizationId === identity.organization_id && current.revision === input.revision) return { ...context, revision: current.revision, unchanged: true };
+  const rows = (await client.query(`SELECT revision,original_line_id AS value,position,label_kind AS kind,
+    label_text AS text,label_number AS number,label_boolean AS boolean FROM user_custom_field_lookup_lines
+    WHERE organization_id=$1 AND source_id=$2 AND revision=$3 ORDER BY position LIMIT $4`,
+  [identity.organization_id, sourceId, current.revision, lookupSourceLineLimit + 1])).rows;
+  if (!rows.length || rows.length > lookupSourceLineLimit || rows.some((row, index) => row.position !== index
+    || row.revision !== current.revision || !['text', 'number', 'boolean'].includes(row.kind) || row[row.kind] === null)) {
+    throw new HttpError(409, 'incomplete_user_lookup', 'Lookup choices changed. Reload before continuing.');
+  }
+  return { ...context, revision: current.revision, options: rows.map(row => ({ value: row.value, label: row[row.kind] })) };
+}
 
 export async function loadUserFieldUserLabels(client, identity, input) {
   requireRead(identity); const ids = userFieldUserIds(input);

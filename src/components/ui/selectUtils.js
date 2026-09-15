@@ -33,3 +33,24 @@ export function flattenSelectOptions(options = []) {
   return options.flatMap((option) =>
     Array.isArray(option.options) ? flattenSelectOptions(option.options) : [option]);
 }
+
+export function prepareSelectOptions(options = []) {
+  const normalizedOptions = normalizeSelectOptions(options);
+  const flatOptions = flattenSelectOptions(normalizedOptions);
+  return { sourceOptions: options, options: normalizedOptions, byValue: new Map(flatOptions.map(option => [String(option.value), option])) };
+}
+
+export function cacheSelectFilter(filter, emptyInputFilter = filter) {
+  let inputValue; let results = new WeakMap();
+  const primitive = value => value == null || ['string', 'number', 'boolean'].includes(typeof value);
+  function cachedFilter(option, input) {
+    if (input !== inputValue) { inputValue = input; results = new WeakMap(); }
+    if (!option?.data || typeof option.data !== 'object' || !primitive(option.label) || !primitive(option.value)) return filter(option, input);
+    const previous = results.get(option.data); const isNew = option.data.__isNew__;
+    if (previous && previous.label === option.label && previous.value === option.value && previous.isNew === isNew) return previous.result;
+    const result = (typeof input === 'string' && !input.trim() ? emptyInputFilter : filter)(option, input);
+    results.set(option.data, { label: option.label, value: option.value, isNew, result }); return result;
+  }
+  cachedFilter.clear = () => { inputValue = undefined; results = new WeakMap(); };
+  return cachedFilter;
+}

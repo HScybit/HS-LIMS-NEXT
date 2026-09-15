@@ -36,6 +36,7 @@
   "dependencies": {
     "@fontsource/inter": "5.2.8",
     "@tabler/icons-react": "3.41.1",
+    "@tanstack/react-virtual": "3.14.13",
     "@xmldom/xmldom": "0.9.12",
     "bootstrap": "5.3.8",
     "classnames": "2.5.1",

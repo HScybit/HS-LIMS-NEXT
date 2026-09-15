@@ -49,7 +49,11 @@ test('Product source controls capture every type, retry lost upload/save respons
   await page.getByLabel('Custom Choices',{exact:true}).fill('Zero');await page.getByRole('listbox').getByRole('option',{name:'Zero',exact:true}).click();
   await page.getByLabel('Custom Choices',{exact:true}).fill('False');await page.getByRole('listbox').getByRole('option',{name:'False',exact:true}).click();
   await page.getByLabel('Custom Notes',{exact:true}).fill('Line one\nLine two');
-  await page.getByLabel('Custom Users',{exact:true}).fill('Synthetic Analyst');await page.getByRole('listbox').getByRole('option',{name:'Synthetic Analyst',exact:true}).click();
+  await page.getByLabel('Custom Users',{exact:true}).fill('Synthetic Analyst');await expect(page.getByRole('listbox').getByRole('option',{name:'Synthetic Analyst',exact:true})).toBeVisible();
+  // The server also matches the raw name; AsyncSelect must retain its server-filtered results.
+  const rawUserSearch=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/masters/products/custom-field-users'&&new URL(response.url()).searchParams.get('search')==='Synthetic_Analyst');
+  await page.getByLabel('Custom Users',{exact:true}).fill('Synthetic_Analyst');expect((await rawUserSearch).status()).toBe(200);
+  await page.getByRole('listbox').getByRole('option',{name:'Synthetic Analyst',exact:true}).click();
   await page.getByLabel('Custom Date Time',{exact:true}).fill('2026-03-08T02:30');
   await page.getByRole('checkbox',{name:'Custom Checkbox',exact:true}).check();await page.getByRole('checkbox',{name:'Custom Checkbox',exact:true}).uncheck();
   await page.getByLabel('Custom Email',{exact:true}).fill('source permits this text');

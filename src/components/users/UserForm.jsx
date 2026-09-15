@@ -13,6 +13,7 @@ import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
 import { userFormDraft, userFormErrors, userFormPayload, userReturnPath } from '../../users/form-model.js';
 import { saveUserSignature } from '../../users/signature-client.js';
 import { userCustomFieldDraft, userCustomFieldPayload, userCustomFieldErrors } from '../../users/custom-field-form.js';
+import { loadUserFieldLookupSources } from '../../users/custom-field-lookup-client.js';
 
 const emptyFields = [];
 
@@ -22,7 +23,8 @@ export default function UserForm({ data, canManage, currentUserId, onReload }) {
   const [draft, setDraft] = useState(() => userFormDraft(data)); const [saving, setSaving] = useState(false); const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({}); const [unknown, setUnknown] = useState(false); const [created, setCreated] = useState(false);
   const [signatureFile, setSignatureFile] = useState(null); const [signaturePending, setSignaturePending] = useState(false);
-  const [custom, setCustom] = useState({ fields: [], values: {}, refreshKey: 0 });
+  const [custom, setCustom] = useState({ fields: [], values: {}, refreshKey: 0, lookupSources: new Map() });
+  const lookupSources = useRef(new Map());
   const [customLoading, setCustomLoading] = useState(true); const [customLoadError, setCustomLoadError] = useState(''); const [customReload, setCustomReload] = useState(0);
   const [uploadingFields, setUploadingFields] = useState(() => new Set());
   const uploadBusy = useRef(new Set());
@@ -37,12 +39,17 @@ export default function UserForm({ data, canManage, currentUserId, onReload }) {
   useEffect(() => {
     if (!canRefreshFields) return undefined;
     const controller = new AbortController();
-    apiRequest('/api/users/custom-fields', { signal: controller.signal }).then(({ fields }) => {
+    apiRequest('/api/users/custom-fields', { signal: controller.signal }).then(async ({ fields }) => {
+      const sources = await loadUserFieldLookupSources(fields, lookupSources.current, { signal: controller.signal });
       if (!controller.signal.aborted && !request.current?.pending && !createdUser.current && !uploadBusy.current.size) {
-        setCustom(current => ({ fields, values: userCustomFieldDraft(fields, storedFields, current.values), refreshKey: current.refreshKey + 1 }));
+        lookupSources.current = sources;
+        setCustom(current => ({ fields, values: userCustomFieldDraft(fields, storedFields, current.values), refreshKey: current.refreshKey + 1, lookupSources: sources }));
         setCustomLoading(false); setCustomLoadError('');
       }
-    }).catch(failure => { if (!controller.signal.aborted && !request.current?.pending && !createdUser.current && !uploadBusy.current.size) { setCustomLoading(false); setCustomLoadError(failure.message); } });
+    }).catch(failure => {
+      if (!controller.signal.aborted && !request.current?.pending && !createdUser.current && !uploadBusy.current.size) { setCustomLoading(false); setCustomLoadError(failure.message); }
+      controller.abort();
+    });
     return () => controller.abort();
   }, [canRefreshFields, storedFields, customReload]);
   useEffect(() => {
@@ -118,7 +125,7 @@ export default function UserForm({ data, canManage, currentUserId, onReload }) {
         onChange={value => change(key, value)} disabled={blocked} required={required} error={fieldErrors[key]} excludeUserId={data?.user.id} />)}
       <UserSignatureField userId={data?.user.id} signature={data?.signature} selectedFile={signatureFile} onSelect={setSignatureFile} disabled={blocked}
         onPendingChange={setSignaturePending} />
-      <UserCustomFields fields={custom.fields} values={custom.values} storedFields={storedFields} loading={customLoading} loadError={customLoadError}
+      <UserCustomFields fields={custom.fields} values={custom.values} storedFields={storedFields} lookupSources={custom.lookupSources} loading={customLoading} loadError={customLoadError}
         errors={fieldErrors} disabled={blocked} refreshKey={custom.refreshKey} onChange={changeCustom} onBusy={onUploadBusy} onReload={reloadFields} />
       <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={saving}
         onClick={() => router.push(created ? `/user_management/${createdUser.current}/edit` : returnPath)}>{created ? 'Open saved user' : 'Cancel'}</SecondaryButton>

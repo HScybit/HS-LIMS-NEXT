@@ -2,11 +2,12 @@
 
 import React, { useCallback, useId, useMemo, useState } from 'react';
 import cx from 'classnames';
-import BaseSelect, { components } from 'react-select';
+import BaseSelect, { components, createFilter } from 'react-select';
 import AsyncSelect from 'react-select/async';
 import CreatableSelect from 'react-select/creatable';
 import AppIcon from './AppIcon.jsx';
-import { flattenSelectOptions, normalizeSelectOptions } from './selectUtils.js';
+import WindowedSelectMenuList from './WindowedSelectMenuList.jsx';
+import { cacheSelectFilter, flattenSelectOptions, prepareSelectOptions } from './selectUtils.js';
 import '../../styles/searchable-select.scss';
 
 function buildValueSet(selectedOptions) {
@@ -128,9 +129,7 @@ function MenuList(props) {
     ? (hasFilter ? 'Deselect visible' : 'Deselect all')
     : (hasFilter ? 'Select visible' : 'Select all');
 
-  return (
-    <components.MenuList {...props}>
-      {selectProps.isMulti && selectProps.enableBulkActions !== false ? (
+  const actions = selectProps.isMulti && selectProps.enableBulkActions !== false ? (
         <div className="smplfy-rselect__actions" onMouseDown={(event) => event.preventDefault()}>
           <button
             type="button"
@@ -158,10 +157,12 @@ function MenuList(props) {
             </div>
           ) : null}
         </div>
-      ) : null}
-      {children}
-    </components.MenuList>
-  );
+      ) : null;
+  if (selectProps.windowedOptions && Array.isArray(children) && children.length > 1000
+    && children.every(child => React.isValidElement(child) && child.props.innerProps?.role === 'option')) {
+    return <WindowedSelectMenuList {...props} actions={actions} />;
+  }
+  return <components.MenuList {...props}>{actions}{children}</components.MenuList>;
 }
 
 const sharedComponents = {
@@ -179,6 +180,8 @@ export default function SearchableSelect({
   defaultValue,
   onChange,
   options = [],
+  preparedOptions,
+  windowedOptions = false,
   multiple = false,
   placeholder = 'Select…',
   disabled = false,
@@ -186,6 +189,7 @@ export default function SearchableSelect({
   isClearable,
   isLoading = false,
   loadOptions,
+  filterOption,
   defaultOptions = true,
   cacheOptions = true,
   searchable = true,
@@ -215,13 +219,10 @@ export default function SearchableSelect({
     normalizeValue(isControlled ? value : defaultValue, multiple),
   );
   const [inputValue, setInputValue] = useState('');
-
-  const normalizedOptions = useMemo(() => normalizeSelectOptions(options), [options]);
-  const flatOptions = useMemo(() => flattenSelectOptions(normalizedOptions), [normalizedOptions]);
-  const optionMap = useMemo(
-    () => new Map(flatOptions.map((option) => [String(option.value), option])),
-    [flatOptions],
-  );
+  const cachedDefaultFilter = useMemo(() => cacheSelectFilter(createFilter(), createFilter({ ignoreAccents: false })), []);
+  const optionModel = useMemo(() => preparedOptions?.sourceOptions === options ? preparedOptions : prepareSelectOptions(options), [options, preparedOptions]);
+  const normalizedOptions = optionModel.options;
+  const optionMap = optionModel.byValue;
   const currentValue = isControlled ? normalizeValue(value, multiple) : internalValue;
   const hasSelection = multiple
     ? Array.isArray(currentValue) && currentValue.length > 0
@@ -262,10 +263,11 @@ export default function SearchableSelect({
 
     if (actionMeta.action === 'menu-close' || actionMeta.action === 'set-value' || actionMeta.action === 'input-blur') {
       setInputValue('');
+      cachedDefaultFilter.clear();
     }
 
     return externalValue ?? nextInputValue;
-  }, [onInputChange]);
+  }, [onInputChange, cachedDefaultFilter]);
 
   const buildSelectionFromValues = useCallback((nextValues, fallbackOptions = []) =>
     nextValues.map((item) =>
@@ -361,6 +363,8 @@ export default function SearchableSelect({
       }}
       components={sharedComponents}
       options={loadOptions ? undefined : normalizedOptions}
+      windowedOptions={windowedOptions && !loadOptions}
+      filterOption={filterOption === undefined ? loadOptions ? undefined : cachedDefaultFilter : filterOption}
       loadOptions={loadOptions}
       defaultOptions={loadOptions ? defaultOptions : undefined}
       cacheOptions={loadOptions ? cacheOptions : undefined}

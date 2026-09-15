@@ -11,8 +11,8 @@ import { customFieldDateInput, customFieldDateTimeInput } from '../../custom-fie
 
 const userOption = (id, name) => ({ value: id, label: String(name ?? id).replace(/[_/-]/g, ' ').replace(/\s+/g, ' ').trim() });
 
-export function CustomFieldControl({ kind, field, value, stored, disabled, error, onChange, onBusy, userOptions, defaultUserOptions, loadUsers }) {
-  const control = customFieldControl(field); const id = `${kind}-custom-field-${field.id}`;
+export function CustomFieldControl({ kind, field, value, stored, disabled, error, onChange, onBusy, userOptions, defaultUserOptions, loadUsers, lookupOptions, lookupSelectOptions }) {
+  const control = customFieldControl(field, lookupOptions); const id = `${kind}-custom-field-${field.id}`;
   if (control.type === 'file') return <MasterCustomFieldFile {...{ kind, field, value, stored, disabled, error, onChange, onBusy }} />;
   if (control.type === 'boolean') return <div className="mb-3">
     <div className="smplfy-checkbox-field"><Checkbox id={id} name={id} checked={Boolean(value)} onChange={onChange} ariaLabel={field.label}
@@ -43,7 +43,8 @@ export function CustomFieldControl({ kind, field, value, stored, disabled, error
     type = searchable ? 'searchable-select' : 'dropdown';
     inputProps = { id, name: id, disabled, value: control.multiple ? Array.isArray(value) ? value : [] : value ?? '',
       options: control.options, placeholder: `Select ${field.label}`,
-      ...(searchable ? { multiple: control.multiple, clearable: !control.required, invalid: Boolean(error), onChange }
+      ...(searchable ? { multiple: control.multiple, clearable: !control.required, invalid: Boolean(error), onChange,
+        preparedOptions: field.fieldType === 'lookup' ? lookupSelectOptions : undefined, windowedOptions: field.fieldType === 'lookup' }
         : { onChange: (event) => onChange(event.target.value) }) };
   } else if (control.type === 'relation') {
     type = 'searchable-select';

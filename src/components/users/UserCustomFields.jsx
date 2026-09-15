@@ -7,7 +7,7 @@ import { apiRequest } from '../../lib/api-client.js';
 import { userFieldUserOption } from '../../users/custom-field-options.js';
 import { userCustomFieldName, userCustomFieldSelectedIds, userCustomFieldSelectedOptions } from '../../users/custom-field-form.js';
 
-export default function UserCustomFields({ fields, values, storedFields, loading, loadError, errors, disabled, refreshKey, onChange, onBusy, onReload }) {
+export default function UserCustomFields({ fields, values, storedFields, lookupSources, loading, loadError, errors, disabled, refreshKey, onChange, onBusy, onReload }) {
   const searchRequest = useRef(null);
   const [defaultUsers, setDefaultUsers] = useState([]); const [choicesError, setChoicesError] = useState('');
   const [users, setUsers] = useState([]); const [selected, setSelected] = useState({ rows: [], ids: [] });
@@ -62,7 +62,8 @@ export default function UserCustomFields({ fields, values, storedFields, loading
         const name = userCustomFieldName(field);
         const content = <CustomFieldControl kind="user" field={field} value={values[name]} stored={storedByKey.get(field.key)} error={errors[name]}
           disabled={disabled || Boolean(loadError) || field.fieldType === 'multi_user_select' && choicesLoading}
-          onChange={value => onChange(name, value)} onBusy={onBusy} userOptions={userOptions} defaultUserOptions={defaultUsers} loadUsers={loadUsers} />;
+          onChange={value => onChange(name, value)} onBusy={onBusy} userOptions={userOptions} defaultUserOptions={defaultUsers} loadUsers={loadUsers}
+          lookupOptions={lookupSources?.get(field.lookupSourceId)?.options} lookupSelectOptions={lookupSources?.get(field.lookupSourceId)?.selectOptions} />;
         return <div key={name}>{field.scheme ? <div className="d-flex align-items-end gap-3"><div className="flex-fill min-w-0">{content}</div>
           <button type="button" className="smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center flex-shrink-0" disabled
             title="Value generation is currently unavailable" aria-label={`Generate ${field.label} value from scheme`}><AppIcon name="refresh" size={14} /></button>
