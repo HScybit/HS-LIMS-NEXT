@@ -4,6 +4,7 @@ import { organizations, memberships } from './schema.js';
 import { products, tags, sampleCategories } from './master-schema.js';
 import { templates } from './template-schema.js';
 import { customFieldVersions, customFieldVersionOptions, customFieldAttachments } from './custom-field-schema.js';
+import { customFieldLookupLines } from './custom-field-lookup-schema.js';
 import { customFieldTypes } from '../masters/custom-field-config.js';
 
 const transactionId = customType({ dataType: () => 'xid8' });
@@ -86,6 +87,7 @@ export const productVersionCustomFieldValues = pgTable('product_version_custom_f
   interpretationState: text('interpretation_state').notNull(), parsedNumber: doublePrecision('parsed_number'), parsedBoolean: boolean('parsed_boolean'),
   parsedDate: date('parsed_date', { mode: 'string' }), parsedTimestamp: timestamp('parsed_timestamp', { withTimezone: true, mode: 'string' }),
   optionId: uuid('option_id'), optionRevision: integer('option_revision'), userId: uuid('user_id'), attachmentId: uuid('attachment_id'),
+  lookupSourceId: uuid('lookup_source_id'), lookupRevision: integer('lookup_revision'), lookupLineId: text('lookup_line_id'),
 }, (table) => [
   primaryKey({ name: 'product_custom_value_pk', columns: [...capturedFieldColumns(table), table.position] }),
   foreignKey({ name: 'product_custom_value_field_fk', columns: capturedFieldColumns(table), foreignColumns: capturedFieldColumns(productVersionCustomFields) }),
@@ -93,6 +95,10 @@ export const productVersionCustomFieldValues = pgTable('product_version_custom_f
     foreignColumns: [customFieldVersionOptions.organizationId, customFieldVersionOptions.fieldId, customFieldVersionOptions.revision, customFieldVersionOptions.id] }),
   foreignKey({ name: 'product_custom_value_user_fk', columns: [table.organizationId, table.userId], foreignColumns: [memberships.organizationId, memberships.userId] }),
   foreignKey({ name: 'product_custom_value_attachment_fk', columns: [table.organizationId, table.attachmentId], foreignColumns: [customFieldAttachments.organizationId, customFieldAttachments.id] }),
+  foreignKey({ name: 'product_custom_value_lookup_fk', columns: [table.organizationId, table.lookupSourceId, table.lookupRevision, table.lookupLineId],
+    foreignColumns: [customFieldLookupLines.organizationId, customFieldLookupLines.sourceId, customFieldLookupLines.revision, customFieldLookupLines.originalLineId] }),
+  check('product_custom_value_lookup_reference', sql`num_nonnulls(${table.lookupSourceId},${table.lookupRevision},${table.lookupLineId})=0
+    or (${table.lookupSourceId} is not null and ${table.lookupRevision} is not null and ${table.lookupRevision}>0 and ${table.lookupLineId} is not null)`),
   check('product_custom_value_raw', sql`${table.position} between 0 and 499 and num_nonnulls(${table.rawText},${table.rawNumber},${table.rawBoolean})=1
     and ((${table.rawKind}='text' and ${table.rawText} is not null and length(${table.rawText})<=16000)
       or (${table.rawKind}='number' and ${table.rawNumber} is not null and ${finiteNumber(table.rawNumber)})
@@ -107,7 +113,7 @@ export const productVersionCustomFieldValues = pgTable('product_version_custom_f
     and (${table.parsedNumber} is null or ${finiteNumber(table.parsedNumber)})
     and (${table.parsedTimestamp} is null or isfinite(${table.parsedTimestamp})) and (${table.parsedDate} is null or isfinite(${table.parsedDate}))
     and ((${table.optionId} is null and ${table.optionRevision} is null) or (${table.optionId} is not null and ${table.optionRevision} is not null and ${table.optionRevision}>0))
-    and (${table.interpretationState}='valid' or num_nonnulls(${table.parsedNumber},${table.parsedBoolean},${table.parsedDate},${table.parsedTimestamp},${table.optionId},${table.optionRevision},${table.userId},${table.attachmentId})=0)
+    and (${table.interpretationState}='valid' or num_nonnulls(${table.parsedNumber},${table.parsedBoolean},${table.parsedDate},${table.parsedTimestamp},${table.optionId},${table.optionRevision},${table.userId},${table.attachmentId},${table.lookupSourceId},${table.lookupRevision},${table.lookupLineId})=0)
     and ((${table.interpretationState}='empty')=(${table.rawKind}='text' and ${table.rawText}=''))`),
   index('product_custom_value_raw_search').on(table.organizationId, table.fieldId, sql`md5(${table.rawText})`, table.productId, table.revision).where(sql`${table.rawText} is not null`),
 ]);

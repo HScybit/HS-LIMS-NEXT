@@ -9,7 +9,9 @@ import ParameterUncertainty from './ParameterUncertainty.jsx';
 import { emptyUncertaintyGrid, uncertaintySpreadsheet, updateUncertaintyGrid } from '../../masters/parameter-grid.js';
 import { apiRequest } from '../../lib/api-client.js';
 import MasterCustomFields from './MasterCustomFields.jsx';
-import { customFieldInitialValue, customFieldSubmittedValue, customFieldValidationError, customFieldNeedsGeneration } from '../../custom-fields/form-values.js';
+import { customFieldSubmittedValue, customFieldValidationError, customFieldNeedsGeneration } from '../../custom-fields/form-values.js';
+import { masterCustomFieldDraft } from '../../masters/custom-field-draft.js';
+import { loadMasterFieldLookupSources } from '../../masters/custom-field-lookup-client.js';
 
 const emptyFields = [];
 
@@ -25,28 +27,46 @@ export default function TestParameterForm({ parameter }) {
   const [fieldErrors, setFieldErrors] = useState({}); const [labError, setLabError] = useState(''); const [moreLabs, setMoreLabs] = useState(false);
   const [labOption, setLabOption] = useState(() => parameter?.laboratoryId ? { value: parameter.laboratoryId, label: parameter.laboratoryName } : null);
   const labQuery = useRef(null);
-  const [customFields, setCustomFields] = useState([]); const [customValues, setCustomValues] = useState({});
+  const [custom, setCustom] = useState({ fields: [], values: {}, lookupSources: new Map() });
+  const { fields: customFields, values: customValues, lookupSources } = custom;
+  const lookupCache = useRef(new Map()); const fieldLoad = useRef(null); const fieldWork = useRef(false); const uploadBusy = useRef(new Set());
+  const [saveUnknown, setSaveUnknown] = useState(false);
   const [customLoading, setCustomLoading] = useState(true); const [customLoadError, setCustomLoadError] = useState('');
   const [customReload, setCustomReload] = useState(0);
   const [uploadingFields, setUploadingFields] = useState(() => new Set()); const [generatingId, setGeneratingId] = useState('');
   const blocked = saving || Boolean(generatingId) || uploadingFields.size > 0;
+  const canRefreshFields = !blocked && !saveUnknown;
+  const reloadFields = useCallback(() => setCustomReload(value => value + 1), []);
   const storedFields = parameter?.customFields ?? emptyFields;
 
   const from = search.get('from'); const returnPath = from && /^\/test_parameters(?:\?[^#]*)?$/.test(from) ? from : '/test_parameters';
   useEffect(() => () => labQuery.current?.abort(), []);
   useEffect(() => {
-    const controller = new AbortController(); const storedById = new Map(storedFields.map((field) => [field.fieldId, field]));
-    apiRequest('/api/masters/test-parameters/custom-fields', { signal: controller.signal }).then(({ fields }) => {
-      if (controller.signal.aborted) return;
-      setCustomFields(fields); setCustomValues((current) => Object.fromEntries(fields.map((field) =>
-        [field.id, Object.hasOwn(current, field.id) ? current[field.id] : customFieldInitialValue(field, storedById.get(field.id))])));
+    if (!canRefreshFields) return undefined;
+    const controller = new AbortController(); fieldLoad.current = controller;
+    const canPublish = () => !controller.signal.aborted && !fieldWork.current && !saveRequest.current?.pending && !uploadBusy.current.size;
+    apiRequest('/api/masters/test-parameters/custom-fields', { signal: controller.signal }).then(async ({ fields, organizationId }) => {
+      const sources = await loadMasterFieldLookupSources('parameter', fields, lookupCache.current, { signal: controller.signal, organizationId });
+      if (!canPublish()) return;
+      lookupCache.current = sources;
+      setCustom(current => ({ fields, values: masterCustomFieldDraft(fields, storedFields, current.fields, current.values), lookupSources: sources }));
       setCustomLoadError(''); setCustomLoading(false);
-    }).catch((failure) => { if (!controller.signal.aborted) { setCustomLoadError(failure.message); setCustomLoading(false); } });
-    return () => controller.abort();
-  }, [storedFields, customReload]);
-  const onUploadBusy = useCallback((fieldId, busy) => setUploadingFields((current) => {
-    const next = new Set(current); if (busy) next.add(fieldId); else next.delete(fieldId); return next;
-  }), []);
+    }).catch(failure => {
+      if (canPublish()) { setCustomLoadError(failure.message); setCustomLoading(false); }
+      controller.abort();
+    }).finally(() => { if (fieldLoad.current === controller) fieldLoad.current = null; });
+    return () => { controller.abort(); if (fieldLoad.current === controller) fieldLoad.current = null; };
+  }, [canRefreshFields, storedFields, customReload]);
+  useEffect(() => {
+    if (!canRefreshFields) return undefined;
+    const refresh = () => { if (!fieldLoad.current && document.visibilityState !== 'hidden') reloadFields(); };
+    const timer = window.setInterval(refresh, 10_000); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [canRefreshFields, reloadFields]);
+  const onUploadBusy = useCallback((fieldId, busy) => {
+    if (busy) uploadBusy.current.add(fieldId); else uploadBusy.current.delete(fieldId);
+    setUploadingFields(new Set(uploadBusy.current));
+  }, []);
   const loadLabs = useCallback(async (search) => {
     labQuery.current?.abort(); const controller = new AbortController(); labQuery.current = controller;
     try {
@@ -69,7 +89,8 @@ export default function TestParameterForm({ parameter }) {
     const value = event.target.value; setDraft((current) => ({ ...current, [field]: value })); clearFieldError(field);
   };
   function changeCustomField(fieldId, value) {
-    setCustomValues((current) => ({ ...current, [fieldId]: value })); clearFieldError(fieldId);
+    if (Array.isArray(value) && value.length > 500) { setFieldErrors(current => ({ ...current, [fieldId]: 'Select at most 500 items.' })); return; }
+    setCustom(current => ({ ...current, values: { ...current.values, [fieldId]: value } })); clearFieldError(fieldId);
   }
   function capture(values) {
     if (!customFields.length) return {};
@@ -84,14 +105,14 @@ export default function TestParameterForm({ parameter }) {
     } });
     const next = { ...values };
     for (const item of result.values) next[item.fieldId] = item.value;
-    setCustomValues(next); return next;
+    setCustom(current => ({ ...current, values: next })); return next;
   }
   async function generateField(field) {
     if (blocked || customLoading || customLoadError) return;
-    setGeneratingId(field.id); setError('');
+    fieldWork.current = true; setGeneratingId(field.id); setError('');
     try { await generate(customValues, field.id); clearFieldError(field.id); }
     catch (failure) { setError(failure.message); }
-    finally { setGeneratingId(''); }
+    finally { fieldWork.current = false; setGeneratingId(''); }
   }
   function changeGrid(_name, value) {
     gridConfigured.current = true;
@@ -107,11 +128,11 @@ export default function TestParameterForm({ parameter }) {
   }
   async function save(event) {
     event.preventDefault(); if (blocked || customLoading || customLoadError || gridProblem.current) return;
-    setSaving(true); setError('');
+    fieldWork.current = true; setSaving(true); setError('');
     let values;
     const replay = saveRequest.current?.content === JSON.stringify(saveBody(customValues));
     try { values = replay ? customValues : await generate(customValues); }
-    catch (failure) { setError(failure.message); setSaving(false); return; }
+    catch (failure) { fieldWork.current = false; setError(failure.message); setSaving(false); return; }
     const problems = {};
     for (const [field, label] of [['name', 'Parameter Name'], ['key', 'Key'], ['schemeAbbreviation', 'Scheme Abbreviation']]) {
       if (!draft[field].trim()) problems[field] = `${label} is required.`;
@@ -124,15 +145,19 @@ export default function TestParameterForm({ parameter }) {
     for (const field of customFields) {
       const problem = customFieldValidationError(field, values[field.id]); if (problem) problems[field.id] = problem;
     }
-    setFieldErrors(problems); if (Object.keys(problems).length) { setSaving(false); return; }
+    setFieldErrors(problems); if (Object.keys(problems).length) { fieldWork.current = false; setSaving(false); return; }
     newId.current ??= crypto.randomUUID();
     const body = saveBody(values);
     const content = JSON.stringify(body);
     if (saveRequest.current?.content !== content) saveRequest.current = { content, id: crypto.randomUUID() };
+    saveRequest.current.pending = true;
     try {
       await apiRequest('/api/masters/test-parameters', { method: 'POST', body: { ...body, requestId: saveRequest.current.id } });
-      router.push(returnPath);
-    } catch (failure) { setError(failure.message); setSaving(false); }
+      saveRequest.current.pending = false; setSaveUnknown(false); router.push(returnPath);
+    } catch (failure) {
+      saveRequest.current.pending = ![400, 401, 403, 404, 409, 413, 422].includes(failure.status);
+      setSaveUnknown(saveRequest.current.pending); setError(failure.message); setSaving(false);
+    } finally { fieldWork.current = false; }
   }
   return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
     <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
@@ -154,9 +179,9 @@ export default function TestParameterForm({ parameter }) {
         inputProps={{ name: 'schemeAbbreviation', placeholder: 'Ni', value: draft.schemeAbbreviation, onChange: change('schemeAbbreviation'), maxLength: 64, disabled: blocked }} /></div>
       <ParameterUncertainty name="measurementUncertainty" cfg={uncertaintyConfig} value={uncertaintySpreadsheet(initialGrid)} error={gridError} disabled={blocked} onChange={changeGrid}
         onInvalid={(message) => { gridProblem.current = message; setGridError(message); }} />
-      <MasterCustomFields kind="parameter" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields}
+      <MasterCustomFields kind="parameter" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
         errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
-        onReload={() => { setCustomLoading(true); setCustomReload((current) => current + 1); }} />
+        onReload={reloadFields} />
       <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
         <PrimaryButton type="submit" leftIcon="save" disabled={blocked || customLoading || Boolean(customLoadError) || Boolean(gridError)}>{saving ? 'Saving...' : parameter ? 'Update' : 'Create'}</PrimaryButton></div>
     </form></div></div>

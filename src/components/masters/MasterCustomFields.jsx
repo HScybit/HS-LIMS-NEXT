@@ -61,7 +61,7 @@ export function CustomFieldControl({ kind, field, value, stored, disabled, error
   return <div className="mb-3"><FormElement type={type} label={field.label} mandatory={control.required} message={error} messageTone="error" inputProps={inputProps} /></div>;
 }
 
-export default function MasterCustomFields({ kind, fields, loading, loadError, values, storedFields = [], errors, disabled, generatingId, onChange, onBusy, onGenerate, onReload }) {
+export default function MasterCustomFields({ kind, fields, loading, loadError, values, storedFields = [], lookupSources, errors, disabled, generatingId, onChange, onBusy, onGenerate, onReload }) {
   const resource = kind === 'parameter' ? 'test-parameters' : 'products';
   const requests = useRef(new Map()); const controllers = useRef(new Set());
   const [users, setUsers] = useState([]); const [userError, setUserError] = useState(''); const [moreUsers, setMoreUsers] = useState(false);
@@ -88,12 +88,14 @@ export default function MasterCustomFields({ kind, fields, loading, loadError, v
     return () => { for (const abort of active) abort.abort(); pending.clear(); };
   }, [hasUsers, loadUsers]);
   if (loading) return <div className="mt-4 pt-3 border-top"><div className="text-muted small" role="status">Loading additional data fields...</div></div>;
-  if (loadError) return <div className="alert alert-danger mt-4" role="alert">{loadError}<button type="button" className="btn btn-link" onClick={onReload}>Retry loading fields</button></div>;
-  if (!fields.length) return null;
-  return <Profiler id={`${kind}-custom-fields`} onRender={(_id, phase, duration, _base, start) => performance.measure(`${kind}-fields:react-${phase}`, { start, duration })}>
+  const failure = loadError ? <div className="alert alert-danger mt-4" role="alert">{loadError}<button type="button" className="btn btn-link" disabled={disabled} onClick={onReload}>Retry loading fields</button></div> : null;
+  if (!fields.length) return failure;
+  return <>{failure}<Profiler id={`${kind}-custom-fields`} onRender={(_id, phase, duration, _base, start) => performance.measure(`${kind}-fields:react-${phase}`, { start, duration })}>
     <div className="mt-4 pt-3 border-top"><div className="text-muted small fw-semibold mb-3 text-uppercase">Additional Data Fields</div>
     {fields.map((field) => {
+      const source = lookupSources?.get(field.lookupSourceId);
       const content = <CustomFieldControl kind={kind} field={field} value={values[field.id]} stored={storedById.get(field.id)} disabled={disabled} error={errors[field.id]}
+        lookupOptions={source?.options} lookupSelectOptions={source?.selectOptions}
         onChange={(value) => onChange(field.id, value)} onBusy={onBusy} userOptions={userOptions} loadUsers={loadUsers} />;
       return <div key={field.id}>{field.scheme ? <div className="d-flex align-items-end gap-3"><div className="flex-fill min-w-0">{content}</div>
         <button type="button" className="smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center justify-content-center flex-shrink-0"
@@ -104,5 +106,5 @@ export default function MasterCustomFields({ kind, fields, loading, loadError, v
     {hasUsers && moreUsers ? <div className="smplfy-form-text form-text">More users match. Refine your search to find a user.</div> : null}
     {hasUsers && userError ? <div className="smplfy-form-element__message smplfy-form-element__message--error" role="alert">{userError}</div> : null}
     </div>
-  </Profiler>;
+  </Profiler></>;
 }

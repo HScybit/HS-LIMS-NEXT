@@ -5,6 +5,7 @@ import { customFieldValuesInput } from '../custom-fields/value-input.js';
 import { customFieldTimeZone } from '../custom-fields/server-dates.js';
 import { parameterCustomFields } from './custom-fields.js';
 import { loadParameterCustomFieldValues, prepareParameterCustomFieldValues, appendParameterCustomFieldValues } from './parameter-custom-fields.js';
+import { lockMasterCustomFieldCapture } from './master-custom-field-values.js';
 import { parameterCustomFieldMatch, loadParameterListingValues } from './parameter-custom-field-listing.js';
 import { customFieldColumnKey } from '../custom-fields/listing-values.js';
 
@@ -99,12 +100,12 @@ async function priorSave(client, identity, parameterId, revision, requestId, ope
 
 export async function saveTestParameter(client, identity, value) {
   requirePermission(identity, 'masters.manage'); const input = testParameterInput(value);
+  await lockMasterCustomFieldCapture(client);
   const prior = await priorSave(client, identity, input.id, input.revision, input.requestId, input.revision ? 'update' : 'create');
   if (prior) {
     if (JSON.stringify(authoredFields(prior)) !== JSON.stringify(authoredFields(input))) throw new HttpError(409, 'save_request_reused', 'This save request was already used for different values.');
     return prior;
   }
-  await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('custom-field-definitions:'||$1::text,0))", [identity.organization_id]);
   const current = (await client.query('SELECT revision,active,custom_field_count FROM test_parameters WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
   if (input.revision && !current?.active) throw new HttpError(404, 'parameter_not_found', 'Test parameter was not found.');
   if ((current?.revision ?? 0) !== input.revision) throw new HttpError(409, 'stale_parameter', 'The test parameter changed. Reload before saving.');
@@ -132,7 +133,7 @@ export async function saveTestParameter(client, identity, value) {
     if (error.constraint === 'parameter_custom_field_definition_set') throw new HttpError(409, 'parameter_custom_fields_changed', 'Custom Fields changed. Reload before saving.');
     if (error.constraint === 'parameter_custom_field_required') throw new HttpError(400, 'invalid_custom_field_value', 'Complete the required Custom Fields.');
     if (['parameter_custom_value_option', 'parameter_custom_value_option_fk', 'parameter_custom_value_user', 'parameter_custom_value_user_fk',
-      'parameter_custom_value_attachment', 'parameter_custom_value_attachment_fk'].includes(error.constraint)) {
+      'parameter_custom_value_attachment', 'parameter_custom_value_attachment_fk', 'parameter_custom_value_lookup', 'parameter_custom_value_lookup_fk'].includes(error.constraint)) {
       throw new HttpError(400, 'invalid_parameter_custom_field_reference', 'A Custom Field selection is no longer available.');
     }
     if (error.constraint === 'test_parameter_save_request_key') throw new HttpError(409, 'save_request_reused', 'This save request was already used for another change.');
@@ -146,6 +147,7 @@ export async function retireTestParameter(client, identity, input) {
   requirePermission(identity, 'masters.manage'); fieldsOnly(input, ['id', 'revision', 'requestId']);
   const id = uuid(input.id, 'Parameter').toLowerCase(); const requestId = uuid(input.requestId, 'Delete request').toLowerCase();
   const revision = integer(input.revision, 'Revision', 1, 2_147_483_646);
+  await lockMasterCustomFieldCapture(client);
   const prior = await priorSave(client, identity, id, revision, requestId, 'retire');
   if (prior) return { id, revision: prior.revision };
   const current = (await client.query('SELECT revision,active FROM test_parameters WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, id])).rows[0];

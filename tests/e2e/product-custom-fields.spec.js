@@ -40,9 +40,9 @@ test('Product definition HTTP reads require a permitted tenant session and retur
     try {
       const other = await context.newPage(); await login(other, account); const response = await other.request.get(url);
       if (account.organizationId === manager.organizationId) expect(response.status()).toBe(403);
-      else { expect(response.status()).toBe(200); expect(await response.json()).toEqual({ fields: [] }); }
+      else { expect(response.status()).toBe(200); expect(await response.json()).toEqual({ organizationId: account.organizationId, fields: [] }); }
     } finally { await context.close(); }
   }
   await change((client, identity) => retireCustomField(client, identity, { id: command.id, revision: 2, requestId: randomUUID() }));
-  expect(await (await page.request.get(url)).json()).toEqual({ fields: [] });
+  expect(await (await page.request.get(url)).json()).toEqual({ organizationId: manager.organizationId, fields: [] });
 });

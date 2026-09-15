@@ -11,6 +11,7 @@ export const GET = endpoint(async (request) => {
 });
 
 export const POST = endpoint(async (request) => {
-  const input = await readInput(request, { maxBytes: 256 * 1024 });
+  // Complete bounded Custom Field captures can exceed 256 KiB.
+  const input = await readInput(request, { maxBytes: 8 * 1_048_576 });
   return json(await authenticated(request, (client, identity) => saveProduct(client, identity, input), { permission: 'masters.manage' }));
 });

@@ -1,11 +1,37 @@
 import { HttpError } from '../auth/errors.js';
-import { integer, requirePermission, uuid } from '../templates/input.js';
+import { fieldsOnly, integer, requirePermission, uuid } from '../templates/input.js';
 import { lookupSourceInput, lookupSourceLineLimit } from './lookup-source-input.js';
 
 function requireRead(identity) {
   if (!identity.permission_codes?.some(permission => ['masters.read', 'masters.manage'].includes(permission))) {
     throw new HttpError(403, 'forbidden', 'You cannot view lookup source observations.');
   }
+}
+
+export async function loadMasterFieldLookupOptions(kind, client, identity, input) {
+  if (!['product', 'parameter'].includes(kind)) throw new TypeError('Unsupported lookup field master.');
+  requireRead(identity); fieldsOnly(input, ['sourceId', 'revision', 'knownOrganizationId']);
+  const sourceId = uuid(input.sourceId, 'Lookup source').toLowerCase();
+  if (input.revision !== undefined) integer(input.revision, 'Known lookup revision', 1, 2_147_483_647);
+  const knownOrganizationId = input.knownOrganizationId === undefined ? null : uuid(input.knownOrganizationId, 'Known lookup organization').toLowerCase();
+  const context = { organizationId: identity.organization_id, sourceId };
+  const current = (await client.query(`SELECT source.revision,source.line_count AS "headLineCount",observation.line_count AS "lineCount"
+    FROM custom_field_lookup_sources source LEFT JOIN custom_field_lookup_versions observation
+      ON observation.organization_id=source.organization_id AND observation.source_id=source.id AND observation.revision=source.revision
+    WHERE source.organization_id=$1 AND source.id=$2 AND EXISTS (
+      SELECT 1 FROM custom_field_definitions definition WHERE definition.organization_id=source.organization_id
+        AND definition.associated_with=$3 AND definition.active AND definition.field_type='lookup' AND definition.lookup_source_id=source.id
+    )`, [identity.organization_id, sourceId, kind])).rows[0];
+  if (!current) return { ...context, revision: null, options: [] };
+  const incomplete = () => new HttpError(409, 'incomplete_master_lookup', 'Lookup choices changed. Reload before continuing.');
+  if (!Number.isInteger(current.lineCount) || current.lineCount < 0 || current.lineCount > lookupSourceLineLimit || current.lineCount !== current.headLineCount) throw incomplete();
+  if (knownOrganizationId === identity.organization_id && current.revision === input.revision) return { ...context, revision: current.revision, unchanged: true };
+  const rows = (await client.query(`SELECT original_line_id AS value,position,label_kind AS kind,
+    label_text AS text,label_number AS number,label_boolean AS boolean FROM custom_field_lookup_lines
+    WHERE organization_id=$1 AND source_id=$2 AND revision=$3 ORDER BY position LIMIT $4`,
+  [identity.organization_id, sourceId, current.revision, lookupSourceLineLimit + 1])).rows;
+  if (rows.length !== current.lineCount || rows.some((row, index) => row.position !== index || !['text', 'number', 'boolean'].includes(row.kind) || row[row.kind] === null)) throw incomplete();
+  return { ...context, revision: current.revision, options: rows.map(row => ({ value: row.value, label: row[row.kind] })) };
 }
 
 export async function loadLookupSourceObservation(client, identity, id, { atRevision } = {}) {

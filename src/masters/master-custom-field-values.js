@@ -5,8 +5,8 @@ import { customFieldTimeZone, customFieldTimeZoneDataVersion, customFieldDatePar
   parseCustomFieldDateInZone, customFieldDateDisplayInZone } from '../custom-fields/server-dates.js';
 
 const stores = Object.freeze({
-  product: Object.freeze({ label: 'Product', fieldTable: 'product_version_custom_fields', valueTable: 'product_version_custom_field_values', idColumn: 'product_id' }),
-  parameter: Object.freeze({ label: 'Parameter', fieldTable: 'parameter_version_custom_fields', valueTable: 'parameter_version_custom_field_values', idColumn: 'parameter_id' }),
+  product: Object.freeze({ label: 'Product', fieldTable: 'product_version_custom_fields', valueTable: 'product_version_custom_field_values', idColumn: 'product_id', lookupValues: true }),
+  parameter: Object.freeze({ label: 'Parameter', fieldTable: 'parameter_version_custom_fields', valueTable: 'parameter_version_custom_field_values', idColumn: 'parameter_id', lookupValues: true }),
   user: Object.freeze({ label: 'User', fieldTable: 'user_version_custom_fields', valueTable: 'user_version_custom_field_values', idColumn: 'subject_user_id',
     definitionTable: 'user_custom_field_versions', optionTable: 'user_custom_field_version_options', attachmentTable: 'user_custom_field_attachments',
     userTable: 'user_directory', userIdColumn: 'id', frozenUsers: true, lookupValues: true, attachmentPath: '/api/users/custom-fields/attachments' }),
@@ -14,6 +14,16 @@ const stores = Object.freeze({
 function storeFor(kind) {
   if (!Object.hasOwn(stores, kind)) throw new TypeError('Unsupported Custom Field master.');
   return stores[kind];
+}
+
+export async function lockMasterCustomFieldCapture(client) {
+  try { await client.query('SELECT masters_lock_field_writer()'); }
+  catch (error) {
+    if (error.code === '42501' && error.constraint === 'master_field_session_required') {
+      throw new HttpError(403, 'forbidden', 'An active master management session is required.');
+    }
+    throw error;
+  }
 }
 
 const dateField = (field) => ['date', 'date_time'].includes(field.fieldType);
@@ -83,7 +93,7 @@ function postgresDate(value, includeTime = false) {
   return day + (includeTime ? value.format(' HH:mm:ss.SSS') + '+00' : '') + era;
 }
 
-async function currentUserLookupSelections(client, identity, definitions, entries) {
+async function currentLookupSelections(kind, client, identity, definitions, entries) {
   const bySource = new Map();
   for (const entry of entries) {
     const field = definitions.get(entry.fieldId);
@@ -97,12 +107,15 @@ async function currentUserLookupSelections(client, identity, definitions, entrie
   const rows = (await client.query(`SELECT line.source_id AS "sourceId",line.revision,line.original_line_id AS "lineId",
     line.label_kind AS "labelKind",line.label_text AS "labelText",line.label_number AS "labelNumber",line.label_boolean AS "labelBoolean"
     FROM unnest($2::uuid[],$3::text[]) AS requested(source_id,line_id)
-    JOIN user_custom_field_lookup_lines line ON line.organization_id=$1 AND line.source_id=requested.source_id AND line.original_line_id=requested.line_id`,
+    JOIN ${kind === 'user' ? 'user_custom_field_lookup_lines' : 'custom_field_lookup_lines'} line
+      ON line.organization_id=$1 AND line.source_id=requested.source_id AND line.original_line_id=requested.line_id
+    ${kind === 'user' ? '' : `JOIN custom_field_lookup_sources source
+      ON source.organization_id=line.organization_id AND source.id=line.source_id AND source.revision=line.revision`}`,
   [identity.organization_id, pairs.map(([id]) => id), pairs.map(([, value]) => value)])).rows;
   for (const row of rows) {
     const source = bySource.get(row.sourceId);
-    if (!source?.has(row.lineId) || source.get(row.lineId) !== null) throw new HttpError(409, 'incomplete_user_custom_fields', 'Lookup choices are inconsistent. Reload before saving.');
-    source.set(row.lineId, { value: row.lineId, label: primitive(row, 'label', 'user'), revision: row.revision });
+    if (!source?.has(row.lineId) || source.get(row.lineId) !== null) throw new HttpError(409, `incomplete_${kind}_custom_fields`, 'Lookup choices are inconsistent. Reload before saving.');
+    source.set(row.lineId, { value: row.lineId, label: primitive(row, 'label', kind), revision: row.revision });
   }
   return bySource;
 }
@@ -123,14 +136,14 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
   const zone = hasDates ? customFieldTimeZone(timeZone) : null;
   if (!hasDates && timeZone !== null && timeZone !== undefined) throw new HttpError(400, 'invalid_custom_field_timezone', 'A Custom Field time zone requires captured date fields.');
   const previousById = new Map(previousFields.map((field) => [field.fieldId, field]));
-  const previousByKey = kind === 'user' ? new Map(previousFields.map((field) => [field.key, field])) : null;
-  const lookupSelections = store.lookupValues ? await currentUserLookupSelections(client, identity, definitionsById, entries) : new Map();
+  const previousByKey = new Map(previousFields.map((field) => [field.key, field]));
+  const lookupSelections = store.lookupValues ? await currentLookupSelections(kind, client, identity, definitionsById, entries) : new Map();
   const userIds = new Set(); const attachmentIds = new Set(); const fields = []; const items = [];
   for (const [position, entry] of entries.entries()) {
     const field = definitionsById.get(entry.fieldId); const validation = customFieldValidationError(field, entry.value);
     if (validation) throw new HttpError(400, 'invalid_custom_field_value', `${field.label}: ${validation}`);
     const options = new Map(field.options.map((option) => [option.key, option]));
-    const previousField = kind === 'user' ? previousByKey.get(field.key) : previousById.get(field.id);
+    const previousField = kind === 'user' || field.fieldType === 'lookup' ? previousByKey.get(field.key) : previousById.get(field.id);
     const values = Array.isArray(entry.value) ? entry.value : [entry.value];
     const lookupSource = lookupSelections.get(field.lookupSourceId);
     const lookupOptions = field.fieldType === 'lookup' ? [...new Set(values.map(String))].map(value => lookupSource?.get(value)).filter(Boolean) : [];

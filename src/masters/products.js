@@ -4,6 +4,7 @@ import { customFieldValuesInput } from '../custom-fields/value-input.js';
 import { customFieldTimeZone } from '../custom-fields/server-dates.js';
 import { productCustomFields } from './custom-fields.js';
 import { loadProductCustomFieldValues, prepareProductCustomFieldValues, appendProductCustomFieldValues } from './product-custom-fields.js';
+import { lockMasterCustomFieldCapture } from './master-custom-field-values.js';
 import { productCustomFieldMatch, loadProductListingValues } from './product-custom-field-listing.js';
 import { productCustomFieldColumnKey } from '../custom-fields/listing-values.js';
 
@@ -86,12 +87,12 @@ async function appendTags(client, organizationId, productId, revision, tagIds) {
 
 export async function saveProduct(client, identity, value) {
   requirePermission(identity, 'masters.manage'); const input = productInput(value);
+  await lockMasterCustomFieldCapture(client);
   const prior = await priorSave(client, identity, input.id, input.revision, input.requestId, input.revision ? 'update' : 'create');
   if (prior) {
     if (JSON.stringify(authoredFields(prior)) !== JSON.stringify(authoredFields(input))) throw new HttpError(409, 'save_request_reused', 'This save request was already used for different values.');
     return prior;
   }
-  await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('custom-field-definitions:'||$1::text,0))", [identity.organization_id]);
   const current = (await client.query('SELECT revision,active,custom_field_count FROM products WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
   if (input.revision && !current?.active) throw new HttpError(404, 'product_not_found', 'Product was not found.');
   if ((current?.revision ?? 0) !== input.revision) throw new HttpError(409, 'stale_product', 'The product changed. Reload before saving.');
@@ -124,7 +125,7 @@ export async function saveProduct(client, identity, value) {
     if (error.constraint === 'product_custom_field_definition_set') throw new HttpError(409, 'product_custom_fields_changed', 'Custom Fields changed. Reload before saving.');
     if (error.constraint === 'product_custom_field_required') throw new HttpError(400, 'invalid_custom_field_value', 'Complete the required Custom Fields.');
     if (['product_custom_value_option', 'product_custom_value_option_fk', 'product_custom_value_user', 'product_custom_value_user_fk',
-      'product_custom_value_attachment', 'product_custom_value_attachment_fk'].includes(error.constraint)) {
+      'product_custom_value_attachment', 'product_custom_value_attachment_fk', 'product_custom_value_lookup', 'product_custom_value_lookup_fk'].includes(error.constraint)) {
       throw new HttpError(400, 'invalid_product_custom_field_reference', 'A Custom Field selection is no longer available.');
     }
     if (error.constraint === 'product_save_request_key') throw new HttpError(409, 'save_request_reused', 'This save request was already used for another change.');
@@ -140,6 +141,7 @@ export async function retireProduct(client, identity, input) {
   requirePermission(identity, 'masters.manage'); fieldsOnly(input, ['id', 'requestId', 'revision']);
   const id = uuid(input.id, 'Product').toLowerCase(); const requestId = uuid(input.requestId, 'Delete request').toLowerCase();
   const revision = integer(input.revision, 'Revision', 1, 2_147_483_646);
+  await lockMasterCustomFieldCapture(client);
   const prior = await priorSave(client, identity, id, revision, requestId, 'retire');
   if (prior) return { id, revision: prior.revision };
   const current = (await client.query('SELECT revision,active FROM products WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, id])).rows[0];
