@@ -1,6 +1,6 @@
 export const workflowNodeFlags = [
   ['isPositiveTermination', 'Positive Termination'], ['showSampleRetest', 'Show Sample Retest'],
-  ['showSampleReissue', 'Show Sample Reissue'], ['enableTemplateValidation', 'Enable Template Validation'],
+  ['enableTemplateValidation', 'Enable Template Validation'],
   ['enableCriticalParametersValidation', 'Enable Critical Params Validation'], ['showSampleEdit', 'Show Sample Edit'],
   ['showAddResult', 'Show Add Result'], ['generateTestRequests', 'Generate Test Request'],
   ['requireAllTestRequestsAllocated', 'Require All TRs Allocated'], ['requireAllTestRequestsApproved', 'Require All TRs Approved'],

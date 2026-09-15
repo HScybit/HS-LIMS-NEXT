@@ -6,7 +6,7 @@ import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { createWorkflowMaster } from '../../src/workflows/metadata.js';
 import { loadWorkflowDefinition } from '../../src/workflows/definition.js';
-import { patchWorkflowState, saveWorkflowState, saveWorkflowTransition } from '../../src/workflows/authoring.js';
+import { patchWorkflowState, publishWorkflow, saveWorkflowState, saveWorkflowTransition } from '../../src/workflows/authoring.js';
 import { createTemplate } from '../../src/templates/authoring.js';
 
 let owner;
@@ -33,6 +33,45 @@ async function addNode(page, name) {
   await dialog(page).getByRole('textbox', { name: /^Name/ }).fill(name);
   await dialog(page).getByRole('button', { name: 'Save Node', exact: true }).click(); await expect(dialog(page)).toHaveCount(0);
 }
+
+test('hidden reissue metadata survives published and draft node edits', async ({ page }) => {
+  const { manager, graph } = await fixture();
+  await work(manager, async (client, identity) => {
+    let revision = 1; const nodes = [];
+    for (let index = 0; index < 3; index++) {
+      const node = await saveWorkflowState(client, identity, graph.versionId, revision, {
+        code: `state-${index}`, name: `Synthetic state ${index}`, stateType: index === 0 ? 'initial' : index === 2 ? 'final' : 'normal',
+        canvasX: 100 + index * 500, canvasY: 120, inputCount: index === 0 ? 0 : 1, outputCount: index === 2 ? 0 : 1,
+        showSampleReissue: index !== 1,
+      });
+      nodes.push(node); revision = node.revision;
+    }
+    for (let index = 1; index < 3; index++) revision = (await saveWorkflowTransition(client, identity, graph.versionId, revision, {
+      code: `edge-${index}`, name: `Continue ${index}`, sourceStateId: nodes[index - 1].id, targetStateId: nodes[index].id,
+      sourcePort: 1, targetPort: 1, approvalMode: 'none',
+    })).revision;
+    await publishWorkflow(client, identity, graph.versionId, revision, 'Synthetic hidden metadata fixture');
+  });
+  const original = workflowGraphValues(await load(manager, graph.versionId)); const expected = structuredClone(original);
+  expect(original.states[0].showSampleReissue).toBe(true); expect(original.states[1].showSampleReissue).toBe(false);
+  await login(page, manager); await page.goto(`/workflow_management/${graph.workflowId}?versionId=${graph.versionId}`);
+  let draftId;
+  for (const index of [0, 1]) {
+    await page.getByRole('button', { name: `Edit Synthetic state ${index}`, exact: true }).click();
+    await expect(dialog(page)).toBeVisible(); await expect(dialog(page).getByLabel('Show Sample Reissue', { exact: true })).toHaveCount(0);
+    expected.states[index].name = `Preserved hidden metadata ${index}`;
+    await dialog(page).getByRole('textbox', { name: /^Name/ }).fill(expected.states[index].name);
+    await dialog(page).getByRole('button', { name: 'Save Node', exact: true }).click(); await expect(dialog(page)).toHaveCount(0);
+    const currentId = versionFrom(page, graph.versionId); expect(currentId).not.toBe(graph.versionId);
+    if (draftId) expect(currentId).toBe(draftId); else draftId = currentId;
+    expect(workflowGraphValues(await load(manager, draftId))).toEqual(expected);
+    expect(workflowGraphValues(await load(manager, graph.versionId))).toEqual(original);
+    await page.reload();
+    await page.getByRole('button', { name: `Edit ${expected.states[index].name}`, exact: true }).click();
+    await expect(dialog(page).getByLabel('Show Sample Reissue', { exact: true })).toHaveCount(0);
+    await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(dialog(page)).toHaveCount(0);
+  }
+});
 
 test('node controls create source defaults, validate ports, save deltas and avoid no-op revisions', async ({ page }, testInfo) => {
   const { manager, graph } = await fixture(); const errors = []; page.on('pageerror', (error) => errors.push(error.message));

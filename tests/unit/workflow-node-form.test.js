@@ -35,11 +35,24 @@ test('returning a field to its original value or reordering a role set does not 
 });
 
 test('node controls match the native authoring fields and submit valid create and partial input', () => {
-  assert.deepEqual(workflowNodeFlags.map(([field]) => field).sort(), [...stateFlags].sort());
+  assert.deepEqual(workflowNodeFlags.map(([field]) => field).sort(), stateFlags.filter(field => field !== 'showSampleReissue').sort());
   assert.deepEqual(Object.fromEntries(workflowNodeRoles.map(([field, , capability]) => [field, capability])), stateRoles);
   const created = workflowNodeSaveInput(null, workflowNodeForm(null, []), [], []);
   const normalized = workflowStateInput(created); assert.equal(normalized.stateType, 'initial'); assert.equal(normalized.inputCount, 0);
   const state = { ...normalized, legacyTrState: null, inputCount: null };
   const patch = workflowNodeSaveInput(state, { ...workflowNodeForm(state, [state]), name: 'Changed' }, ['name'], [state]);
   assert.deepEqual(workflowStatePatchInput(state, patch), { name: 'Changed' });
+});
+
+test('hidden reissue metadata survives partial edits and new nodes retain the existing false default', () => {
+  for (const showSampleReissue of [true, false]) {
+    const state = { code: 'ORIGINAL', name: 'Original', stateType: 'initial', inputCount: 0, outputCount: 1, showSampleReissue, capabilityRoles: [] };
+    const value = workflowNodeForm(state, [state]); assert.equal(Object.hasOwn(value, 'showSampleReissue'), false);
+    const patch = workflowNodeSaveInput(state, { ...value, name: 'Changed' }, ['name'], [state]);
+    assert.deepEqual(workflowStatePatchInput(state, patch), { name: 'Changed' });
+    assert.equal(state.showSampleReissue, showSampleReissue);
+    assert.deepEqual(workflowNodeSaveInput(state, value, ['showSampleReissue'], [state]), {});
+  }
+  const created = workflowNodeSaveInput(null, workflowNodeForm(null, []), [], []);
+  assert.equal(Object.hasOwn(created, 'showSampleReissue'), false); assert.equal(workflowStateInput(created).showSampleReissue, false);
 });
