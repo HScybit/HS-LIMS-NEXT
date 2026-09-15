@@ -19,7 +19,7 @@ export function sampleHeaderRevision(input) {
   return integer(input.revision, 'Sample revision', 1, 2_147_483_647);
 }
 
-function editableFields(sampleType) {
+export function sampleEditableHeaderFields(sampleType) {
   if (sampleType === 'amendment') return ['customerId', 'customerQuotationId', 'customerAddress', 'modeOfReceipt', 'collectionDetails', 'amendmentRemarks'];
   if (sampleType === 'complaint') return ['customerAddress', 'complaintRemarks'];
   if (sampleType === 'quality_control') return ['customerAddress'];
@@ -31,7 +31,7 @@ export function sampleHeaderUpdateInput(input, sampleType) {
   const changes = {};
   // Match the source's special-edit whitelist before interpreting locked values.
   // Unknown keys still fail the transport contract, including immutable identity.
-  for (const key of editableFields(sampleType)) {
+  for (const key of sampleEditableHeaderFields(sampleType)) {
     if (!Object.hasOwn(input, key)) continue;
     const value = input[key];
     if (value === undefined) invalid('Omit unchanged sample fields instead of sending undefined.');

@@ -71,9 +71,10 @@ test('sample header HTTP enforces permissions, origin, CSRF and body validation 
   const reader = await createAccount(owner, { organizationId: account.organizationId, permissions: ['samples.read'] });
   headers = await login(page, reader);
   expect((await page.request.patch(path, { headers, data: { revision: 1, description: 'Denied' } })).status()).toBe(403);
-  const { canGenerateRequests, canPrintCoa, ...readerSample } = await (await page.request.get(path)).json();
-  const { canGenerateRequests: _managerCanGenerate, canPrintCoa: _managerCanPrint, ...savedSample } = before;
-  expect(canGenerateRequests).toBe(false); expect(canPrintCoa).toBe(false); expect(readerSample).toEqual(savedSample);
+  const { canGenerateRequests, canPrintCoa, canEdit, ...readerSample } = await (await page.request.get(path)).json();
+  const { canGenerateRequests: _managerCanGenerate, canPrintCoa: _managerCanPrint, canEdit: managerCanEdit, ...savedSample } = before;
+  expect(canGenerateRequests).toBe(false); expect(canPrintCoa).toBe(false); expect(canEdit).toBe(false); expect(managerCanEdit).toBe(true);
+  expect(readerSample).toEqual(savedSample);
   await page.context().clearCookies();
   expect((await page.request.patch(path, { headers, data: { revision: 1 } })).status()).toBe(401);
 });

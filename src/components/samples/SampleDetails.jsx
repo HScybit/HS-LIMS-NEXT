@@ -62,6 +62,7 @@ export default function SampleDetails({ sampleId }) {
         </div></div><div className="d-flex align-items-center gap-2 flex-wrap">
         {sample.canPrintCoa ? <SecondaryButton leftIcon="file-text" size="large" href={`/samples/${sampleId}/coa`}>Test Reports</SecondaryButton> : null}
         <SecondaryButton leftIcon="clipboard-text" size="large" className="btn-primary text-white border-primary" href={`/samples/${sampleId}/test_requests`}>Test Requests/Jobs</SecondaryButton>
+        {sample.canEdit ? <SecondaryButton leftIcon="edit" size="large" href={`/samples/${sampleId}/edit`}>Edit</SecondaryButton> : null}
         {actions.length ? <MoreActionButton items={actions} /> : null}
       </div>
     </div></section></PageHeader>

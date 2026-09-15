@@ -37,6 +37,7 @@ export async function loadSample(client, identity, sampleId) {
   return { ...sample, products: [...productMap.values()], participatingLabs, quotationNumber: quotation?.quotationNumber ?? null,
     workflowRunId: workflow.state?.workflow_run_id ?? null, stateName: workflow.state?.name ?? null, stateColor: workflow.state?.color ?? null,
     canPrintCoa: workflow.allowedActions.printCoa,
+    canEdit: identity.permission_codes.includes('samples.manage') && workflow.allowedActions.edit,
     canGenerateRequests: ['samples.manage', 'test_requests.allocate'].some((permission) => identity.permission_codes.includes(permission))
       && workflow.allowedActions.allocate && Boolean(workflow.state?.generate_test_requests || workflow.permissionFallbackActions.allocate),
     activity: events.rows.map((event) => ({ ...event, actorName: actorNames.get(event.actorUserId) ?? event.actorUserId })) };
