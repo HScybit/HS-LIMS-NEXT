@@ -21,9 +21,30 @@ test('master lookup renames do not inherit old drafts and removed fields are pru
   assert.deepEqual(masterCustomFieldDraft([], [], [lookup('old')], { old: 'Draft' }), {});
   assert.deepEqual(masterCustomFieldDraft([lookup('new', '__proto__')], [], [lookup('old', '__proto__')], { old: 'Literal key' }), Object.fromEntries([['new', 'Literal key']]));
 });
-test('master nonlookup drafts retain the existing ID-based initialization and refresh behavior', () => {
-  const field = { id: 'new', key: 'note', fieldType: 'text' };
-  assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'old', key: 'note', value: 'Other ID' }]), { new: '' });
-  assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'new', key: 'prior', value: 'Same ID' }]), { new: 'Same ID' });
+for (const fieldType of ['select', 'attachment', 'multi_user_select']) test(`master ${fieldType} drafts retain their existing reference initialization`, () => {
+  const field = { id: 'new', key: 'note', fieldType };
+  const empty = fieldType === 'multi_user_select' ? [] : '';
+  const stored = fieldType === 'multi_user_select' ? ['Same ID'] : 'Same ID';
+  assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'old', key: 'note', value: 'Other ID' }]), { new: empty });
+  assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'new', key: 'prior', value: 'Same ID' }]), { new: stored });
   assert.deepEqual(masterCustomFieldDraft([field], [], [], { new: 'Current' }), { new: 'Current' });
 });
+
+for (const fieldType of ['text', 'number', 'longtext', 'date', 'date_time', 'checkbox', 'email']) {
+  test(`master ${fieldType} drafts use saved keys and preserve explicit current values through refresh`, () => {
+    const field = { id: 'new', key: 'note', fieldType };
+    const previous = { ...field, id: 'old' };
+    for (const value of ['', 0, false, 'Literal']) {
+      assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'old', key: 'note', value }]), { new: value });
+    }
+    for (const value of ['', 0, false, null, ['A', 'A', 0, false]]) {
+      const current = { old: value };
+      const next = masterCustomFieldDraft([field], [{ key: 'note', value: 'Saved' }], [previous], current);
+      assert.equal(next.new, value); assert.deepEqual(current, { old: value });
+    }
+    assert.deepEqual(masterCustomFieldDraft([field], [{ key: 'note', value: 'Saved' }], [previous], { old: undefined }), { new: 'Saved' });
+    assert.deepEqual(masterCustomFieldDraft([{ ...field, key: 'renamed' }], [{ fieldId: 'new', key: 'note', value: 'Saved' }], [field], { new: 'Draft' }), { new: '' });
+    assert.deepEqual(masterCustomFieldDraft([], [{ key: 'note', value: 'Saved' }], [previous], { old: 'Draft' }), {});
+    assert.deepEqual(masterCustomFieldDraft([{ ...field, key: '__proto__' }], [], [{ ...previous, key: '__proto__' }], { old: 'Literal key' }), { new: 'Literal key' });
+  });
+}
