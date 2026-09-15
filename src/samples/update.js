@@ -62,16 +62,20 @@ export async function updateSample(client, identity, sampleId, rawInput) {
   const categoryId = editLines && Object.hasOwn(rawInput, 'sampleCategoryId') ? uuid(sampleCategoryId, 'Sample category').toLowerCase() : existing.sampleCategoryId;
   if (!Object.keys(changes).length && !editLines) return { id: existing.id, sampleNumber: existing.sampleNumber, revision: existing.revision };
   if (existing.revision === 2_147_483_647) throw new HttpError(409, 'sample_revision_limit', 'This sample has reached its revision limit.');
-  validateSampleHeaderChanges(existing, changes);
   const captured = await changedCustomerReferences(client, organizationId, existing, changes);
-  let lineChanges = {};
-  try { if (editLines) lineChanges = await reconcileSampleProducts(client, identity, existing, products, categoryId); }
+  let lineChanges = {}; let reportingDate = '';
+  const receivedValue = changes.receivedAt ?? existing.receivedAt;
+  try { if (editLines) ({ changes: lineChanges, reportingDate } = await reconcileSampleProducts(client, identity, existing, products, categoryId, receivedValue)); }
   catch (error) {
     const cause = error.cause ?? error;
     if (cause.code === '55000' || cause.code === '23503') throw new HttpError(409, 'sample_lines_changed', 'A sample line or test is in use or its references changed. Reload the sample before saving.');
     if (cause.code === '22003') throw new HttpError(400, 'invalid_sample', 'A sample line number is outside the supported range.');
+    if (['22007', '22008', '22009'].includes(cause.code)) throw new HttpError(400, 'invalid_sample', 'A sample date is outside the supported range.');
     throw error;
   }
+  validateSampleHeaderChanges(existing, { ...changes, ...(reportingDate ? {
+    dueAt: new Date(Math.max(new Date(`${reportingDate}T00:00:00Z`).getTime(), new Date(receivedValue).getTime())),
+  } : {}) });
   const updates = { ...changes, ...captured, ...lineChanges, revision: existing.revision + 1 };
   if (Object.hasOwn(changes, 'receivedAt') || categoryId !== existing.sampleCategoryId) {
     await lockReferences(client, sampleCategories, [categoryId]);
@@ -83,6 +87,13 @@ export async function updateSample(client, identity, sampleId, rawInput) {
       ELSE ${samples.retentionDueOn} END`;
   }
   if (Object.hasOwn(changes, 'dueAt')) updates.dueAt = changes.dueAt === null ? null : sql`${changes.dueAt}::timestamptz`;
+  if (reportingDate) {
+    const receivedAt = Object.hasOwn(changes, 'receivedAt') ? sql`${changes.receivedAt}::timestamptz` : samples.receivedAt;
+    // A source calendar date must not truncate an unchanged saved due instant
+    // or precede receipt when a fractional estimate lands on the receiving day.
+    updates.dueAt = sql`GREATEST(CASE WHEN (${samples.dueAt} AT TIME ZONE 'UTC')::date=${reportingDate}::date
+      THEN ${samples.dueAt} ELSE ${reportingDate}::date::timestamp AT TIME ZONE 'UTC' END, ${receivedAt})`;
+  }
   let result;
   try {
     [result] = await db.update(samples).set(updates).where(and(eq(samples.organizationId, organizationId), eq(samples.id, sampleId), eq(samples.revision, expectedRevision)))
@@ -92,7 +103,7 @@ export async function updateSample(client, identity, sampleId, rawInput) {
     // below JavaScript Date's resolution, without rounding saved timestamps.
     const cause = error.cause ?? error;
     if (cause.code === '23514' && cause.constraint === 'sample_dates_quantity') throw new HttpError(400, 'invalid_sample', 'Due date cannot be earlier than the received date.');
-    if (['22003', '22008'].includes(cause.code)) throw new HttpError(400, 'invalid_sample', 'A sample number or date is outside the supported range.');
+    if (['22003', '22007', '22008', '22009'].includes(cause.code)) throw new HttpError(400, 'invalid_sample', 'A sample number or date is outside the supported range.');
     throw error;
   }
   if (!result) throw new HttpError(409, 'sample_changed', 'The sample changed while it was being saved.');

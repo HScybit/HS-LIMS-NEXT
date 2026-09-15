@@ -6,6 +6,8 @@ import { HttpError } from '../auth/errors.js';
 import { insertBatch } from '../templates/authoring.js';
 import { sampleProductsUpdateInput, temporarySampleOrders } from './lines-input.js';
 import { sampleEditReferences } from './edit-references.js';
+import { sampleReportingRowsChanged } from './reporting-date.js';
+import { sampleReportingDate } from './reporting-estimates.js';
 
 const conflict = message => { throw new HttpError(409, 'sample_lines_changed', message); };
 const invalid = message => { throw new HttpError(400, 'invalid_sample', message); };
@@ -37,7 +39,7 @@ async function updateRows(client, organizationId, table, rows, columns) {
   if (result.rowCount !== rows.length) conflict('A selected sample line or test is no longer available.');
 }
 
-export async function reconcileSampleProducts(client, identity, sample, rawProducts, categoryId) {
+export async function reconcileSampleProducts(client, identity, sample, rawProducts, categoryId, receivedAt = sample.receivedAt) {
   const organizationId = identity.organization_id; const db = database(client);
   const lines = sampleProductsUpdateInput(rawProducts, categoryId);
   const previousLines = await db.select().from(sampleProducts).where(and(eq(sampleProducts.organizationId, organizationId), eq(sampleProducts.sampleId, sample.id)))
@@ -99,6 +101,9 @@ export async function reconcileSampleProducts(client, identity, sample, rawProdu
       (oldTests.get(test.id)?.used ? requested : planned).push(record);
     }
   }
+  const nextTests = [...planned, ...requested];
+  const reportingDate = sampleReportingRowsChanged([...oldTests.values()], nextTests)
+    ? await sampleReportingDate(client, organizationId, categoryId, products, nextTests, receivedAt) : '';
   const removableTests = [...oldTests.values()].filter(test => !test.used).map(test => test.id);
   if (removableTests.length) await db.delete(sampleTests).where(and(eq(sampleTests.organizationId, organizationId), inArray(sampleTests.id, removableTests)));
   await updateRows(client, organizationId, 'sample_products', temporarySampleOrders(previousLines, products.length), orderColumn);
@@ -111,6 +116,6 @@ export async function reconcileSampleProducts(client, identity, sample, rawProdu
   await updateRows(client, organizationId, 'sample_tests', requested, testColumns);
   await insertBatch(db, sampleTests, planned);
   const category = references.categories.get(categoryId);
-  return categoryId === sample.sampleCategoryId ? {} : { sampleCategoryId: categoryId, categoryCode: category.code,
-    categoryName: category.name, categoryAbbreviation: category.abbreviation };
+  return { reportingDate, changes: categoryId === sample.sampleCategoryId ? {} : { sampleCategoryId: categoryId, categoryCode: category.code,
+    categoryName: category.name, categoryAbbreviation: category.abbreviation } };
 }
