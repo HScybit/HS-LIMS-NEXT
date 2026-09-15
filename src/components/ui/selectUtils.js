@@ -34,10 +34,24 @@ export function flattenSelectOptions(options = []) {
     Array.isArray(option.options) ? flattenSelectOptions(option.options) : [option]);
 }
 
-export function prepareSelectOptions(options = []) {
+export function selectValueKey(value, caseInsensitiveValues = false) {
+  const key = String(value);
+  return caseInsensitiveValues ? key.toLowerCase() : key;
+}
+
+export function prepareSelectOptions(options = [], { caseInsensitiveValues = false } = {}) {
   const normalizedOptions = normalizeSelectOptions(options);
   const flatOptions = flattenSelectOptions(normalizedOptions);
-  return { sourceOptions: options, options: normalizedOptions, byValue: new Map(flatOptions.map(option => [String(option.value), option])) };
+  return { sourceOptions: options, options: normalizedOptions, caseInsensitiveValues,
+    byValue: new Map(flatOptions.map(option => [selectValueKey(option.value, caseInsensitiveValues), option])) };
+}
+
+export function selectOptionForValue(value, model, fallbackOptions = []) {
+  const key = selectValueKey(value, model.caseInsensitiveValues);
+  const option = model.byValue.get(key) ?? fallbackOptions.find(option => selectValueKey(option.value, model.caseInsensitiveValues) === key);
+  if (!option) return { value, label: String(value) };
+  // A canonical UUID option supplies its label while the selected raw value stays intact.
+  return model.caseInsensitiveValues && option.value !== value ? { ...option, value } : option;
 }
 
 export function cacheSelectFilter(filter, emptyInputFilter = filter) {

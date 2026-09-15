@@ -21,13 +21,22 @@ test('master lookup renames do not inherit old drafts and removed fields are pru
   assert.deepEqual(masterCustomFieldDraft([], [], [lookup('old')], { old: 'Draft' }), {});
   assert.deepEqual(masterCustomFieldDraft([lookup('new', '__proto__')], [], [lookup('old', '__proto__')], { old: 'Literal key' }), Object.fromEntries([['new', 'Literal key']]));
 });
-for (const fieldType of ['multi_user_select']) test(`master ${fieldType} drafts retain their existing reference initialization`, () => {
-  const field = { id: 'new', key: 'note', fieldType };
-  const empty = fieldType === 'multi_user_select' ? [] : '';
-  const stored = fieldType === 'multi_user_select' ? ['Same ID'] : 'Same ID';
-  assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'old', key: 'note', value: 'Other ID' }]), { new: empty });
-  assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'new', key: 'prior', value: 'Same ID' }]), { new: stored });
-  assert.deepEqual(masterCustomFieldDraft([field], [], [], { new: 'Current' }), { new: 'Current' });
+test('master user selections initialize by saved key and normalize scalar stored values to arrays', () => {
+  const field = { id: 'new', key: 'people', fieldType: 'multi_user_select' };
+  for (const [value, expected] of [['Person', ['Person']], [null, []], ['', []], [[], []], [['B', 'A', 'A'], ['B', 'A', 'A']]]) {
+    assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'old', key: field.key, value }]), { new: expected });
+  }
+  assert.deepEqual(masterCustomFieldDraft([field], [{ fieldId: 'new', key: 'old_key', value: ['Old person'] }]), { new: [] });
+});
+test('master user selection refresh preserves explicit drafts and clears renamed or removed keys', () => {
+  const old = { id: 'old', key: 'people', fieldType: 'multi_user_select' }; const field = { ...old, id: 'new' };
+  const stored = [{ fieldId: old.id, key: old.key, value: ['Saved'] }];
+  for (const value of [[], ['B', 'A', 'A'], null, '']) {
+    const current = { old: value }; assert.equal(masterCustomFieldDraft([field], stored, [old], current).new, value); assert.deepEqual(current, { old: value });
+  }
+  assert.deepEqual(masterCustomFieldDraft([field], stored, [old], { old: undefined }), { new: ['Saved'] });
+  assert.deepEqual(masterCustomFieldDraft([{ ...old, key: 'renamed' }], stored, [old], { old: ['Draft'] }), { old: [] });
+  assert.deepEqual(masterCustomFieldDraft([], stored, [old], { old: ['Draft'] }), {});
 });
 
 for (const fieldType of ['text', 'number', 'longtext', 'date', 'date_time', 'checkbox', 'email', 'select']) {

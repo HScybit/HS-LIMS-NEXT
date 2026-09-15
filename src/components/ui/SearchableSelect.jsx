@@ -7,17 +7,19 @@ import AsyncSelect from 'react-select/async';
 import CreatableSelect from 'react-select/creatable';
 import AppIcon from './AppIcon.jsx';
 import WindowedSelectMenuList from './WindowedSelectMenuList.jsx';
-import { cacheSelectFilter, flattenSelectOptions, prepareSelectOptions } from './selectUtils.js';
+import { cacheSelectFilter, flattenSelectOptions, prepareSelectOptions, selectOptionForValue, selectValueKey } from './selectUtils.js';
 import '../../styles/searchable-select.scss';
 
-function buildValueSet(selectedOptions) {
+const insensitiveOptionValue = option => selectValueKey(option.value, true);
+
+function buildValueSet(selectedOptions, caseInsensitiveValues) {
   const values = Array.isArray(selectedOptions)
     ? selectedOptions
     : selectedOptions
       ? [selectedOptions]
       : [];
 
-  return new Set(values.map((option) => String(option.value)));
+  return new Set(values.map((option) => selectValueKey(option.value, caseInsensitiveValues)));
 }
 
 function isOptionDisabled(option, selectProps) {
@@ -115,9 +117,9 @@ function MenuList(props) {
     () => flattenSelectOptions(options).filter((option) => !isOptionDisabled(option, selectProps)),
     [options, selectProps],
   );
-  const selectedSet = useMemo(() => buildValueSet(selectProps.value), [selectProps.value]);
+  const selectedSet = useMemo(() => buildValueSet(selectProps.value, selectProps.caseInsensitiveValues), [selectProps.value, selectProps.caseInsensitiveValues]);
   const selectedVisibleCount = visibleSelectableOptions.reduce(
-    (count, option) => count + (selectedSet.has(String(option.value)) ? 1 : 0),
+    (count, option) => count + (selectedSet.has(selectValueKey(option.value, selectProps.caseInsensitiveValues)) ? 1 : 0),
     0,
   );
   const allVisibleSelected = visibleSelectableOptions.length > 0
@@ -181,6 +183,7 @@ export default function SearchableSelect({
   onChange,
   options = [],
   preparedOptions,
+  caseInsensitiveValues = false,
   windowedOptions = false,
   multiple = false,
   placeholder = 'Select…',
@@ -220,9 +223,9 @@ export default function SearchableSelect({
   );
   const [inputValue, setInputValue] = useState('');
   const cachedDefaultFilter = useMemo(() => cacheSelectFilter(createFilter(), createFilter({ ignoreAccents: false })), []);
-  const optionModel = useMemo(() => preparedOptions?.sourceOptions === options ? preparedOptions : prepareSelectOptions(options), [options, preparedOptions]);
+  const optionModel = useMemo(() => preparedOptions?.sourceOptions === options && (preparedOptions.caseInsensitiveValues ?? false) === caseInsensitiveValues
+    ? preparedOptions : prepareSelectOptions(options, { caseInsensitiveValues }), [options, preparedOptions, caseInsensitiveValues]);
   const normalizedOptions = optionModel.options;
-  const optionMap = optionModel.byValue;
   const currentValue = isControlled ? normalizeValue(value, multiple) : internalValue;
   const hasSelection = multiple
     ? Array.isArray(currentValue) && currentValue.length > 0
@@ -231,15 +234,15 @@ export default function SearchableSelect({
   const selectedOption = useMemo(() => {
     if (multiple) {
       const values = Array.isArray(currentValue) ? currentValue : [];
-      return values.map((item) => optionMap.get(String(item)) ?? { value: item, label: String(item) });
+      return values.map((item) => selectOptionForValue(item, optionModel));
     }
 
     if (!currentValue) {
       return null;
     }
 
-    return optionMap.get(String(currentValue)) ?? { value: currentValue, label: String(currentValue) };
-  }, [currentValue, multiple, optionMap]);
+    return selectOptionForValue(currentValue, optionModel);
+  }, [currentValue, multiple, optionModel]);
 
   const handleChange = useCallback((nextSelection) => {
     const nextValue = multiple
@@ -270,23 +273,20 @@ export default function SearchableSelect({
   }, [onInputChange, cachedDefaultFilter]);
 
   const buildSelectionFromValues = useCallback((nextValues, fallbackOptions = []) =>
-    nextValues.map((item) =>
-      optionMap.get(String(item))
-      ?? fallbackOptions.find((option) => String(option.value) === String(item))
-      ?? { value: item, label: String(item) }), [optionMap]);
+    nextValues.map((item) => selectOptionForValue(item, optionModel, fallbackOptions)), [optionModel]);
 
   const handleToggleVisibleOptions = useCallback((visibleOptions, shouldDeselect) => {
     const currentValues = Array.isArray(currentValue) ? currentValue : [];
-    const visibleValueSet = new Set(visibleOptions.map((option) => String(option.value)));
+    const visibleValueSet = new Set(visibleOptions.map((option) => selectValueKey(option.value, caseInsensitiveValues)));
 
     const nextValues = shouldDeselect
-      ? currentValues.filter((item) => !visibleValueSet.has(String(item)))
+      ? currentValues.filter((item) => !visibleValueSet.has(selectValueKey(item, caseInsensitiveValues)))
       : (() => {
-          const existingValues = new Set(currentValues.map((item) => String(item)));
+          const existingValues = new Set(currentValues.map((item) => selectValueKey(item, caseInsensitiveValues)));
           const mergedValues = [...currentValues];
 
           visibleOptions.forEach((option) => {
-            const optionValue = String(option.value);
+            const optionValue = selectValueKey(option.value, caseInsensitiveValues);
             if (!existingValues.has(optionValue)) {
               existingValues.add(optionValue);
               mergedValues.push(option.value);
@@ -303,7 +303,7 @@ export default function SearchableSelect({
     }
 
     onChange?.(nextValues, nextSelection);
-  }, [buildSelectionFromValues, currentValue, isControlled, onChange]);
+  }, [buildSelectionFromValues, currentValue, isControlled, onChange, caseInsensitiveValues]);
 
   const handleClearAllSelections = useCallback(() => {
     if (!isControlled) {
@@ -390,6 +390,7 @@ export default function SearchableSelect({
       noOptionsMessage={() => noOptionsMessage}
       loadingMessage={() => loadingMessage}
       enableBulkActions={multiple && enableBulkActions}
+      caseInsensitiveValues={caseInsensitiveValues}
       maxVisibleValues={maxVisibleValues}
       onToggleVisibleOptions={handleToggleVisibleOptions}
       onClearAllSelections={handleClearAllSelections}
@@ -400,6 +401,7 @@ export default function SearchableSelect({
         }),
       }}
       {...props}
+      {...(caseInsensitiveValues ? { getOptionValue: insensitiveOptionValue } : {})}
     />
   );
 }

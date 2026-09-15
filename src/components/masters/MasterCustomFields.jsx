@@ -49,7 +49,7 @@ export function CustomFieldControl({ kind, field, value, stored, disabled, error
   } else if (control.type === 'relation') {
     type = 'searchable-select';
     inputProps = { id, name: id, disabled, value: Array.isArray(value) ? value : [], multiple: true, clearable: !control.required,
-      options: userOptions, defaultOptions: defaultUserOptions ?? userOptions, loadOptions: loadUsers, cacheOptions: false,
+      options: userOptions, defaultOptions: defaultUserOptions ?? userOptions, loadOptions: loadUsers, cacheOptions: false, caseInsensitiveValues: true,
       ...(kind === 'user' ? { bulkActionScope: 'visible' } : {}),
       placeholder: `Select ${field.label}`, invalid: Boolean(error), onChange };
   } else if (control.type === 'textarea') { type = 'textarea'; inputProps.rows = 3; }
