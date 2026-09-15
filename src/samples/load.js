@@ -12,7 +12,7 @@ export async function loadSample(client, identity, sampleId) {
   if (!sample) throw new HttpError(404, 'sample_not_found', 'Sample was not found.');
   const products = await db.select().from(sampleProducts).where(and(eq(sampleProducts.organizationId, organizationId), eq(sampleProducts.sampleId, sampleId))).orderBy(asc(sampleProducts.displayOrder), asc(sampleProducts.id));
   const tests = await client.query(`SELECT selected.id, selected.sample_product_id AS "sampleProductId", selected.test_parameter_id AS "testParameterId",
-    selected.method_id AS "methodId", coalesce(specification.parameter_name, parameter.name) AS "parameterName",
+    selected.method_id AS "methodId", selected.decision_rule_id AS "decisionRuleId", coalesce(specification.parameter_name, parameter.name) AS "parameterName",
     coalesce(specification.method_name, method.name) AS "methodName", selected.requested_quantity AS "requestedQuantity", selected.requested_size AS "requestedSize",
     selected.rate, selected.currency_code AS "currencyCode", selected.estimated_duration_minutes AS "estimatedDurationMinutes", selected.is_accredited AS "isAccredited",
     selected.is_retest AS "isRetest", selected.is_subcontracted AS "isSubcontracted", selected.status,

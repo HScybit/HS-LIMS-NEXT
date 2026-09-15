@@ -3,10 +3,11 @@ import { HttpError } from '../auth/errors.js';
 import { database } from '../db/pool.js';
 import { customers, customerQuotations, sampleCategories } from '../db/master-schema.js';
 import { samples, sampleEvents } from '../db/sample-schema.js';
-import { requirePermission, uuid } from '../templates/input.js';
+import { fieldsOnly, requirePermission, uuid } from '../templates/input.js';
 import { requireWorkflowAction } from '../workflows/access.js';
 import { lockReferences } from './reference-locks.js';
-import { sampleHeaderRevision, sampleHeaderUpdateInput, validateSampleHeaderChanges } from './update-input.js';
+import { sampleHeaderFields, sampleHeaderRevision, sampleHeaderUpdateInput, validateSampleHeaderChanges } from './update-input.js';
+import { reconcileSampleProducts } from './reconcile.js';
 
 const invalidReference = message => { throw new HttpError(422, 'invalid_sample_reference', message); };
 
@@ -32,12 +33,20 @@ async function changedCustomerReferences(client, organizationId, existing, chang
   return captured;
 }
 
-// The caller owns the transaction, so the revision, changed references and actor
-// event commit together. This command edits headers only; line/capture identity
-// and scientific histories have separate adapters and remain untouched.
+// Retain the narrower programmatic header command for existing callers.
 export async function updateSampleHeader(client, identity, sampleId, rawInput) {
+  requirePermission(identity, 'samples.manage');
+  sampleHeaderRevision(rawInput);
+  return updateSample(client, identity, sampleId, rawInput);
+}
+
+// The caller owns the transaction. Lines, headers, revision and actor event
+// either commit together or leave the previous sample intact.
+export async function updateSample(client, identity, sampleId, rawInput) {
   requirePermission(identity, 'samples.manage'); uuid(sampleId, 'Sample');
-  const expectedRevision = sampleHeaderRevision(rawInput);
+  fieldsOnly(rawInput, ['revision', ...sampleHeaderFields, 'products', 'sampleCategoryId']);
+  const { products, sampleCategoryId, ...headerInput } = rawInput;
+  const expectedRevision = sampleHeaderRevision(headerInput);
   const organizationId = identity.organization_id; const db = database(client);
   const [existing] = await db.select().from(samples).where(and(eq(samples.organizationId, organizationId), eq(samples.id, sampleId))).for('update');
   if (!existing) throw new HttpError(404, 'sample_not_found', 'Sample was not found.');
@@ -46,18 +55,31 @@ export async function updateSampleHeader(client, identity, sampleId, rawInput) {
   await client.query('SELECT id FROM workflow_runs WHERE organization_id=$1 AND sample_id=$2 FOR UPDATE', [organizationId, sampleId]);
   await requireWorkflowAction(client, identity, { type: 'sample', id: sampleId }, 'edit');
   if (existing.revision !== expectedRevision) throw new HttpError(409, 'sample_changed', 'The sample changed after it was opened. Reload it before saving.');
-  const { changes } = sampleHeaderUpdateInput(rawInput, existing.sampleType);
-  if (!Object.keys(changes).length) return { id: existing.id, sampleNumber: existing.sampleNumber, revision: existing.revision };
+  const { changes } = sampleHeaderUpdateInput(headerInput, existing.sampleType);
+  const ordinary = ['customer', 'internal', 'proficiency', 'interlaboratory'].includes(existing.sampleType);
+  const editLines = ordinary && Object.hasOwn(rawInput, 'products');
+  if (ordinary && Object.hasOwn(rawInput, 'sampleCategoryId') && !editLines) throw new HttpError(400, 'invalid_sample', 'Supply the sample lines when changing the primary category.');
+  const categoryId = editLines && Object.hasOwn(rawInput, 'sampleCategoryId') ? uuid(sampleCategoryId, 'Sample category').toLowerCase() : existing.sampleCategoryId;
+  if (!Object.keys(changes).length && !editLines) return { id: existing.id, sampleNumber: existing.sampleNumber, revision: existing.revision };
   if (existing.revision === 2_147_483_647) throw new HttpError(409, 'sample_revision_limit', 'This sample has reached its revision limit.');
   validateSampleHeaderChanges(existing, changes);
   const captured = await changedCustomerReferences(client, organizationId, existing, changes);
-  const updates = { ...changes, ...captured, revision: existing.revision + 1 };
-  if (Object.hasOwn(changes, 'receivedAt')) {
-    await lockReferences(client, sampleCategories, [existing.sampleCategoryId]);
-    updates.receivedAt = sql`${changes.receivedAt}::timestamptz`;
-    updates.retentionDueOn = sql`CASE WHEN ${samples.receivedAt} IS DISTINCT FROM ${changes.receivedAt}::timestamptz
-      THEN (${changes.receivedAt}::timestamptz AT TIME ZONE 'UTC')::date +
-        (SELECT retention_days FROM sample_categories WHERE organization_id=${organizationId} AND id=${existing.sampleCategoryId})
+  let lineChanges = {};
+  try { if (editLines) lineChanges = await reconcileSampleProducts(client, identity, existing, products, categoryId); }
+  catch (error) {
+    const cause = error.cause ?? error;
+    if (cause.code === '55000' || cause.code === '23503') throw new HttpError(409, 'sample_lines_changed', 'A sample line or test is in use or its references changed. Reload the sample before saving.');
+    if (cause.code === '22003') throw new HttpError(400, 'invalid_sample', 'A sample line number is outside the supported range.');
+    throw error;
+  }
+  const updates = { ...changes, ...captured, ...lineChanges, revision: existing.revision + 1 };
+  if (Object.hasOwn(changes, 'receivedAt') || categoryId !== existing.sampleCategoryId) {
+    await lockReferences(client, sampleCategories, [categoryId]);
+    const receivedAt = Object.hasOwn(changes, 'receivedAt') ? sql`${changes.receivedAt}::timestamptz` : samples.receivedAt;
+    if (Object.hasOwn(changes, 'receivedAt')) updates.receivedAt = receivedAt;
+    updates.retentionDueOn = sql`CASE WHEN ${samples.receivedAt} IS DISTINCT FROM ${receivedAt} OR ${samples.sampleCategoryId} IS DISTINCT FROM ${categoryId}::uuid
+      THEN (${receivedAt} AT TIME ZONE 'UTC')::date +
+        (SELECT retention_days FROM sample_categories WHERE organization_id=${organizationId} AND id=${categoryId})
       ELSE ${samples.retentionDueOn} END`;
   }
   if (Object.hasOwn(changes, 'dueAt')) updates.dueAt = changes.dueAt === null ? null : sql`${changes.dueAt}::timestamptz`;

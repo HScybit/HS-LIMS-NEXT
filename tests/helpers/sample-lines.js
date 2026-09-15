@@ -18,10 +18,10 @@ export async function addSampleLineWidgets(client, identity, template, sectionId
   return { ...template, revision, model, fieldIds };
 }
 
-export async function prepareSampleLineFlow(owner, account, { complete = true, secondLine = true } = {}) {
+export async function prepareSampleLineFlow(owner, account, { complete = true, secondLine = true, printRoleId } = {}) {
   const work = (action) => withSession(account.token, action, { csrfToken: account.csrfToken });
   let datasheetTemplate;
-  const flow = await prepareReportFlow(owner, account, { complete, finalSection: true,
+  const flow = await prepareReportFlow(owner, account, { complete, finalSection: true, printRoleId,
     prepareProduct: async (_client, _identity, fixture) => {
       Object.assign(fixture.registration.products[0], { description: 'First captured line', quantity: '1.00000000000000001',
         sampleSize: '2 L', quality: 'Clear', identificationMark: 'LINE-A', condition: 'Sealed' });

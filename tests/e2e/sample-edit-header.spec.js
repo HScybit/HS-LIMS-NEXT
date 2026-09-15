@@ -66,7 +66,7 @@ test('sample header HTTP enforces permissions, origin, CSRF and body validation 
   expect((await page.request.patch(path, { headers: { ...headers, 'X-CSRF-Token': 'invalid' }, data: { revision: 1 } })).status()).toBe(403);
   expect((await page.request.patch(path, { headers: { ...headers, 'Content-Type': 'text/plain' }, data: 'invalid' })).status()).toBe(415);
   expect((await page.request.patch(path, { headers: { ...headers, 'Content-Type': 'application/json' }, data: '{' })).status()).toBe(400);
-  expect((await page.request.patch(path, { headers, data: { revision: 1, description: 'x'.repeat(131_072) } })).status()).toBe(413);
+  expect((await page.request.patch(path, { headers, data: { revision: 1, description: 'x'.repeat(8_388_608) } })).status()).toBe(413);
   expect(await (await page.request.get(path)).json()).toEqual(before);
   const reader = await createAccount(owner, { organizationId: account.organizationId, permissions: ['samples.read'] });
   headers = await login(page, reader);

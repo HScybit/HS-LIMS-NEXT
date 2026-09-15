@@ -43,9 +43,10 @@ function pendingCustomFields(value) {
   throw new HttpError(422, 'project_fields_unavailable', 'These project fields cannot be saved yet.');
 }
 
-function testInput(input) {
-  fieldsOnly(input, ['testParameterId', 'methodId', 'decisionRuleId', 'requestedQuantity', 'requestedSize', 'rate', 'currencyCode', 'estimatedDurationMinutes', 'isAccredited', 'isRetest', 'isSubcontracted']);
+function testInput(input, editing = false) {
+  fieldsOnly(input, ['testParameterId', 'methodId', 'decisionRuleId', 'requestedQuantity', 'requestedSize', 'rate', 'currencyCode', 'estimatedDurationMinutes', 'isAccredited', 'isRetest', 'isSubcontracted', ...(editing ? ['id'] : [])]);
   const result = {
+    ...(editing ? { id: optionalId(input.id, 'Selected test')?.toLowerCase() ?? null } : {}),
     testParameterId: uuid(input.testParameterId, 'Parameter'), methodId: uuid(input.methodId, 'Method'), decisionRuleId: optionalId(input.decisionRuleId, 'Decision rule'),
     requestedQuantity: integer(input.requestedQuantity ?? 1, 'Requested quantity', 1, 2_147_483_647), requestedSize: optionalText(input.requestedSize, 'Requested size', 150),
     rate: quantity(input.rate, 'Rate', { optional: true, inclusive: true }), currencyCode: currency(input.currencyCode),
@@ -56,15 +57,17 @@ function testInput(input) {
   return result;
 }
 
-function productInput(input, categoryId) {
-  fieldsOnly(input, ['productId', 'sampleCategoryId', 'quantity', 'customerReference', 'description', 'sampleSize', 'quality', 'identificationMark', 'condition', 'measurementUnitId', 'imageFileId', 'tag', 'tagId', 'customFields', 'tests']);
+export function sampleProductInput(input, categoryId, editing = false) {
+  fieldsOnly(input, ['productId', 'sampleCategoryId', 'quantity', 'customerReference', 'description', 'sampleSize', 'quality', 'identificationMark', 'condition', 'measurementUnitId', 'imageFileId', 'tag', 'tagId', 'customFields', 'tests', ...(editing ? ['id'] : [])]);
   pendingCustomFields(input.customFields);
   if (input.imageFileId != null) throw new HttpError(422, 'sample_image_unavailable', 'The sample image cannot be saved yet.');
   if (!Array.isArray(input.tests) || !input.tests.length || input.tests.length > 1000) invalid('Select between 1 and 1,000 tests per product.');
-  const tests = input.tests.map(testInput);
+  const tests = input.tests.map((test) => testInput(test, editing));
+  if (editing) for (const test of tests) for (const key of ['testParameterId', 'methodId', 'decisionRuleId']) test[key] = test[key]?.toLowerCase() ?? null;
   const keys = tests.map((test) => `${test.testParameterId}:${test.methodId}:${test.isRetest}`);
   if (new Set(keys).size !== keys.length) invalid('The same parameter and method cannot be selected twice for one product.');
   return {
+    ...(editing ? { id: optionalId(input.id, 'Sample line')?.toLowerCase() ?? null } : {}),
     productId: uuid(input.productId, 'Product'), sampleCategoryId: uuid(input.sampleCategoryId ?? categoryId, 'Product category'), quantity: quantity(input.quantity ?? 1, 'Product quantity'),
     customerReference: optionalText(input.customerReference, 'Product reference', 150), description: optionalText(input.description, 'Product description', 2000),
     sampleSize: optionalText(input.sampleSize, 'Sample size', 120), quality: optionalText(input.quality, 'Quality', 200),
@@ -91,7 +94,7 @@ export function sampleRegistrationInput(input) {
     amendmentRemarks: optionalText(input.amendmentRemarks, 'Amendment remarks', 5000), complaintRemarks: optionalText(input.complaintRemarks, 'Complaint remarks', 5000),
   };
   if (!Array.isArray(input.products) || !input.products.length || input.products.length > 100) invalid('Add between 1 and 100 products.');
-  result.products = input.products.map((product) => productInput(product, result.sampleCategoryId));
+  result.products = input.products.map((product) => sampleProductInput(product, result.sampleCategoryId));
   if (result.products.reduce((count, product) => count + product.tests.length, 0) > 5000) invalid('A sample cannot exceed 5,000 selected tests.');
   const labs = input.participatingLabs ?? [];
   if (!Array.isArray(labs) || labs.length > 100) invalid('Add at most 100 participating labs.');
