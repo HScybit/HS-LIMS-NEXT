@@ -5,6 +5,7 @@ import { ownerPool, createAccount } from '../helpers/database.js';
 import { prepareReportFlow } from '../helpers/report-flow.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
+import { editTemplate } from '../../src/templates/authoring.js';
 import { generateReports, loadReport, listReports, reportOptions } from '../../src/reports/service.js';
 
 const owner = ownerPool(); let account;
@@ -15,6 +16,29 @@ before(async () => {
   account = { ...user, ...await signIn({ identifier: user.username, password: user.password }) };
 });
 after(async () => { await closePool(); await owner.end(); });
+
+test('finalized report sets reject new generations while preserving exact retries and history', async () => {
+  const flow = await prepareReportFlow(owner, account);
+  const draft = await work((client, identity) => generateReports(client, identity, flow.sample.id, flow.input));
+  assert.equal(draft.reportsFinalized, false);
+  const input = { ...flow.input, requestId: randomUUID(), finalizeSample: true };
+  const generated = await work((client, identity) => generateReports(client, identity, flow.sample.id, input));
+  assert.equal(generated.reportsFinalized, true);
+  const before = await work((client, identity) => listReports(client, identity, flow.sample.id), { readOnly: true });
+  for (const finalizeSample of [false, true]) {
+    await assert.rejects(work((client, identity) => generateReports(client, identity, flow.sample.id,
+      { ...input, revision: generated.sample.revision, requestId: randomUUID(), finalizeSample })), { code: 'report_already_finalized' });
+    assert.deepEqual(await work((client, identity) => listReports(client, identity, flow.sample.id), { readOnly: true }), before);
+    assert.deepEqual(await sampleState(flow.sample.id), { status: 'completed', revision: generated.sample.revision });
+  }
+  const replay = await work((client, identity) => generateReports(client, identity, flow.sample.id, input));
+  assert.equal(replay.replayed, true); assert.equal(replay.items[0].id, generated.items[0].id);
+  const oldDraft = await work((client, identity) => generateReports(client, identity, flow.sample.id, flow.input));
+  assert.equal(oldDraft.replayed, true); assert.equal(oldDraft.items[0].id, draft.items[0].id);
+  assert.equal(oldDraft.items[0].isFinalized, false); assert.equal(oldDraft.reportsFinalized, true);
+  const options = await work((client, identity) => reportOptions(client, identity, flow.sample.id), { readOnly: true });
+  assert.equal(options.canGenerate, false); assert.equal(options.reportsFinalized, true);
+});
 
 test('finalisation atomically completes the sample and pins actual evidence for every group without issuing or inventing workflow transitions', async () => {
   const flow = await prepareReportFlow(owner, account, { productLines: 2 });
@@ -49,8 +73,8 @@ test('finalisation atomically completes the sample and pins actual evidence for 
   const history = await work((client, identity) => listReports(client, identity, flow.sample.id), { readOnly: true });
   assert.equal(history.items.filter((report) => report.isFinalized).length, 2);
   assert.equal(history.items.find((report) => report.id === draft.items[0].id).isFinalized, false);
-  const later = await work((client, identity) => generateReports(client, identity, flow.sample.id, { ...flow.input, requestId: randomUUID(), revision: 2 }));
-  assert.equal(later.items[0].isFinalized, false);
+  await assert.rejects(work((client, identity) => generateReports(client, identity, flow.sample.id,
+    { ...flow.input, requestId: randomUUID(), revision: 2 })), { code: 'report_already_finalized' });
   assert.deepEqual(await sampleState(flow.sample.id), { status: 'completed', revision: 2 });
 });
 
@@ -65,11 +89,82 @@ test('concurrent retries complete once and reject changed finalisation intent or
   assert.equal((await owner.query('SELECT * FROM sample_report_finalizations WHERE organization_id=$1 AND sample_id=$2', [account.organizationId, flow.sample.id])).rowCount, 1);
   await assert.rejects(work((client, identity) => generateReports(client, identity, flow.sample.id, flow.input)), { code: 'report_request_reused' });
   await assert.rejects(work((client, identity) => generateReports(client, identity, flow.sample.id, { ...input, requestId: randomUUID() })), { code: 'stale_sample' });
-  const next = await work((client, identity) => generateReports(client, identity, flow.sample.id, { ...input, requestId: randomUUID(), revision: 2 }));
-  assert.equal(next.sample.revision, 3);
+  await assert.rejects(work((client, identity) => generateReports(client, identity, flow.sample.id,
+    { ...input, requestId: randomUUID(), revision: 2 })), { code: 'report_already_finalized' });
+  // Simulate a later sample edit without inventing another report finalization.
+  await owner.query('UPDATE samples SET revision=3 WHERE organization_id=$1 AND id=$2', [account.organizationId, flow.sample.id]);
   const replay = await work((client, identity) => generateReports(client, identity, flow.sample.id, input));
   assert.equal(replay.sample.revision, 3);
   assert.equal(replay.items[0].id, attempts[0].items[0].id);
+});
+
+test('completed sample status and allocated draft numbers do not finalize a report set', async () => {
+  const flow = await prepareReportFlow(owner, account);
+  await owner.query("UPDATE samples SET status='completed',revision=2 WHERE organization_id=$1 AND id=$2", [account.organizationId, flow.sample.id]);
+  const input = { ...flow.input, revision: 2 };
+  const first = await work((client, identity) => generateReports(client, identity, flow.sample.id, input));
+  assert.equal(first.reportsFinalized, false); assert.equal(first.items[0].isFinalized, false);
+  const second = await work((client, identity) => generateReports(client, identity, flow.sample.id, { ...input, requestId: randomUUID() }));
+  assert.equal(second.items[0].reportNumber, first.items[0].reportNumber); assert.equal(second.items[0].revision, 2);
+  const options = await work((client, identity) => reportOptions(client, identity, flow.sample.id), { readOnly: true });
+  assert.equal(options.canGenerate, true); assert.equal(options.reportsFinalized, false);
+  assert.equal((await owner.query('SELECT 1 FROM sample_report_finalizations WHERE organization_id=$1 AND sample_id=$2', [account.organizationId, flow.sample.id])).rowCount, 0);
+});
+
+test('the database rejects generation after finalization even when the application check is bypassed', async () => {
+  const flow = await prepareReportFlow(owner, account);
+  await work((client, identity) => generateReports(client, identity, flow.sample.id, { ...flow.input, finalizeSample: true }));
+  const title = flow.template.records.fields[0];
+  await work((client, identity) => editTemplate(client, identity, flow.template.versionId, 1,
+    { type: 'configureField', columnId: title.columnId, widget: 'text_widget', label: 'Changed after report finalization' }));
+  const options = await work((client, identity) => reportOptions(client, identity, flow.sample.id), { readOnly: true });
+  const input = { ...flow.input, revision: options.sample.revision, requestId: randomUUID(), reportType: 'product_wise',
+    templateSelections: options.products.map(product => ({ key: product.id, templateId: flow.template.templateId })) };
+  const history = await work((client, identity) => listReports(client, identity, flow.sample.id), { readOnly: true });
+  const templates = async () => (await owner.query('SELECT id,status,number FROM template_versions WHERE organization_id=$1 ORDER BY id', [account.organizationId])).rows;
+  const sequence = async () => (await owner.query("SELECT period_key,next_value FROM number_sequences WHERE organization_id=$1 AND sequence_key='sample_report' ORDER BY period_key", [account.organizationId])).rows;
+  const beforeTemplates = await templates(); const beforeSequence = await sequence(); let bypassed = false; let constraint;
+  await assert.rejects(work((client, identity) => generateReports({ query: async (statement, parameters) => {
+    const query = typeof statement === 'string' ? statement : statement.text;
+    if (/AS finalized\b/.test(query)) { bypassed = true; return { rows: [{ finalized: false }], rowCount: 1 }; }
+    try { return await client.query(statement, parameters); }
+    catch (error) { if (/^\s*INSERT INTO sample_reports\b/i.test(query)) constraint = error.constraint; throw error; }
+  } }, identity, flow.sample.id, input)), { code: 'report_already_finalized' });
+  assert.equal(bypassed, true); assert.equal(constraint, 'report_already_finalized');
+  assert.deepEqual(await templates(), beforeTemplates); assert.deepEqual(await sequence(), beforeSequence);
+  assert.deepEqual(await work((client, identity) => listReports(client, identity, flow.sample.id), { readOnly: true }), history);
+  assert.equal((await owner.query('SELECT 1 FROM sample_events WHERE organization_id=$1 AND id=$2', [account.organizationId, input.requestId])).rowCount, 0);
+});
+
+test('a generation waiting on the sample lock rechecks committed finalization', async () => {
+  const flow = await prepareReportFlow(owner, account);
+  const held = Promise.withResolvers(); const release = Promise.withResolvers(); const started = Promise.withResolvers();
+  let generating;
+  const finalizing = work(async (client, identity) => {
+    const { rows: [connection] } = await client.query('SELECT pg_backend_pid() AS pid');
+    const result = await generateReports(client, identity, flow.sample.id, { ...flow.input, finalizeSample: true });
+    held.resolve({ result, pid: connection.pid }); await release.promise; return result;
+  });
+  finalizing.catch(held.reject);
+  try {
+    const first = await held.promise;
+    generating = work(async (client, identity) => {
+      const { rows: [connection] } = await client.query('SELECT pg_backend_pid() AS pid'); started.resolve(connection.pid);
+      return generateReports(client, identity, flow.sample.id, { ...flow.input, requestId: randomUUID(), revision: first.result.sample.revision });
+    });
+    generating.catch(started.reject);
+    const outcomes = Promise.allSettled([finalizing, generating]);
+    const pid = await started.promise; let waiting = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if ((await owner.query('SELECT $1::integer=ANY(pg_blocking_pids($2::integer)) AS blocked', [first.pid, pid])).rows[0].blocked) { waiting = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.equal(waiting, true); release.resolve();
+    const [finalized, rejected] = await outcomes;
+    assert.equal(finalized.status, 'fulfilled'); assert.equal(rejected.status, 'rejected'); assert.equal(rejected.reason.code, 'report_already_finalized');
+    assert.deepEqual(await sampleState(flow.sample.id), { status: 'completed', revision: first.result.sample.revision });
+    assert.equal((await owner.query('SELECT 1 FROM sample_reports WHERE organization_id=$1 AND sample_id=$2', [account.organizationId, flow.sample.id])).rowCount, first.result.items.length);
+  } finally { release.resolve(); await Promise.allSettled([finalizing, ...(generating ? [generating] : [])]); }
 });
 
 test('failures before or after sample completion roll back every report, event and completion and preserve a retry', async () => {

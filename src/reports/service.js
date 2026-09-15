@@ -38,6 +38,15 @@ async function reportSample(client, identity, sampleId, { lock = false } = {}) {
   return { sample, access };
 }
 
+async function reportsAreFinalized(client, identity, sampleId) {
+  const result = await client.query(`SELECT EXISTS (
+    SELECT 1 FROM sample_report_finalizations WHERE organization_id=$1 AND sample_id=$2
+  ) OR EXISTS (
+    SELECT 1 FROM sample_reports WHERE organization_id=$1 AND sample_id=$2 AND is_finalized
+  ) AS finalized`, [identity.organization_id, sampleId]);
+  return result.rows[0].finalized;
+}
+
 // Selected result/specification references are authoritative; editable masters
 // never supply the interpretation for a completed analytical result.
 export async function reportCandidates(client, identity, sampleId) {
@@ -67,6 +76,7 @@ export async function reportCandidates(client, identity, sampleId) {
 export async function reportOptions(client, identity, sampleId) {
   requireRead(identity);
   const { sample, access } = await reportSample(client, identity, sampleId);
+  const finalized = await reportsAreFinalized(client, identity, sampleId);
   const templates = await client.query(`SELECT template.id, template.code, version.name, version.id AS "versionId", version.status
     FROM templates template JOIN LATERAL (SELECT * FROM template_versions version WHERE version.organization_id=template.organization_id AND version.template_id=template.id
       AND version.status IN ('draft','frozen') ORDER BY (version.status='draft') DESC, version.number DESC LIMIT 1) version ON true
@@ -81,7 +91,7 @@ export async function reportOptions(client, identity, sampleId) {
   }
   return { sample: { id: sample.id, sampleNumber: sample.sample_number, revision: sample.revision, status: sample.status }, templates: templates.rows, defaultTemplateId: defaults.rows[0]?.templateId ?? null,
     products: [...products.values()], requireApprovedTestRequests: access.state?.require_all_test_requests_approved || access.permissionFallbackActions.printCoa,
-    canGenerate: identity.permission_codes.includes('samples.manage') && sample.status !== 'cancelled' };
+    reportsFinalized: finalized, canGenerate: identity.permission_codes.includes('samples.manage') && sample.status !== 'cancelled' && !finalized };
 }
 
 export async function listReports(client, identity, sampleId) {
@@ -119,6 +129,7 @@ export async function generateReports(client, identity, sampleId, rawInput) {
   try { return await generateReportRevisions(client, identity, sampleId, rawInput); }
   catch (error) {
     if (error.constraint === 'report_asset_unavailable') throw new HttpError(409, 'report_asset_unavailable', 'A selected report header or footer was deleted. Choose an available template asset before generating.');
+    if (error.constraint === 'report_already_finalized') throw new HttpError(409, 'report_already_finalized', 'Reports for this sample are already finalised.');
     throw error;
   }
 }
@@ -128,9 +139,10 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
   const input = reportGenerationInput(rawInput);
   const { sample, access } = await reportSample(client, identity, sampleId, { lock: true });
   const replay = await checkReplay(client, identity, sampleId, input);
-  if (replay) return { ...replay, sample: { id: sample.id, revision: sample.revision, status: sample.status } };
+  if (replay) return { ...replay, reportsFinalized: await reportsAreFinalized(client, identity, sampleId), sample: { id: sample.id, revision: sample.revision, status: sample.status } };
   if (sample.revision !== input.revision) throw new HttpError(409, 'stale_sample', 'The sample changed. Reload before generating reports.');
   if (sample.status === 'cancelled') throw new HttpError(409, 'sample_cancelled', 'Cancelled samples cannot generate reports.');
+  if (await reportsAreFinalized(client, identity, sampleId)) throw new HttpError(409, 'report_already_finalized', 'Reports for this sample are already finalised.');
   const candidates = await reportCandidates(client, identity, sampleId);
   if (!candidates.length) throw new HttpError(409, 'sample_has_no_results', 'The sample has no tests to report.');
   const requireApproved = access.state?.require_all_test_requests_approved || access.permissionFallbackActions.printCoa;
@@ -195,7 +207,8 @@ async function generateReportRevisions(client, identity, sampleId, rawInput) {
   await loadReportAssetBatch(client, identity.organization_id, reports.map((report) => report.id), Object.fromEntries(reports.map((report) => [report.id, sizes.get(report.groupKey).imageCounts ?? {}])));
   const sampleRevision = input.finalizeSample
     ? (await client.query('SELECT report_finalize_sample($1) AS revision', [input.requestId])).rows[0].revision : sample.revision;
-  return { items: reports, replayed: false, sample: { id: sample.id, revision: sampleRevision, status: input.finalizeSample ? 'completed' : sample.status } };
+  return { items: reports, replayed: false, reportsFinalized: input.finalizeSample,
+    sample: { id: sample.id, revision: sampleRevision, status: input.finalizeSample ? 'completed' : sample.status } };
 }
 
 async function reportFinalSections(client, identity, results, definitions) {

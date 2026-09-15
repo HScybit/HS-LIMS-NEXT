@@ -75,7 +75,9 @@ export default function SampleCoa({ sampleId }) {
   const products = options?.products.filter((product) => product.tests.some((test) => selectedSet.has(test.id))) ?? [];
   const templateKeys = reportType === 'consolidated' ? ['consolidated'] : products.map((product) => product.id);
   const allTests = options?.products.flatMap((product) => product.tests) ?? [];
-  const blocker = !options?.canGenerate ? 'You cannot generate reports for this sample.'
+  const reportsFinalized = options?.reportsFinalized || reports.some((report) => report.isFinalized);
+  const blocker = reportsFinalized ? 'Reports for this sample are already finalised.'
+    : !options?.canGenerate ? 'You cannot generate reports for this sample.'
     : !allTests.length ? 'This sample has no tests to report.'
       : options.requireApprovedTestRequests && allTests.some((test) => !test.isApproved) ? 'Approve all test requests before generating reports.'
         : allTests.some((test) => selectedSet.has(test.id) && !test.hasSubmission) ? 'Every selected test needs a submitted result.' : '';
@@ -91,10 +93,14 @@ export default function SampleCoa({ sampleId }) {
     if (attempt.current?.content !== content) attempt.current = { content, id: crypto.randomUUID() };
     try {
       const result = await apiRequest(`/api/samples/${sampleId}/reports`, { method: 'POST', body: { ...input, requestId: attempt.current.id } });
-      setOptions((current) => ({ ...current, sample: { ...current.sample, ...result.sample } }));
+      setOptions((current) => ({ ...current, sample: { ...current.sample, ...result.sample }, reportsFinalized: result.reportsFinalized,
+        canGenerate: current.canGenerate && !result.reportsFinalized }));
       setReports((current) => [...result.items, ...current.filter((report) => !result.items.some((item) => item.id === report.id))]);
       setSelectedId(result.items[0].id); setExpandedType(reportType); setSelecting(false); setPreviewError(''); attempt.current = null;
-    } catch (failure) { setError(failure.message); }
+    } catch (failure) {
+      setError(failure.message);
+      if (failure.code === 'report_already_finalized') setOptions((current) => ({ ...current, reportsFinalized: true, canGenerate: false }));
+    }
     finally { busyRef.current = false; setBusy(false); }
   }
 
@@ -118,7 +124,7 @@ export default function SampleCoa({ sampleId }) {
       {selectedReport ? <StatusPill color="blue">{selectedReport.status === 'draft' ? selectedReport.isFinalized ? 'Finalised' : 'Draft' : selectedReport.status}</StatusPill> : null}
     </div><div className="finalised-report-page-header__actions">
       {selectedId ? <ReportPrintControl key={selectedId} reportId={selectedId} disabled={!activePreview || readyPreview !== activePreview || Boolean(previewError)} onError={setError} /> : null}
-      {options.canGenerate ? <MoreActionButton items={[{ key: 'regenerate', label: 'Regenerate', leftIcon: 'refresh', onClick: () => { setSelecting(true); setError(''); } }]} /> : null}
+      {options.canGenerate && !reportsFinalized ? <MoreActionButton items={[{ key: 'regenerate', label: 'Regenerate', leftIcon: 'refresh', onClick: () => { setSelecting(true); setError(''); } }]} /> : null}
     </div></section>}</PageHeader>
     {error ? <div className="alert alert-danger m-3" role="alert">{error}</div> : null}
     {selecting ? <main className="smplfy-coa-report-page bg-body-tertiary p-3 p-md-4"><section className="container-xl smplfy-card card shadow-sm">

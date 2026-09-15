@@ -1065,6 +1065,13 @@
       "when": 1789469427462,
       "tag": "0151_custom_field_reissue_editability",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1789471264298,
+      "tag": "0152_finalized_report_generation_guard",
+      "breakpoints": true
     }
   ]
 }

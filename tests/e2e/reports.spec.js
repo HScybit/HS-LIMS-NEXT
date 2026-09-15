@@ -4,12 +4,29 @@ import { prepareReportFlow } from '../helpers/report-flow.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { editTemplate } from '../../src/templates/authoring.js';
+import { generateReports, reportOptions } from '../../src/reports/service.js';
 
 let owner;
 test.beforeAll(() => { owner = ownerPool(); });
 test.afterAll(async () => { await closePool(); await owner.end(); });
 
-test('Finalise recovers a lost success response, completes once and preserves finalised history after regeneration', async ({ page }, testInfo) => {
+test('finalized report history suppresses regeneration when the options response is older', async ({ page }) => {
+  const user = await createAccount(owner, { permissions: ['samples.read', 'samples.create', 'samples.manage', 'templates.manage', 'test_requests.allocate', 'datasheets.execute'] });
+  const account = { ...user, ...await signIn({ identifier: user.username, password: user.password }) };
+  const flow = await prepareReportFlow(owner, account);
+  const older = await withSession(account.token, (client, identity) => reportOptions(client, identity, flow.sample.id), { readOnly: true });
+  expect(older.canGenerate).toBe(true); expect(older.reportsFinalized).toBe(false);
+  await withSession(account.token, (client, identity) => generateReports(client, identity, flow.sample.id, { ...flow.input, finalizeSample: true }), { csrfToken: account.csrfToken });
+  await page.goto('/login'); await page.getByLabel('Username', { exact: true }).fill(account.username);
+  await page.getByLabel('Password', { exact: true }).fill(account.password); await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/me$/);
+  await page.route(`**/api/samples/${flow.sample.id}/report-options`, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(older) }));
+  await page.goto(`/samples/${flow.sample.id}/coa`);
+  await expect(page.locator('.finalised-report-page-header').getByText('Finalised', { exact: true })).toBeVisible();
+  await expect(page.locator('.finalised-report-page-header').getByRole('button', { name: 'More actions', exact: true })).toHaveCount(0);
+});
+
+test('Finalise recovers a lost success response, completes once and prevents new generation', async ({ page }, testInfo) => {
   const user = await createAccount(owner, { permissions: ['samples.read', 'samples.create', 'samples.manage', 'templates.manage', 'test_requests.allocate', 'datasheets.execute'] });
   const account = { ...user, ...await signIn({ identifier: user.username, password: user.password }) };
   const flow = await prepareReportFlow(owner, account);
@@ -51,18 +68,12 @@ test('Finalise recovers a lost success response, completes once and preserves fi
   expect(result.sample.revision).toBe(2);
   await expect(page.locator('.finalised-report-page-header').getByText('Finalised', { exact: true })).toBeVisible();
   await expect(page.frameLocator('.finalised-report-preview__frame').getByRole('article').getByText('CERTIFICATE OF ANALYSIS', { exact: true })).toBeVisible();
+  await expect(page.locator('.finalised-report-page-header').getByRole('button', { name: 'More actions', exact: true })).toHaveCount(0);
   await page.reload();
   await expect(page.locator('.finalised-report-page-header').getByText('Finalised', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: testInfo.outputPath('coa-finalised-desktop.png'), fullPage: true, animations: 'disabled' });
-  await page.getByRole('button', { name: 'More actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Regenerate', exact: true }).click();
-  await page.getByRole('button', { name: /^Consolidated/ }).click();
-  await page.getByLabel('Consolidated Report template', { exact: true }).selectOption(flow.template.templateId);
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
-  await expect(page.locator('.finalised-report-page-header').getByText('Draft', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Version 2', exact: true }).click();
-  await page.getByRole('menuitemradio', { name: 'Version 1', exact: true }).click();
+  await expect(page.locator('.finalised-report-page-header').getByRole('button', { name: 'More actions', exact: true })).toHaveCount(0);
   await expect(page.locator('.finalised-report-page-header').getByText('Finalised', { exact: true })).toBeVisible();
   const stored = (await owner.query('SELECT status,revision FROM samples WHERE organization_id=$1 AND id=$2', [account.organizationId, flow.sample.id])).rows[0];
   expect(stored).toEqual({ status: 'completed', revision: 2 });
