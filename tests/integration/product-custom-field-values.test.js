@@ -102,9 +102,9 @@ test('Product user choices include inactive members, escape literal searches and
   await owner.query("UPDATE users SET display_name='Synthetic %_ User' WHERE id=$1", [inactive.userId]);
   await owner.query('UPDATE memberships SET active=false WHERE organization_id=$1 AND user_id=$2', [user.organizationId,inactive.userId]);
   const selected = await work(user, (client, identity) => productCustomFieldUsers(client, identity, { search: '%_' }), true);
-  assert.deepEqual(selected.rows, [{ id: inactive.userId, name: 'Synthetic %_ User' }]);
+  assert.deepEqual(selected.rows, [], 'Raw separators removed from the displayed label do not match.');
   const displayed = await work(user, (client, identity) => productCustomFieldUsers(client, identity, { search: 'Synthetic % User' }), true);
-  assert.deepEqual(displayed.rows, selected.rows, 'Search also matches the label after source separator/whitespace normalization.');
+  assert.deepEqual(displayed.rows, [{ id: inactive.userId, name: 'Synthetic %_ User' }], 'Search matches the label after source separator/whitespace normalization.');
   assert.equal((await work(foreign, (client, identity) => productCustomFieldUsers(client, identity, { search: '%_' }), true)).rows.length, 0);
   const field = await work(user, (client, identity) => saveCustomField(client, identity, definition('multi_user_select')));
   const saved = await work(user, (client, identity) => saveProduct(client, identity, product([entry(field,[inactive.userId])])));

@@ -23,12 +23,14 @@ try {
   assert.equal(runtime.warnings.size, 0, 'Resolve all runtime dependency tracing warnings before release.');
   report.runtimeFiles = runtime.fileList.size;
   const required = [...runtime.fileList].map(file => path.resolve(root, file));
-  for (const file of await routeTraces('.next/server/app/api/users')) {
+  const routes = [...await routeTraces('.next/server/app/api/users'),
+    ...['products', 'test-parameters'].map(resource => `.next/server/app/api/masters/${resource}/custom-field-users/route.js.nft.json`)];
+  for (const file of routes) {
     const trace = JSON.parse(await readFile(file, 'utf8')); const included = new Set(trace.files.map(entry => path.resolve(path.dirname(file), entry)));
     report.routes.push({ path: file, missing: required.filter(entry => !included.has(entry)).map(entry => path.relative(root, entry)) });
   }
-  assert(report.routes.length > 0, 'Build the user API routes before checking their runtime files.');
-  assert(report.routes.every(route => route.missing.length === 0), 'A user API deployment trace is missing filter runtime files.');
+  assert(report.routes.length > 2, 'Build the user and master API routes before checking their runtime files.');
+  assert(report.routes.every(route => route.missing.length === 0), 'A user-choice API deployment trace is missing filter runtime files.');
   report.status = 'passed';
 } catch (error) { report.status = 'failed'; report.error = error.message; throw error; }
 finally { await writeFile('.local/user-field-filter-runtime-verification.json', JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify({ status: report.status, buildId: report.buildId, runtimeFiles: report.runtimeFiles, routes: report.routes.length, error: report.error })); }

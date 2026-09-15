@@ -248,12 +248,20 @@ export async function customFieldRoles(client, identity, input = {}) {
 export async function masterCustomFieldUsers(client, identity, input = {}) {
   requireRead(identity); fieldsOnly(input, ['search']);
   const search = searchText(input.search, 'User search');
-  // RelationSelect searches its displayed label after replacing separators and JavaScript whitespace.
-  const labelSpacing = '[_/\u0009\u000a\u000b\u000c\u000d \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff-]+';
-  // The source GenericForm user selector includes inactive members too.
-  const rows = (await client.query(`SELECT user_id AS id,display_name AS name FROM method_access_user_labels
-    WHERE organization_id=$1 AND (display_name ILIKE $2 OR regexp_replace(display_name,$3,' ','g') ILIKE $2)
-    ORDER BY display_name,user_id LIMIT 101`,
-  [identity.organization_id, literalSearch(search), labelSpacing])).rows;
-  return { rows: rows.slice(0, 100), hasMore: rows.length > 100 };
+  if (!search.isWellFormed()) throw new HttpError(400, 'invalid_input', 'User search must contain valid text.');
+  // Load the exact source filter only for user searches, keeping unrelated master services lightweight.
+  const { matchesUserFieldUserOption } = await import('../users/custom-field-filter.js');
+  const rows = []; let after = null;
+  while (true) {
+    // The source includes inactive members. Fixed batches retain the existing name/UUID order.
+    const batch = (await client.query(`SELECT user_id AS id,display_name AS name FROM method_access_user_labels
+      WHERE organization_id=$1 ${after ? 'AND (display_name,user_id)>($2,$3::uuid)' : ''}
+      ORDER BY display_name,user_id LIMIT 501`, after ? [identity.organization_id, after.name, after.id] : [identity.organization_id])).rows;
+    for (const person of batch.slice(0, 500)) {
+      if (matchesUserFieldUserOption(person, search)) rows.push(person);
+      if (rows.length > 100) return { rows: rows.slice(0, 100), hasMore: true };
+    }
+    if (batch.length <= 500) return { rows, hasMore: false };
+    after = batch[499];
+  }
 }
