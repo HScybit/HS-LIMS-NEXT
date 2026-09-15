@@ -23,6 +23,7 @@ const settings = () => ({
   splitter: text('splitter').notNull().default('/'), filterSearchType: text('filter_search_type').notNull().default(''),
   showInDashboard: boolean('show_in_dashboard').notNull().default(false), showInReport: boolean('show_in_report').notNull().default(false),
   validateUniqueness: boolean('validate_uniqueness').notNull().default(false), hideFromSampleCreation: boolean('hide_from_sample_creation').notNull().default(false),
+  editOnReissue: boolean('edit_on_reissue').notNull().default(false),
   optionCount: integer('option_count').notNull().default(0), editRoleCount: integer('edit_role_count').notNull().default(0),
   active: boolean('active').notNull().default(true),
 });

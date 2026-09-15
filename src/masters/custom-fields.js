@@ -11,6 +11,7 @@ const columns = {
   associateRoleSpecificUsers: 'associate_role_specific_users', associatedWithRoleId: 'associated_with_role_id', splitter: 'splitter',
   filterSearchType: 'filter_search_type', showInDashboard: 'show_in_dashboard', showInReport: 'show_in_report',
   validateUniqueness: 'validate_uniqueness', hideFromSampleCreation: 'hide_from_sample_creation', lookupSourceId: 'lookup_source_id',
+  editOnReissue: 'edit_on_reissue',
 };
 const authoredFields = (record) => ({ ...Object.fromEntries(Object.keys(columns).map((key) => [key, record[key]])),
   options: record.options, roleIdsCanEdit: record.roleIdsCanEdit });
@@ -112,13 +113,15 @@ export async function saveCustomField(client, identity, value) {
   const prior = await priorSave(client, identity, input.id, input.revision, input.requestId, input.revision ? 'update' : 'create');
   if (prior) {
     if (!Object.hasOwn(value, 'lookupSourceId')) input.lookupSourceId = prior.lookupSourceId;
+    if (!Object.hasOwn(value, 'editOnReissue')) input.editOnReissue = prior.editOnReissue;
     if (JSON.stringify(authoredFields(prior)) !== JSON.stringify(authoredFields(input))) throw new HttpError(409, 'save_request_reused', 'This save request was already used for different values.');
     return prior;
   }
-  const current = (await client.query('SELECT revision,active,lookup_source_id FROM custom_field_definitions WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
+  const current = (await client.query('SELECT revision,active,lookup_source_id,edit_on_reissue FROM custom_field_definitions WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
   if (input.revision && !current?.active) throw new HttpError(404, 'custom_field_not_found', 'Custom field was not found.');
   if ((current?.revision ?? 0) !== input.revision) throw new HttpError(409, 'stale_custom_field', 'The custom field changed. Reload before saving.');
   if (!Object.hasOwn(value, 'lookupSourceId')) input.lookupSourceId = current?.lookup_source_id ?? null;
+  if (!Object.hasOwn(value, 'editOnReissue')) input.editOnReissue = current?.edit_on_reissue ?? false;
   if (input.lookupSourceId && !(await client.query('SELECT id FROM custom_field_lookup_sources WHERE organization_id=$1 AND id=$2', [identity.organization_id, input.lookupSourceId])).rowCount) {
     throw new HttpError(400, 'invalid_custom_field_lookup_source', 'Select a lookup source in this organization.');
   }

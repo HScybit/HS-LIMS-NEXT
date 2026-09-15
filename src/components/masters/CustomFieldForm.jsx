@@ -43,6 +43,8 @@ export const customFieldFormFields = [
   { name: 'showInReport', label: 'Show in Report', type: 'boolean', helper: 'Enabling this displays the dropdown of this field in Report' },
   { name: 'validateUniqueness', label: 'Validate Uniqueness?', type: 'boolean' },
   { name: 'hideFromSampleCreation', label: 'Hide From Sample Creation?', type: 'boolean' },
+  { name: 'editOnReissue', label: 'Editable On Report Reissue?', type: 'boolean', showWhen: ['associatedWith', ['sample', 'sample_product']],
+    helper: 'Enabling this lets the value be changed while reissuing a finalised report.' },
 ];
 
 const roleOption = (row) => ({ value: row.id, label: String(row.name ?? row.id).replace(/[_/-]/g, ' ').replace(/\s+/g, ' ').trim() });
@@ -134,7 +136,10 @@ export default function CustomFieldForm({ field }) {
     <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
       {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
       {customFieldFormFields.map((config) => {
-        if (config.showWhen && draft[config.showWhen[0]] !== config.showWhen[1]) return null;
+        if (config.showWhen) {
+          const [name, expected] = config.showWhen;
+          if (Array.isArray(expected) ? !expected.includes(draft[name]) : draft[name] !== expected) return null;
+        }
         const value = draft[config.name]; const id = `custom-field-${config.name}`;
         if (config.type === 'boolean') return <div key={config.name}>
           <div className="mb-3"><div className="smplfy-checkbox-field"><Checkbox id={id} name={config.name} checked={value}

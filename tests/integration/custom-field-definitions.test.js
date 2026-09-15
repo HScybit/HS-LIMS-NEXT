@@ -28,6 +28,37 @@ before(async () => {
 });
 after(async () => { await closePool(); await owner.end(); });
 
+test('report reissue editability preserves omitted updates, exact retries, hidden settings and immutable revisions', async () => {
+  const absent = await work((client, identity) => saveCustomField(client, identity, input()));
+  assert.equal(absent.editOnReissue, false);
+  const command = input({ associatedWith: 'sample', editOnReissue: true });
+  const first = await work((client, identity) => saveCustomField(client, identity, command));
+  assert.equal(first.editOnReissue, true);
+  const { editOnReissue: _editOnReissue, ...legacy } = command;
+  assert.deepEqual(await work((client, identity) => saveCustomField(client, identity, legacy)), first);
+  const update = { ...legacy, revision: 1, requestId: randomUUID(), associatedWith: 'product', label: 'Hidden setting retained' };
+  const second = await work((client, identity) => saveCustomField(client, identity, update));
+  assert.equal(second.editOnReissue, true); assert.equal(second.associatedWith, 'product');
+  assert.deepEqual(await work((client, identity) => saveCustomField(client, identity, update)), second);
+  await assert.rejects(work((client, identity) => saveCustomField(client, identity, { ...update, editOnReissue: false })), { code: 'save_request_reused' });
+  const third = await work((client, identity) => saveCustomField(client, identity, { ...update, revision: 2, requestId: randomUUID(), editOnReissue: false }));
+  assert.equal(third.editOnReissue, false);
+  const fourth = await work((client, identity) => saveCustomField(client, identity, { ...command, revision: 3, requestId: randomUUID(), associatedWith: 'sample_product' }));
+  assert.equal(fourth.editOnReissue, true);
+  await assert.rejects(work(client => client.query(`UPDATE custom_field_definitions SET active=false,edit_on_reissue=false,revision=5,
+    save_request_id=$3,updated_at=transaction_timestamp() WHERE organization_id=$1 AND id=$2`, [manager.organizationId, first.id, randomUUID()])), { code: '23514' });
+  assert.deepEqual(await work((client, identity) => loadCustomField(client, identity, first.id)), fourth);
+  await work((client, identity) => retireCustomField(client, identity, { id: first.id, revision: 4, requestId: randomUUID() }));
+  for (const [revision, expected] of [[1, first], [2, second], [3, third], [4, fourth]]) {
+    assert.deepEqual(await work((client, identity) => loadCustomField(client, identity, first.id, { atRevision: revision }), viewer, true), expected);
+  }
+  const retired = await work((client, identity) => loadCustomField(client, identity, first.id, { atRevision: 5 }), viewer, true);
+  assert.equal(retired.editOnReissue, true); assert.equal(retired.active, false); assert.equal(retired.operation, 'retire');
+  await assert.rejects(work((client, identity) => loadCustomField(client, identity, first.id, { atRevision: 1 }), outsider, true), { code: 'custom_field_not_found' });
+  await assert.rejects(work((client, identity) => loadCustomField(client, identity, first.id, { atRevision: 1 }), noAccess, true), { code: 'forbidden' });
+  await assert.rejects(work((client, identity) => saveCustomField(client, identity, input({ editOnReissue: true })), viewer), { code: 'forbidden' });
+});
+
 test('custom field revisions retain actual actors, zero/false settings and ordered option/role identities after edits', async () => {
   const options = [option('A', 'Upper'), option('a', 'Lower')];
   const command = input({ key: `MIXED_${randomUUID().replaceAll('-', '')}`, options, roleIdsCanEdit: [viewer.roleId, manager.roleId],

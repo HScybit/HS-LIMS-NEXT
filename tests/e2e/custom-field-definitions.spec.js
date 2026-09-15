@@ -24,6 +24,47 @@ async function fixture() {
   return { account, session, command, field };
 }
 
+test('report reissue editability retains hidden values, exact retries and historical true and false settings', async ({ page }) => {
+  const { account, field } = await fixture();
+  await login(page, account); await page.goto(`/project_fields/${field.id}/edit`);
+  const association = page.getByLabel('Associated With', { exact: true });
+  const editable = page.getByLabel('Editable On Report Reissue?', { exact: true });
+  await expect(editable).toHaveCount(0);
+  await association.selectOption('sample'); await expect(editable).not.toBeChecked(); await editable.check();
+  await expect(page.getByText('Enabling this lets the value be changed while reissuing a finalised report.', { exact: true })).toBeVisible();
+  await association.selectOption('sample_product'); await expect(editable).toBeChecked();
+  await association.selectOption('product'); await expect(editable).toHaveCount(0);
+  await association.selectOption('sample'); await expect(editable).toBeChecked();
+  await association.selectOption('product'); await expect(editable).toHaveCount(0);
+  let attempted;
+  await page.route('**/api/masters/project-fields', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    attempted = route.request().postDataJSON(); expect(attempted.editOnReissue).toBe(true);
+    expect((await route.fetch()).status()).toBe(200);
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Synthetic lost reissue setting response' } }) });
+  });
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  await expect(page.locator('.alert[role="alert"]')).toContainText('Synthetic lost reissue setting response');
+  await page.unroute('**/api/masters/project-fields');
+  const retried = page.waitForResponse(response => response.url().endsWith('/api/masters/project-fields') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  const retry = await retried; expect(retry.status()).toBe(200); expect(retry.request().postDataJSON()).toEqual(attempted);
+  const saved = await retry.json(); expect(saved.editOnReissue).toBe(true); expect(saved.revision).toBe(2);
+  await page.goto(`/project_fields/${field.id}/view`);
+  await expect(page.getByRole('row').filter({ hasText: 'Editable On Report Reissue?' })).toHaveText('Editable On Report Reissue?Yes');
+  await page.goto(`/project_fields/${field.id}/edit`); await expect(editable).toHaveCount(0);
+  await association.selectOption('sample_product'); await expect(editable).toBeChecked(); await editable.uncheck();
+  const changed = page.waitForResponse(response => response.url().endsWith('/api/masters/project-fields') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  const result = await changed; expect(result.status()).toBe(200);
+  const current = await result.json(); expect(current.editOnReissue).toBe(false); expect(current.revision).toBe(3);
+  await page.goto(`/project_fields/${field.id}/edit`); await expect(editable).not.toBeChecked();
+  for (const [revision, expected] of [[1, false], [2, true], [3, false]]) {
+    const response = await page.request.get(`/api/masters/project-fields/${field.id}?revision=${revision}`);
+    expect(response.status()).toBe(200); expect((await response.json()).editOnReissue).toBe(expected);
+  }
+});
+
 test('custom field editor preserves an imported hidden lookup binding across type changes and a lost save response', async ({ page }) => {
   const { account, session, command, field } = await fixture();
   const observation = { id: randomUUID(), revision: 0, requestId: randomUUID(), sourceId: 'Browser-source-' + randomUUID(), name: 'Source name',

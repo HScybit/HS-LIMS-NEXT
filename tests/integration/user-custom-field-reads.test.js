@@ -33,13 +33,14 @@ async function measured(actor, input) {
 test('user field reads preserve exact ordering, options, zero/false and listing flags under user authority only', async () => {
   const f = await fixture(); assert.deepEqual(await measured(f.reader), { fields: [], queries: 1 });
   const inputs = ['\ue000', '😀', 'a', 'A'].map(label => command({ label, displayOrder: 0, paddedNumber: 0,
-    isRequired: false, roleIdsCanEdit: [f.author.roleId], showInList: label === 'a', showInFilter: label === 'A' }));
+    isRequired: false, editOnReissue: label === 'A', roleIdsCanEdit: [f.author.roleId], showInList: label === 'a', showInFilter: label === 'A' }));
   inputs.push(command({ label: 'Choices', displayOrder: 0.25, fieldType: 'select', options: [option('Z', 'Last first'), option('a', 'Second')], allowsMultiple: true }));
   for (const input of inputs) await save(f.author, input);
   await save(f.author, command({ associatedWith: 'product', label: 'Other association' }));
   const { fields, queries } = await measured(f.reader); assert.equal(queries, 2);
   assert.deepEqual(fields.map(field => field.label), ['A', 'a', '😀', '\ue000', 'Choices']);
   assert(fields.every(field => field.associatedWith === 'users' && field.isRequired === false && field.paddedNumber === 0));
+  assert(fields.every(field => field.editOnReissue === (field.label === 'A')));
   assert.deepEqual(fields.at(-1).options, inputs.at(-1).options); assert.equal(fields.at(-1).allowsMultiple, true);
   assert.deepEqual(await measured(f.manager), { fields, queries });
   const listing = await measured(f.reader, { forListing: true }); assert.equal(listing.queries, 1); assert.deepEqual(listing.fields.map(field => field.label), ['A', 'a']);

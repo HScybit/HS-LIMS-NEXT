@@ -9,7 +9,7 @@ const textFields = {
   splitter: ['Splitter Character', 20], filterSearchType: ['Filter Search Type', 40],
 };
 const booleanFields = ['showInList', 'showInFilter', 'allowsMultiple', 'isRequired', 'associateRoleSpecificUsers',
-  'showInDashboard', 'showInReport', 'validateUniqueness', 'hideFromSampleCreation'];
+  'showInDashboard', 'showInReport', 'validateUniqueness', 'hideFromSampleCreation', 'editOnReissue'];
 
 function cleanText(value, label, maximum, optional = true) {
   const result = text(value, label, maximum, { optional }).trim();
