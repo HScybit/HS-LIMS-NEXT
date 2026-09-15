@@ -32,7 +32,7 @@ function boundedNumber(value, label, fallback, maximum) {
 
 export function customFieldInput(input) {
   fieldsOnly(input, ['id', 'requestId', 'revision', ...Object.keys(textFields), ...booleanFields, 'fieldType', 'associatedWith',
-    'paddedNumber', 'displayOrder', 'dateFormat', 'datetimeFormat', 'generatedAt', 'associatedWithRoleId', 'roleIdsCanEdit', 'options']);
+    'paddedNumber', 'displayOrder', 'dateFormat', 'datetimeFormat', 'generatedAt', 'associatedWithRoleId', 'roleIdsCanEdit', 'options', 'lookupSourceId']);
   const result = { id: uuid(input.id, 'Custom field').toLowerCase(), requestId: uuid(input.requestId, 'Save request').toLowerCase(),
     revision: integer(input.revision, 'Revision', 0, 2_147_483_646) };
   for (const [field, [label, maximum]] of Object.entries(textFields)) result[field] = cleanText(input[field], label, maximum, !['label', 'key'].includes(field));
@@ -50,6 +50,7 @@ export function customFieldInput(input) {
   result.dateFormat = result.fieldType === 'date' ? (customFieldDateFormats.some((format) => format.value === dateFormat) ? dateFormat : 'DD/MM/YYYY') : '';
   result.datetimeFormat = result.fieldType === 'date_time' ? (customFieldDateTimeFormats.some((format) => format.value === datetimeFormat) ? datetimeFormat : 'DD/MM/YYYY HH:mm:ss') : '';
   result.associatedWithRoleId = input.associatedWithRoleId == null || input.associatedWithRoleId === '' ? null : uuid(input.associatedWithRoleId, 'Associated role').toLowerCase();
+  result.lookupSourceId = input.lookupSourceId == null || input.lookupSourceId === '' ? null : uuid(input.lookupSourceId, 'Lookup source').toLowerCase();
   const roles = input.roleIdsCanEdit === undefined ? [] : input.roleIdsCanEdit;
   if (!Array.isArray(roles) || roles.length > 500) throw new HttpError(400, 'invalid_custom_field_roles', 'Select at most 500 roles.');
   result.roleIdsCanEdit = roles.map((id) => uuid(id, 'Role').toLowerCase());

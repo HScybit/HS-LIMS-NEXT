@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, integer, boolean, doublePrecision, timestamp, primaryKey, unique, uniqueIndex, index,
   check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships, roles } from './schema.js';
+import { customFieldLookupSources } from './custom-field-lookup-schema.js';
 import { customFieldTypes, customFieldAssociations, customFieldLegacyAssociations, customFieldDateFormats,
   customFieldDateTimeFormats, customFieldGenerationTimes } from '../masters/custom-field-config.js';
 
@@ -17,7 +18,7 @@ const settings = () => ({
   allowsMultiple: boolean('allows_multiple').notNull().default(false), isRequired: boolean('is_required').notNull().default(false),
   paddedNumber: doublePrecision('padded_number').notNull().default(0), displayOrder: doublePrecision('display_order').notNull().default(10000),
   dateFormat: text('date_format').notNull().default(''), datetimeFormat: text('datetime_format').notNull().default(''),
-  generatedAt: text('generated_at').notNull().default('on_init'),
+  generatedAt: text('generated_at').notNull().default('on_init'), lookupSourceId: uuid('lookup_source_id'),
   associateRoleSpecificUsers: boolean('associate_role_specific_users').notNull().default(false), associatedWithRoleId: uuid('associated_with_role_id'),
   splitter: text('splitter').notNull().default('/'), filterSearchType: text('filter_search_type').notNull().default(''),
   showInDashboard: boolean('show_in_dashboard').notNull().default(false), showInReport: boolean('show_in_report').notNull().default(false),
@@ -41,6 +42,7 @@ const settingsChecks = (table, prefix) => [
   check(`${prefix}_numbers`, sql`${table.paddedNumber} between 0 and 1000 and ${table.displayOrder} between 0 and 100000
     and ${table.optionCount} between 0 and 500 and ${table.editRoleCount} between 0 and 500`),
   foreignKey({ name: `${prefix}_associated_role_fk`, columns: [table.organizationId, table.associatedWithRoleId], foreignColumns: [roles.organizationId, roles.id] }),
+  foreignKey({ name: `${prefix}_lookup_source_fk`, columns: [table.organizationId, table.lookupSourceId], foreignColumns: [customFieldLookupSources.organizationId, customFieldLookupSources.id] }),
 ];
 
 export const customFieldDefinitions = pgTable('custom_field_definitions', {

@@ -10,7 +10,7 @@ const columns = {
   paddedNumber: 'padded_number', displayOrder: 'display_order', dateFormat: 'date_format', datetimeFormat: 'datetime_format', generatedAt: 'generated_at',
   associateRoleSpecificUsers: 'associate_role_specific_users', associatedWithRoleId: 'associated_with_role_id', splitter: 'splitter',
   filterSearchType: 'filter_search_type', showInDashboard: 'show_in_dashboard', showInReport: 'show_in_report',
-  validateUniqueness: 'validate_uniqueness', hideFromSampleCreation: 'hide_from_sample_creation',
+  validateUniqueness: 'validate_uniqueness', hideFromSampleCreation: 'hide_from_sample_creation', lookupSourceId: 'lookup_source_id',
 };
 const authoredFields = (record) => ({ ...Object.fromEntries(Object.keys(columns).map((key) => [key, record[key]])),
   options: record.options, roleIdsCanEdit: record.roleIdsCanEdit });
@@ -111,12 +111,17 @@ export async function saveCustomField(client, identity, value) {
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended('custom-field-definitions:'||$1::text,0))", [identity.organization_id]);
   const prior = await priorSave(client, identity, input.id, input.revision, input.requestId, input.revision ? 'update' : 'create');
   if (prior) {
+    if (!Object.hasOwn(value, 'lookupSourceId')) input.lookupSourceId = prior.lookupSourceId;
     if (JSON.stringify(authoredFields(prior)) !== JSON.stringify(authoredFields(input))) throw new HttpError(409, 'save_request_reused', 'This save request was already used for different values.');
     return prior;
   }
-  const current = (await client.query('SELECT revision,active FROM custom_field_definitions WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
+  const current = (await client.query('SELECT revision,active,lookup_source_id FROM custom_field_definitions WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
   if (input.revision && !current?.active) throw new HttpError(404, 'custom_field_not_found', 'Custom field was not found.');
   if ((current?.revision ?? 0) !== input.revision) throw new HttpError(409, 'stale_custom_field', 'The custom field changed. Reload before saving.');
+  if (!Object.hasOwn(value, 'lookupSourceId')) input.lookupSourceId = current?.lookup_source_id ?? null;
+  if (input.lookupSourceId && !(await client.query('SELECT id FROM custom_field_lookup_sources WHERE organization_id=$1 AND id=$2', [identity.organization_id, input.lookupSourceId])).rowCount) {
+    throw new HttpError(400, 'invalid_custom_field_lookup_source', 'Select a lookup source in this organization.');
+  }
   const roles = [...new Set([...input.roleIdsCanEdit, input.associatedWithRoleId].filter(Boolean))];
   // The composite FKs protect concurrent deletion; role validation needs only SELECT permission.
   if (roles.length && (await client.query('SELECT id FROM roles WHERE organization_id=$1 AND id=ANY($2::uuid[]) ORDER BY id', [identity.organization_id, roles])).rowCount !== roles.length) {
@@ -133,6 +138,9 @@ export async function saveCustomField(client, identity, value) {
     if (error.constraint === 'custom_field_save_request_key') throw new HttpError(409, 'save_request_reused', 'This save request was already used for another change.');
     if (error.constraint === 'custom_field_active_key') throw new HttpError(409, 'duplicate_custom_field_key', 'This custom field key is already in use.');
     if (error.constraint === 'custom_field_pk') throw new HttpError(409, 'custom_field_exists', 'This custom field identifier is already in use.');
+    if (['custom_field_lookup_source_fk', 'custom_field_version_lookup_source_fk'].includes(error.constraint)) {
+      throw new HttpError(400, 'invalid_custom_field_lookup_source', 'Select a lookup source in this organization.');
+    }
     if (['custom_field_associated_role_fk', 'custom_field_version_associated_role_fk', 'custom_field_edit_role_fk'].includes(error.constraint)) {
       throw new HttpError(400, 'invalid_custom_field_roles', 'Select roles in this organization.');
     }

@@ -118,7 +118,7 @@ export default function CustomFieldForm({ field }) {
     newId.current ??= crypto.randomUUID(); const id = field?.id ?? newId.current;
     let body;
     try {
-      const { requestId: _requestId, ...normalized } = customFieldInput({ ...draft, id, revision: field?.revision ?? 0, requestId: id,
+      const { requestId: _requestId, ...normalized } = customFieldInput({ ...draft, id, revision: field?.revision ?? 0, requestId: id, lookupSourceId: field?.lookupSourceId ?? null,
         options: draft.options.filter((option) => option.key.trim() || option.label.trim()) });
       body = normalized;
     } catch (failure) { setError(failure.message); showToast(failure.message, 'error'); return; }

@@ -4,6 +4,7 @@ import { ownerPool, createAccount } from '../helpers/database.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { saveCustomField } from '../../src/masters/custom-fields.js';
+import { saveLookupSourceObservation } from '../../src/custom-fields/lookup-sources.js';
 
 let owner;
 test.beforeAll(() => { owner = ownerPool(); });
@@ -22,6 +23,39 @@ async function fixture() {
   const field = await withSession(session.token, (client, identity) => saveCustomField(client, identity, command), { csrfToken: session.csrfToken });
   return { account, session, command, field };
 }
+
+test('custom field editor preserves an imported hidden lookup binding across type changes and a lost save response', async ({ page }) => {
+  const { account, session, command, field } = await fixture();
+  const observation = { id: randomUUID(), revision: 0, requestId: randomUUID(), sourceId: 'Browser-source-' + randomUUID(), name: 'Source name',
+    lines: [{ id: 'original-flat-line', label: 'Observed choice' }] };
+  await withSession(session.token, (c, i) => saveLookupSourceObservation(c, i, observation));
+  await withSession(session.token, (c, i) => saveCustomField(c, i, { ...command, revision: 1, requestId: randomUUID(), fieldType: 'lookup', lookupSourceId: observation.id }));
+  await login(page, account); await page.goto(`/project_fields/${field.id}/edit`);
+  await expect(page.getByLabel('Data Type', { exact: true })).toHaveValue('lookup');
+  await expect(page.getByLabel('Lookup Data Master', { exact: true })).toHaveCount(0);
+  await page.getByLabel('Data Type', { exact: true }).selectOption('text');
+  let attempted;
+  await page.route('**/api/masters/project-fields', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    attempted = route.request().postDataJSON(); expect(attempted.lookupSourceId).toBe(observation.id);
+    expect((await route.fetch()).status()).toBe(200);
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Synthetic lost lookup binding response' } }) });
+  });
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  await expect(page.locator('.alert[role="alert"]')).toContainText('Synthetic lost lookup binding response');
+  await withSession(session.token, (c, i) => saveLookupSourceObservation(c, i, { ...observation, revision: 1, requestId: randomUUID(), lines: [] }));
+  await page.unroute('**/api/masters/project-fields');
+  const response = page.waitForResponse(result => result.url().endsWith('/api/masters/project-fields') && result.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  const saved = await response; expect(saved.status()).toBe(200); expect(saved.request().postDataJSON()).toEqual(attempted);
+  expect((await saved.json()).lookupSourceId).toBe(observation.id);
+  await page.goto(`/project_fields/${field.id}/edit`); await page.getByLabel('Data Type', { exact: true }).selectOption('lookup');
+  const restored = page.waitForResponse(result => result.url().endsWith('/api/masters/project-fields') && result.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  expect((await (await restored).json()).lookupSourceId).toBe(observation.id);
+  const firstBound = await (await page.request.get(`/api/masters/project-fields/${field.id}?revision=2`)).json();
+  expect(firstBound.fieldType).toBe('lookup'); expect(firstBound.lookupSourceId).toBe(observation.id);
+});
 
 test('source Custom Fields form preserves options, zero settings and hidden roles through lost responses, reload and deletion', async ({ page }, testInfo) => {
   test.setTimeout(90_000); await page.setViewportSize({ width: 1280, height: 960 });
