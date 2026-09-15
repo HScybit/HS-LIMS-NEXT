@@ -280,4 +280,4 @@ export const sampleEvents = pgTable('sample_events', {
   foreignKey({ name: 'sample_event_datasheet_fk', columns: [t.organizationId, t.testRequestId, t.datasheetId], foreignColumns: [datasheets.organizationId, datasheets.testRequestId, datasheets.id] }),
   check('sample_event_datasheet_owner', sql`(${t.datasheetId} is null or ${t.testRequestId} is not null) and (${t.eventType} not in ('datasheet_method_added','datasheet_method_voided') or ${t.datasheetId} is not null)`),
   index('sample_events_time_idx').on(t.organizationId, t.sampleId, t.occurredAt),
-  check('sample_event_type', sql`${t.eventType} in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted', 'reports_generated', 'reports_finalized', 'datasheet_method_added', 'datasheet_method_voided', 'test_request_job_created')`)]);
+  check('sample_event_type', sql`${t.eventType} in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted', 'reports_generated', 'reports_finalized', 'datasheet_method_added', 'datasheet_method_voided', 'test_request_job_created', 'sample_updated')`)]);

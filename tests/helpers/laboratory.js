@@ -32,7 +32,7 @@ export async function createLaboratoryFixture(owner, account, options = {}) {
       const [workflow] = await db.insert(workflows).values({ organizationId, code: code(), name: `Synthetic ${appliesTo} workflow`, appliesTo }).returning();
       const [version] = await db.insert(workflowVersions).values({ organizationId, workflowId: workflow.id, number: 1, createdBy: account.userId }).returning();
       const [state] = await db.insert(workflowStates).values({ organizationId, workflowVersionId: version.id, code: 'initial', name: 'In Progress', stateType: 'initial',
-        showSampleEdit: true, showAddResult: true, canWorkOnTestRequest: appliesTo === 'sample' ? options.sampleCanWork ?? true : true,
+        showSampleEdit: options.showSampleEdit ?? true, showAddResult: true, canWorkOnTestRequest: appliesTo === 'sample' ? options.sampleCanWork ?? true : true,
         generateTestRequests: appliesTo === 'sample' && Boolean(options.generateTestRequests) }).returning();
       const [finalState] = await db.insert(workflowStates).values({ organizationId, workflowVersionId: version.id, code: 'complete', name: 'Completed', stateType: 'final', isPositiveTermination: true }).returning();
       await db.insert(workflowTransitions).values({ organizationId, workflowVersionId: version.id, code: 'complete', name: 'Complete', sourceStateId: state.id, targetStateId: finalState.id });
@@ -43,6 +43,7 @@ export async function createLaboratoryFixture(owner, account, options = {}) {
       }
       if (options.capabilityRoleId) await db.insert(workflowStateCapabilityRoles).values({ organizationId, workflowStateId: state.id, capability: 'allocate', roleId: options.capabilityRoleId });
       if (appliesTo === 'sample' && options.printRoleId) await db.insert(workflowStateCapabilityRoles).values({ organizationId, workflowStateId: state.id, capability: 'download_report', roleId: options.printRoleId });
+      if (appliesTo === 'sample' && options.editRoleId) await db.insert(workflowStateCapabilityRoles).values({ organizationId, workflowStateId: state.id, capability: 'edit', roleId: options.editRoleId });
       await client.query("UPDATE workflow_versions SET status = 'published', revision = 2, published_by = $3, published_at = now() WHERE organization_id = $1 AND id = $2", [organizationId, version.id, account.userId]);
       await db.insert(sampleCategoryWorkflows).values({ organizationId, sampleCategoryId: category.id, workflowId: workflow.id, appliesTo, isDefault: true });
       workflowRecords.push({ workflow, version, state });
