@@ -46,7 +46,7 @@ test('batched options return active tenant references, structured/freeform addre
     client.query = (...args) => { actualQueries.push(typeof args[0] === 'string' ? args[0] : args[0].text); return original(...args); };
     try { return await sampleRegistrationOptions(client, identity); } finally { client.query = original; }
   });
-  assert.equal(actualQueries.length, 10);
+  assert.equal(actualQueries.length, 11);
   assert.deepEqual(options.products[0].tagIds, [tag.id]);
   assert.deepEqual(options.products[0].sampleCategoryIds, [fixture.category.id]);
   assert.equal(options.testParameters[0].methods[0].id, fixture.method.id);

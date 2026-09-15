@@ -29,6 +29,7 @@ test('registration recovers from a failed save and reaches allocated, persisted 
   test.setTimeout(120_000);
   const account = await createAccount(owner, { permissions: ['samples.read', 'samples.create', 'samples.manage', 'templates.manage', 'test_requests.allocate', 'datasheets.execute'] });
   const source = await createLaboratoryFixture(owner, account); const db = database(owner); const organizationId = account.organizationId;
+  await owner.query('INSERT INTO organization_laboratory_settings(organization_id,allow_receiving_date_edit,updated_by) VALUES($1,true,$2)', [organizationId, account.userId]);
   await db.insert(customerAddresses).values({ organizationId, customerId: source.customer.id, addressType: 'billing', freeformAddress: 'Synthetic billing address\nReceiving bay', isDefault: true });
   const [quotation] = await db.insert(customerQuotations).values({ organizationId, customerId: source.customer.id, quotationNumber: `SYN-Q-${randomUUID()}`, quotationDate: '2026-09-01', status: 'approved', totalAmount: '0', currencyCode: 'USD' }).returning();
   const [tag] = await db.insert(tags).values({ organizationId, code: randomUUID(), name: 'Synthetic source tag' }).returning();

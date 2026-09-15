@@ -10,7 +10,7 @@ import { apiRequest } from '../../lib/api-client.js';
 import { customFieldDateFormats, customFieldDateTimeFormats } from '../../masters/custom-field-config.js';
 import { organizationDateFormatDefaults } from '../../organization-settings/date-formats.js';
 
-const tabs = [{ id: 'tr_settings', label: 'TR Settings' }, { id: 'nabl_settings', label: 'NABL Settings' },
+const tabs = [{ id: 'sample_page', label: 'Sample Page' }, { id: 'tr_settings', label: 'TR Settings' }, { id: 'nabl_settings', label: 'NABL Settings' },
   { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }, { id: 'settings', label: 'Tenant Settings' }];
 
 function SettingsSelect({ id, label, value, options, disabled, onChange, helperText }) {
@@ -43,7 +43,7 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
     setSaving(true); setError('');
     try {
       const result = await apiRequest('/api/organization-settings/laboratory', { method: 'PUT', body: {
-        revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, selfAllocationEnabled: draft.selfAllocationEnabled,
+        revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, selfAllocationEnabled: draft.selfAllocationEnabled, allowReceivingDateEdit: draft.allowReceivingDateEdit,
         resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: draft.jobWorkflowId,
         schemeCurrentYearDigits: draft.schemeCurrentYearDigits ?? '', schemeNextYearDigits: draft.schemeNextYearDigits ?? '',
         schemeSeparator: draft.schemeSeparator ?? '', schemeMonthFormat: draft.schemeMonthFormat,
@@ -68,6 +68,15 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
       </div>{data.canManage ? <div className="d-flex align-items-center gap-3"><PrimaryButton type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</PrimaryButton></div> : null}</div>
         <div className="settings-layout__surface-body">
           {error ? <div className="alert alert-danger" role="alert">{error}{retry}</div> : null}
+          <div role="tabpanel" id="tabpanel-sample_page" aria-labelledby="tab-sample_page" hidden={activeTab !== 'sample_page'}>
+            <section className="settings-section"><h6 className="settings-section__title">Sample Listing Options</h6>
+              <div className="mb-3"><div className="smplfy-checkbox-field">
+                <Checkbox id="allow_receiving_date_edit" ariaLabel="Allow Editing Receiving Date" checked={draft.allowReceivingDateEdit} disabled={disabled}
+                  onChange={(value) => setDraft((current) => ({ ...current, allowReceivingDateEdit: value }))} />
+                <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="allow_receiving_date_edit">Allow Editing Receiving Date</label></div>
+              </div></div>
+            </section>
+          </div>
           <div role="tabpanel" id="tabpanel-tr_settings" aria-labelledby="tab-tr_settings" hidden={activeTab !== 'tr_settings'}>
             <section className="settings-section"><h6 className="settings-section__title">Number Series</h6>
               <div className="mb-3"><div className="smplfy-checkbox-field">

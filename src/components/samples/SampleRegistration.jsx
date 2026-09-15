@@ -85,7 +85,7 @@ export default function SampleRegistration({ requestedKind, receivedByName, canC
               <button type="button" className="smplfy-btn btn btn-outline-danger btn-sm" aria-label="Remove lab" disabled={busy} onClick={() => setField('participatingLabs', form.participatingLabs.filter((item) => item.key !== lab.key))}><AppIcon name="trash" /></button>
             </div>)}</div>
           </div></div> : null}
-          <div className="col-lg-6">{textField('receivedAt', 'Receiving Date', { type: 'date', required: true })}</div>
+          <div className="col-lg-6">{textField('receivedAt', 'Receiving Date', { type: 'date', required: true, disabled: busy || !options.allowReceivingDateEdit })}</div>
           <div className="col-lg-6"><div className="d-flex align-items-end gap-3"><div className="flex-fill"><SampleSelectField label="Customer" required value={form.customerId} options={optionList(options.customers)} placeholder="Select a Customer or create new" disabled={busy} onChange={(value) => changeCustomer(value)} /></div>
             <PrimaryButton type="button" aria-label="Add customer" leftIcon="plus" onClick={() => setQuickCustomerOpen(true)} disabled={busy} /></div></div>
           <div className="col-lg-6"><SampleSelectField label="Customer Quotation" value={form.customerQuotationId} options={(customer?.quotations ?? []).map((item) => ({ value: item.id, label: item.quotationNumber }))} placeholder="Select quotation" disabled={busy || !customer} onChange={(value) => {
