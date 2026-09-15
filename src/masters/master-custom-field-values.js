@@ -135,7 +135,6 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
   const hasDates = definitions.some(dateField);
   const zone = hasDates ? customFieldTimeZone(timeZone) : null;
   if (!hasDates && timeZone !== null && timeZone !== undefined) throw new HttpError(400, 'invalid_custom_field_timezone', 'A Custom Field time zone requires captured date fields.');
-  const previousById = new Map(previousFields.map((field) => [field.fieldId, field]));
   const previousByKey = new Map(previousFields.map((field) => [field.key, field]));
   const lookupSelections = store.lookupValues ? await currentLookupSelections(kind, client, identity, definitionsById, entries) : new Map();
   const userIds = new Set(); const attachmentIds = new Set(); const fields = []; const items = [];
@@ -143,7 +142,7 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
     const field = definitionsById.get(entry.fieldId); const validation = customFieldValidationError(field, entry.value);
     if (validation) throw new HttpError(400, 'invalid_custom_field_value', `${field.label}: ${validation}`);
     const options = new Map(field.options.map((option) => [option.key, option]));
-    const previousField = kind === 'user' || field.fieldType === 'lookup' ? previousByKey.get(field.key) : previousById.get(field.id);
+    const previousField = previousByKey.get(field.key);
     const values = Array.isArray(entry.value) ? entry.value : [entry.value];
     const lookupSource = lookupSelections.get(field.lookupSourceId);
     const lookupOptions = field.fieldType === 'lookup' ? [...new Set(values.map(String))].map(value => lookupSource?.get(value)).filter(Boolean) : [];
@@ -172,12 +171,12 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
           }
         } else if (field.fieldType === 'select') {
           const option = options.get(String(value));
-          const previous = !option && previousField?.items.find((item) => item.value === value && (kind === 'user' || item.optionId && item.optionRevision));
+          const previous = !option && previousField?.items.find((item) => item.value === value);
           if (!option && !previous) throw new HttpError(400, `invalid_${kind}_custom_field_option`, `${field.label}: Select an available option.`);
           if (option || previousField.fieldId === field.id && previous.optionId && previous.optionRevision) {
             item.optionId = option?.id ?? previous.optionId; item.optionRevision = option ? field.revision : previous.optionRevision;
           } else {
-            // A reused user key can retain raw text without claiming an option belonging to another definition.
+            // A reused field key can retain raw values without claiming an option belonging to another definition.
             item.interpretationState = 'invalid';
           }
         } else if (field.fieldType === 'multi_user_select') {
