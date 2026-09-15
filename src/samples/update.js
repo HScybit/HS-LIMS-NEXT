@@ -8,6 +8,7 @@ import { requireWorkflowAction } from '../workflows/access.js';
 import { lockReferences } from './reference-locks.js';
 import { sampleHeaderFields, sampleHeaderRevision, sampleHeaderUpdateInput, validateSampleHeaderChanges } from './update-input.js';
 import { reconcileSampleProducts } from './reconcile.js';
+import { updateComplaintRetests } from './complaint-retests.js';
 
 const invalidReference = message => { throw new HttpError(422, 'invalid_sample_reference', message); };
 
@@ -44,8 +45,8 @@ export async function updateSampleHeader(client, identity, sampleId, rawInput) {
 // either commit together or leave the previous sample intact.
 export async function updateSample(client, identity, sampleId, rawInput) {
   requirePermission(identity, 'samples.manage'); uuid(sampleId, 'Sample');
-  fieldsOnly(rawInput, ['revision', ...sampleHeaderFields, 'products', 'sampleCategoryId']);
-  const { products, sampleCategoryId, ...headerInput } = rawInput;
+  fieldsOnly(rawInput, ['revision', ...sampleHeaderFields, 'products', 'sampleCategoryId', 'complaintRetestIds']);
+  const { products, sampleCategoryId, complaintRetestIds, ...headerInput } = rawInput;
   const expectedRevision = sampleHeaderRevision(headerInput);
   const organizationId = identity.organization_id; const db = database(client);
   const [existing] = await db.select().from(samples).where(and(eq(samples.organizationId, organizationId), eq(samples.id, sampleId))).for('update');
@@ -58,14 +59,18 @@ export async function updateSample(client, identity, sampleId, rawInput) {
   const { changes } = sampleHeaderUpdateInput(headerInput, existing.sampleType);
   const ordinary = ['customer', 'internal', 'proficiency', 'interlaboratory'].includes(existing.sampleType);
   const editLines = ordinary && Object.hasOwn(rawInput, 'products');
+  const editRetests = existing.sampleType === 'complaint' && Object.hasOwn(rawInput, 'complaintRetestIds');
   if (ordinary && Object.hasOwn(rawInput, 'sampleCategoryId') && !editLines) throw new HttpError(400, 'invalid_sample', 'Supply the sample lines when changing the primary category.');
   const categoryId = editLines && Object.hasOwn(rawInput, 'sampleCategoryId') ? uuid(sampleCategoryId, 'Sample category').toLowerCase() : existing.sampleCategoryId;
-  if (!Object.keys(changes).length && !editLines) return { id: existing.id, sampleNumber: existing.sampleNumber, revision: existing.revision };
+  if (!Object.keys(changes).length && !editLines && !editRetests) return { id: existing.id, sampleNumber: existing.sampleNumber, revision: existing.revision };
   if (existing.revision === 2_147_483_647) throw new HttpError(409, 'sample_revision_limit', 'This sample has reached its revision limit.');
   const captured = await changedCustomerReferences(client, organizationId, existing, changes);
   let lineChanges = {}; let reportingDate = '';
   const receivedValue = changes.receivedAt ?? existing.receivedAt;
-  try { if (editLines) ({ changes: lineChanges, reportingDate } = await reconcileSampleProducts(client, identity, existing, products, categoryId, receivedValue)); }
+  try {
+    if (editLines) ({ changes: lineChanges, reportingDate } = await reconcileSampleProducts(client, identity, existing, products, categoryId, receivedValue));
+    if (editRetests) reportingDate = await updateComplaintRetests(client, identity, existing, complaintRetestIds);
+  }
   catch (error) {
     const cause = error.cause ?? error;
     if (cause.code === '55000' || cause.code === '23503') throw new HttpError(409, 'sample_lines_changed', 'A sample line or test is in use or its references changed. Reload the sample before saving.');

@@ -45,8 +45,9 @@ export async function generateTestRequests(client, identity, sampleId, input = {
     product.product_id AS "productId", product.id AS "sampleProductId", product.sample_category_id AS "sampleCategoryId" FROM sample_tests test JOIN sample_products product
       ON product.organization_id = test.organization_id AND product.id = test.sample_product_id
     WHERE test.organization_id = $1 AND product.sample_id = $2 AND ($3::uuid[] IS NULL OR test.id = ANY($3)) AND test.status = 'planned'
-    ORDER BY product.display_order, test.display_order, test.id FOR UPDATE OF test`, [identity.organization_id, sampleId, selectedIds]);
-  if (selectedIds && tests.rowCount !== selectedIds.length) throw new HttpError(409, 'sample_test_not_available', 'A selected sample test is missing or already requested.');
+      AND (NOT $4::boolean OR test.is_retest)
+    ORDER BY product.display_order, test.display_order, test.id FOR UPDATE OF test`, [identity.organization_id, sampleId, selectedIds, sample.sample_type === 'complaint']);
+  if (selectedIds && tests.rowCount !== selectedIds.length) throw new HttpError(409, 'sample_test_not_available', 'A selected sample test is missing, already requested or not selected for retest.');
   if (!tests.rowCount) return { items: [], jobs: [] };
   const specifications = await createSpecifications(client, identity, tests.rows);
   const numbers = await client.query("SELECT laboratory_next_number('test_request', extract(year FROM now() AT TIME ZONE 'UTC')::integer::text) AS number FROM generate_series(1, $1::integer)", [tests.rowCount]);
