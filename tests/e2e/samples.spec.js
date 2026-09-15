@@ -49,7 +49,7 @@ test('registration recovers from a failed save and reaches allocated, persisted 
   await page.getByRole('button', { name: 'Auto-fill parameters', exact: true }).click();
   await expect(page.getByLabel('Requested size 1', { exact: true })).toHaveValue('10 mL');
   await expect(page.getByLabel('Charges 1', { exact: true })).toHaveValue('125');
-  await expect(page.getByLabel('Amount (Inc. of all taxes)', { exact: true })).toHaveValue('0');
+  await expect(page.getByLabel('Amount', { exact: true })).toHaveValue('0');
   await page.getByLabel('Receiving Date', { exact: true }).fill('2026-09-12');
   await expect(page.getByLabel('Tentative Reporting Date', { exact: true })).toHaveValue('2026-09-14');
   await page.getByLabel('Quantity', { exact: true }).fill('1.25');
@@ -87,7 +87,7 @@ test('registration recovers from a failed save and reaches allocated, persisted 
   await page.getByRole('button', { name: 'Save Sample', exact: true }).click();
   await expect(page.locator('.sample-form-page').getByRole('alert')).toContainText('Synthetic registration interruption');
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('1.25');
-  await expect(page.getByLabel('Amount (Inc. of all taxes)', { exact: true })).toHaveValue('0');
+  await expect(page.getByLabel('Amount', { exact: true })).toHaveValue('0');
   const registrationResponse = page.waitForResponse((response) => response.url().endsWith('/api/samples') && response.request().method() === 'POST' && response.status() === 201);
   await page.getByRole('button', { name: 'Save Sample', exact: true }).click();
   const created = await (await registrationResponse).json();

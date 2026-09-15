@@ -104,7 +104,7 @@ export default function SampleRegistration({ requestedKind, receivedByName, canC
         <SampleFormSection id="new-sample-additional-details" title="Additional Details"><div className="container-fluid p-4"><div className="row g-4">
           <div className="col-lg-6">{textField('modeOfReceipt', 'Mode of Sample Receipt', { maxLength: 200 })}</div>
           <div className="col-lg-6"><SampleTextField label="Tentative Reporting Date" type="date" required value={dueAt} disabled={busy} onChange={(value) => setField('dueAt', value)} /></div>
-          <div className="col-lg-6"><SampleTextField label="Amount (Inc. of all taxes)" type="number" min="0" step="any" value={form.totalAmount === '' ? estimatedAmount(form.products, form.kind) : form.totalAmount} disabled={busy} onChange={(value) => setField('totalAmount', value)} /></div>
+          <div className="col-lg-6"><SampleTextField label="Amount" type="number" min="0" step="any" value={form.totalAmount === '' ? estimatedAmount(form.products, form.kind) : form.totalAmount} disabled={busy} onChange={(value) => setField('totalAmount', value)} /></div>
           <div className="col-lg-6">{textField('receivedByName', 'Received By', { maxLength: 200 })}</div>
           <div className="col-12">{textField('collectionDetails', 'Sample Collection Details', { textarea: true, rows: 3, maxLength: 5000 })}</div>
           {form.kind === 'amendment' ? <div className="col-12">{textField('amendmentRemarks', 'Amendment Remarks', { textarea: true, rows: 3, maxLength: 5000 })}</div> : null}

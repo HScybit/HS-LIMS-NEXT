@@ -49,7 +49,7 @@ export default function SampleDetails({ sampleId }) {
     ...(sample.iqcType ? [['IQC Type', sample.iqcType]] : []), ...(sample.participantCount ? [['No. of Participants', sample.participantCount]] : []),
     ...(sample.ilcMode === 'organizer' ? [['ILC Labs', sample.participatingLabs.map((lab) => lab.laboratoryName).join(', '), true]] : [])];
   const additional = [['Mode of Sample Receipt', sample.modeOfReceipt], ['Tentative Reporting Date', dateLabel(sample.dueAt)],
-    ['Amount (Inc. of all taxes)', sample.totalAmount], ['Received By', sample.receivedByName], ['Sample Collection Details', sample.collectionDetails, true],
+    ['Amount', sample.totalAmount], ['Received By', sample.receivedByName], ['Sample Collection Details', sample.collectionDetails, true],
     ...(sample.sampleType === 'amendment' ? [['Amendment Remarks', sample.amendmentRemarks, true]] : []),
     ...(sample.sampleType === 'complaint' ? [['Complaint Remarks', sample.complaintRemarks, true]] : [])];
   const actions = sample.canGenerateRequests && sample.products.some((product) => product.tests.some((test) => test.status === 'planned'))
