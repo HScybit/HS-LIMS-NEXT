@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, integer, numeric, doublePrecision, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
 import { organizations } from './schema.js';
 import { templates } from './template-schema.js';
 
@@ -24,9 +24,10 @@ export const laboratories = pgTable('laboratories', { ...identity(), ...metadata
 
 export const sampleCategories = pgTable('sample_categories', {
   ...identity(), ...metadata(), description: text('description').notNull().default(''), abbreviation: text('abbreviation').notNull(),
-  retentionDays: integer('retention_days'), estimatedTimeInDays: integer('estimated_time_in_days').notNull().default(0),
+  retentionDays: integer('retention_days'), estimatedTimeInDays: doublePrecision('estimated_time_in_days').notNull().default(0),
   enableEvents: boolean('enable_events').notNull().default(false), enableReissue: boolean('enable_reissue').notNull().default(false),
-}, (t) => [...named(t, 'sample_categories'), check('sample_categories_settings', sql`length(trim(${t.abbreviation})) between 1 and 64 and ${t.retentionDays} >= 0 and ${t.estimatedTimeInDays} >= 0`)]);
+}, (t) => [...named(t, 'sample_categories'), check('sample_categories_settings', sql`length(trim(${t.abbreviation})) between 1 and 64 and ${t.retentionDays} >= 0 and ${t.estimatedTimeInDays} >= 0`),
+  check('sample_categories_estimate_finite', sql`${t.estimatedTimeInDays} not in ('NaN'::double precision, 'Infinity'::double precision, '-Infinity'::double precision)`)]);
 
 export const products = pgTable('products', {
   ...identity(), ...metadata(), description: text('description').notNull().default(''), abbreviation: text('abbreviation'), jobTemplateId: uuid('job_template_id'),

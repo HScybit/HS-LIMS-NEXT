@@ -1114,6 +1114,13 @@
       "when": 1789508229738,
       "tag": "0158_sample_product_images",
       "breakpoints": true
+    },
+    {
+      "idx": 159,
+      "version": "7",
+      "when": 1789511558757,
+      "tag": "0159_fractional_category_estimates",
+      "breakpoints": true
     }
   ]
 }

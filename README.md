@@ -1,5 +1,7 @@
 # Sampleify LIMS
 
+Sample Category estimates preserve finite fractional days from the original application. Sample registration choices, edit previews and saved reporting dates retain the existing calendar-day truncation; migration `0159` preserves all existing integer estimates exactly.
+
 Product images can be uploaded, previewed, replaced or removed on sample registration and ordinary sample edits. JPEG, PNG and WebP files are limited to 10 MiB and validated by decoding their contents. Files retain their original bytes, checksum and uploader; removing a line reference preserves the immutable file. Upload retries recover the same file after a lost response, and in-flight uploads cannot move between Product rows. Tenant isolation, sample permissions and workflow edit gates apply. Image metadata loads in one batch for up to 100 Product lines. Project-field capture and acknowledgement printing remain separate migration work.
 
 The image service benchmark is `node scripts/benchmark-sample-images.js`; the browser benchmark is `npx playwright test --config=playwright.performance.config.js tests/performance/sample-images.spec.js`. Run them separately with `SAMPLEIFY_TEST_DATABASE_NAME` and database URLs pointing to a synthetic verification database.
