@@ -98,7 +98,9 @@ Datasheet submission records the exact frozen capture, selected final result, un
 
 TR Data displays supported scientific markup in datasheets and frozen reports, including subscripts, superscripts and entities. Unbound image markup remains visible as text.
 
-Sample registration defaults Receiving Date to local today and keeps it read-only. Organization Settings → Sample Page → Allow Editing Receiving Date enables explicit dates. Failed saves retain the entered date; older settings clients preserve this preference when omitted. Registration options expose only this flag through the sample permission boundary. Existing API date validation and timestamp conversion remain unchanged.
+Sample registration defaults Receiving Date to local today and keeps it read-only. Organization Settings → Sample Page → Allow Editing Receiving Date enables explicit dates. Failed saves retain the entered date; older settings clients preserve this preference when omitted. Registration options expose only this flag through the sample permission boundary. The API continues to validate explicitly supplied instants independently of this form setting.
+
+Registration preserves PostgreSQL timestamp precision for receipt and due dates. It validates their order before allocating a sample number, and derives the number year and retention date from the same normalized receiving instant. Timestamp rounding across midnight or a year boundary stays consistent; invalid offsets, reversed dates and UTC years outside 0001–9999 fail without partial registration or consumed numbers.
 
 `PATCH /api/samples/:id` accepts `revision` and explicitly supplied header fields with sample-management and current-workflow edit permission. It preserves omitted headers, applies the IQC/amendment/complaint restrictions, validates changed customer and quotation references, and records the save atomically with its actor. Receiving-date changes preserve PostgreSQL timestamp precision and recalculate retention when the instant changes.
 

@@ -31,11 +31,6 @@ async function setup({ days = '3', count = 1, ...headers } = {}) {
     receivedAt: '2024-02-28T10:30:00.123456Z', dueAt: '2024-03-20T18:00:00.654321Z',
     products: Array.from({ length: count }, () => structuredClone(fixture.registration.products[0])), ...headers };
   const created = await work((client, identity) => registerSample(client, identity, registration));
-  const opened = await read(created);
-  // Registration currently rounds through Date; establish exact saved instants
-  // through the existing header service before exercising line-edit preservation.
-  await work((client, identity) => updateSample(client, identity, created.id, { revision: opened.revision,
-    receivedAt: registration.receivedAt, dueAt: registration.dueAt }));
   return { fixture, sample: await read(created) };
 }
 const newLine = fixture => ({ ...structuredClone(fixture.registration.products[0]), sampleCategoryId: fixture.category.id,
