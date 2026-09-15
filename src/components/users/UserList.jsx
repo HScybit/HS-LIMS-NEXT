@@ -9,6 +9,7 @@ import PrimaryButton from '../ui/PrimaryButton.jsx';
 import PageHeader from '../layout/PageHeader.jsx';
 import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
 import { userReferences } from './UserReferenceField.jsx';
+import { customFieldListDisplay, userCustomFieldColumnKey } from '../../custom-fields/listing-values.js';
 import '../../styles/users.scss';
 
 const actionClass = 'smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 flex-shrink-0 text-nowrap';
@@ -41,6 +42,7 @@ async function roleFilterOptions(search, { signal }) {
 
 export default function UserList({ canManage, currentUserId }) {
   const router = useRouter(); const search = useSearchParams(); const [reload, setReload] = useState(0);
+  const [customFields, setCustomFields] = useState(null); const [customFieldError, setCustomFieldError] = useState('');
   // DataTable replaces its rows with skeletons during refresh; pending commands must outlive those cells.
   const [commands, setCommands] = useState({});
   const refresh = useCallback(() => setReload(value => value + 1), []);
@@ -61,11 +63,25 @@ export default function UserList({ canManage, currentUserId }) {
     { key: 'lastLoginAt', header: 'Last login', format: dateTime },
     { key: 'lastLogoutAt', header: 'Last logout', format: dateTime },
     { key: 'membershipActive', header: 'Status', type: 'boolean', component: UserStatus, canManage, currentUserId, commands, onSave: saveStatus, onReload: reloadStatus },
+    ...(customFields ?? []).map(field => ({ key: userCustomFieldColumnKey(field), header: field.label, searchable: field.showInFilter,
+      filterable: field.showInFilter, hidden: !field.showInList, minWidth: 150,
+      format: (_value, row) => customFieldListDisplay(row.customFields?.[field.key], field) || '-',
+      ...(field.fieldType === 'select' && field.options.length ? { filterOptions: field.options.map(option => ({ value: option.label, label: option.label })) } : {}),
+    })),
     { key: 'actions', header: 'Actions', minWidth: 160, render: row => <div className="d-flex flex-nowrap align-items-center gap-2">
       <Link className={actionClass} href={`/user_management/${row.id}/view?from=${encodeURIComponent(returnPath)}`}><AppIcon name="eye" /><span>View</span></Link>
       {canManage ? <Link className={actionClass} href={`/user_management/${row.id}/edit?from=${encodeURIComponent(returnPath)}`}><AppIcon name="edit" /><span>Edit</span></Link> : null}
     </div> },
-  ], [canManage, currentUserId, returnPath, commands, saveStatus, reloadStatus]);
+  ], [canManage, currentUserId, returnPath, commands, saveStatus, reloadStatus, customFields]);
+  useEffect(() => {
+    const controller = new AbortController();
+    apiRequest('/api/users/custom-fields?view=list', { signal: controller.signal }).then(({ fields }) => {
+      if (controller.signal.aborted) return;
+      const sorted = [...fields].sort((left, right) => left.displayOrder - right.displayOrder || left.label.localeCompare(right.label));
+      setCustomFields(current => current && JSON.stringify(current) === JSON.stringify(sorted) ? current : sorted); setCustomFieldError('');
+    }).catch(failure => { if (!controller.signal.aborted) setCustomFieldError(failure.message); });
+    return () => controller.abort();
+  }, [reload]);
   const loadRows = useCallback(async ({ page, pageSize, search, filters, sort }) => {
     void reload;
     // DataTable labels belong to the visible filter chips; only IDs/values belong in the query.
@@ -82,5 +98,8 @@ export default function UserList({ canManage, currentUserId }) {
   return <><PageHeader><div className="page-header"><div className="container-fluid h-100"><div className="row h-100 align-items-center justify-content-between page-header__row">
     <div className="col page-header__start"><h1 className="page-title mb-0">User Management</h1></div><div className="col-auto page-header__actions">
       {canManage ? <PrimaryButton leftIcon="plus" onClick={() => router.push(`/user_management/new?from=${encodeURIComponent(returnPath)}`)}>New User</PrimaryButton> : null}
-    </div></div></div></div></PageHeader><DataTable columns={columns} loadRows={loadRows} tableLayout="auto" /></>;
+    </div></div></div></div></PageHeader>
+    {customFieldError ? <div className="alert alert-danger m-4" role="alert">{customFieldError}<button type="button" className="btn btn-link" onClick={refresh}>Retry loading fields</button></div> : null}
+    {customFields ? <DataTable columns={columns} loadRows={loadRows} tableLayout="auto" /> : !customFieldError
+      ? <div className="text-muted m-4" role="status">Loading user fields...</div> : null}</>;
 }

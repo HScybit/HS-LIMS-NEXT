@@ -1,5 +1,6 @@
 import { HttpError } from '../auth/errors.js';
 import { dateOnly, fieldsOnly, integer, text, uuid } from '../templates/input.js';
+import { userCustomFieldColumnKey } from '../custom-fields/listing-values.js';
 
 export const userSortColumns = { displayName: 'display_name', username: 'username', email: 'email', createdAt: 'created_at', active: 'active',
   identityCreatedAt: 'identity_created_at', defaultRoleName: 'default_role_name', defaultRoleDescription: 'default_role_description',
@@ -13,11 +14,15 @@ function filterText(value) {
   return result;
 }
 
-function userFilters(value = {}) {
-  fieldsOnly(value, filterKeys); const result = {};
+function userFilters(value = {}, customColumns = new Map()) {
+  fieldsOnly(value, [...filterKeys, ...[...customColumns].filter(([, field]) => field.showInFilter).map(([key]) => key)]); const result = {};
   for (const [key, filter] of Object.entries(value)) {
     fieldsOnly(filter, key === 'identityCreatedAt' ? ['type', 'from', 'to'] : ['type', 'value']);
-    if (key === 'identityCreatedAt') {
+    if (customColumns.has(key)) {
+      const field = customColumns.get(key); const expectedType = field.fieldType === 'select' && field.options.length ? 'select' : 'text';
+      if (filter.type !== expectedType) throw new HttpError(400, 'invalid_user_filter', 'Custom Field filter does not match its configured control.');
+      const value = filterText(filter.value); if (value) result[key] = { type: expectedType, value };
+    } else if (key === 'identityCreatedAt') {
       if (filter.type !== 'date') throw new HttpError(400, 'invalid_user_filter', 'Created-on filter is invalid.');
       const from = filter.from === undefined || filter.from === '' ? null : dateOnly(filter.from);
       const to = filter.to === undefined || filter.to === '' ? null : dateOnly(filter.to);
@@ -39,18 +44,19 @@ function userFilters(value = {}) {
   return result;
 }
 
-export function userListInput(input = {}) {
+export function userListInput(input = {}, customFields = []) {
   fieldsOnly(input, ['page', 'pageSize', 'search', 'status', 'sort', 'filters', 'timeZone']);
+  const customColumns = new Map(customFields.map(field => [userCustomFieldColumnKey(field), field]));
   const search = text(input.search, 'Search', 500, { optional: true }).trim();
   if (!search.isWellFormed() || search.includes('\0')) throw new HttpError(400, 'invalid_user_search', 'Search contains invalid text.');
   const status = input.status ?? 'all';
   if (!['all', 'active', 'disabled'].includes(status)) throw new HttpError(400, 'invalid_user_status', 'Select an available user status.');
   const sort = input.sort ?? { key: 'displayName', dir: 'asc' };
   fieldsOnly(sort, ['key', 'dir']);
-  if (typeof sort.key !== 'string' || !Object.hasOwn(userSortColumns, sort.key) || !['asc', 'desc'].includes(sort.dir)) throw new HttpError(400, 'invalid_user_sort', 'Select a user sort column and direction.');
+  if (typeof sort.key !== 'string' || !Object.hasOwn(userSortColumns, sort.key) && !customColumns.get(sort.key)?.showInList || !['asc', 'desc'].includes(sort.dir)) throw new HttpError(400, 'invalid_user_sort', 'Select a user sort column and direction.');
   const timeZone = input.timeZone ?? 'UTC';
   if (typeof timeZone !== 'string' || timeZone.length > 100 || !/^[A-Za-z_+-]+(?:\/[A-Za-z0-9_+-]+)*$/.test(timeZone)) throw new HttpError(400, 'invalid_user_time_zone', 'Select a valid time zone.');
   try { new Intl.DateTimeFormat('en', { timeZone }); } catch { throw new HttpError(400, 'invalid_user_time_zone', 'Select a valid time zone.'); }
   return { page: integer(input.page ?? 1, 'Page', 1, 1_000_000), pageSize: integer(input.pageSize ?? 25, 'Page size', 1, 100), search, status, sort,
-    filters: userFilters(input.filters ?? {}), timeZone };
+    filters: userFilters(input.filters ?? {}, customColumns), timeZone };
 }

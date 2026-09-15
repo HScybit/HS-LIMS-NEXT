@@ -38,7 +38,7 @@ try {
     await measure(actor, (client, identity) => listUsers(client, identity, { search: prefix, pageSize: 100 }), (result) => {
       assert.equal(result.totalCount, size); assert.equal(result.rows.length, Math.min(100, size));
       assert(result.rows.every((row) => row.roles.length === roleCount && (events ? row.lastLoginAt && row.lastLogoutAt : row.lastLoginAt === null && row.lastLogoutAt === null)));
-    }, budgetMs, 2, `${size} users, ${roleCount} roles, ${events} events each`);
+    }, budgetMs, 3, `${size} users, ${roleCount} roles, ${events} events each`);
     if (roleCount === 20) {
       const manyRoles = (await owner.query(`INSERT INTO roles(organization_id,id,name) SELECT $1,gen_random_uuid(),$2||'-Detailed-'||n FROM generate_series(1,500) n RETURNING id`, [actor.organizationId, prefix])).rows.map((row) => row.id);
       await owner.query('DELETE FROM membership_roles WHERE organization_id=$1 AND user_id=$2', [actor.organizationId, people[0]]);

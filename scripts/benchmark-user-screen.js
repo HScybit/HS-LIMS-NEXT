@@ -62,18 +62,18 @@ try {
     console.log(JSON.stringify({ fixture: size, setupMs, analyzeMs, roleCount, recordedProfiles: size === 10000 ? 1000 : 0 }));
     const query = { search: prefix, pageSize: 100 };
     const validateList = result => { assert.equal(result.totalCount, size); assert.equal(result.rows.length, 100); assert(result.rows.every(person => person.roles.length === roleCount)); };
-    await measure(actor, `First 100 among ${size} users`, budget, 2, (client, identity) => listUsers(client, identity, query), validateList);
+    await measure(actor, `First 100 among ${size} users`, budget, 3, (client, identity) => listUsers(client, identity, query), validateList);
     if (size === 10000) {
-      await measure(actor, 'Saved label and calendar filters among 10000 users', 600, 2, (client, identity) => listUsers(client, identity, { ...query, timeZone: 'Asia/Kolkata', filters: {
+      await measure(actor, 'Saved label and calendar filters among 10000 users', 600, 3, (client, identity) => listUsers(client, identity, { ...query, timeZone: 'Asia/Kolkata', filters: {
         defaultRoleName: { type: 'text', value: 'Saved screen role' }, businessUnitName: { type: 'text', value: 'Saved screen unit' }, identityCreatedAt: { type: 'date', from: '2024-02-29', to: '2024-02-29' } } }),
       result => { assert.equal(result.totalCount, 1000); assert.equal(result.rows.length, 100); });
-      await measure(actor, 'Actual last-login sort among 10000 users', 1000, 2, (client, identity) => listUsers(client, identity, { ...query, sort: { key: 'lastLoginAt', dir: 'desc' } }),
+      await measure(actor, 'Actual last-login sort among 10000 users', 1000, 3, (client, identity) => listUsers(client, identity, { ...query, sort: { key: 'lastLoginAt', dir: 'desc' } }),
         result => { validateList(result); assert(result.rows.every(person => person.lastLoginAt)); });
-      await measure(actor, 'Saved unit sort among 10000 users', 1000, 2, (client, identity) => listUsers(client, identity, { ...query, sort: { key: 'businessUnitName', dir: 'desc' } }),
+      await measure(actor, 'Saved unit sort among 10000 users', 1000, 3, (client, identity) => listUsers(client, identity, { ...query, sort: { key: 'businessUnitName', dir: 'desc' } }),
         result => { validateList(result); assert(result.rows.every(person => person.businessUnitId === unit)); });
       await measure(actor, 'Exact profiled user among 10000 users', 100, 1, (client, identity) => loadUser(client, identity, ids[0]),
         result => { assert.equal(result.id, ids[0]); assert.equal(result.roles.length, 20); assert.equal(result.businessUnitId, unit); });
-      await measure(actor, 'Complete form metadata among 10000 users', 150, 4, (client, identity) => loadUserForm(client, identity, ids[0]),
+      await measure(actor, 'Complete form metadata among 10000 users', 150, 5, (client, identity) => loadUserForm(client, identity, ids[0]),
         result => { assert.equal(result.user.id, ids[0]); assert.equal(result.profile.roles.length, 20); assert.equal(result.signature.file, null); });
     }
   }

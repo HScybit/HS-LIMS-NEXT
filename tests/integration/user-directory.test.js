@@ -20,12 +20,12 @@ before(async () => {
 });
 after(async () => { await closePool(); await owner.end(); });
 
-test('user directory readers and managers get bounded typed identities with two list queries and one detail query', async () => {
+test('user directory readers and managers get bounded typed identities with three list queries and one detail query', async () => {
   await work(reader, async (client, identity) => {
     let count = 0; const measured = { query(...args) { count++; return client.query(...args); } };
     const result = await listUsers(measured, identity, { pageSize: 1 });
-    assert.equal(count, 2); assert.equal(result.totalCount, 3); assert.equal(result.rows.length, 1);
-    const person = await loadUser(measured, identity, manager.userId.toUpperCase()); assert.equal(count, 3);
+    assert.equal(count, 3); assert.equal(result.totalCount, 3); assert.equal(result.rows.length, 1);
+    const person = await loadUser(measured, identity, manager.userId.toUpperCase()); assert.equal(count, 4);
     assert.deepEqual(Object.keys(person).sort(), ['active', 'createdAt', 'displayName', 'email', 'id', 'identityActive', 'lastLoginAt', 'lastLogoutAt', 'membershipActive', 'organizationName', 'roles', 'statusRevision', 'username',
       'identityCreatedAt', 'defaultRoleId', 'defaultRoleName', 'defaultRoleDescription', 'businessUnitId', 'businessUnitName'].sort());
     assert.equal(person.email, manager.email); assert.equal(person.active, true); assert(person.lastLoginAt instanceof Date); assert.equal(person.lastLogoutAt, null);

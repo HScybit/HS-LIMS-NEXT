@@ -1,6 +1,7 @@
 import { customFieldDateDisplay } from './dates.js';
 
 export const customFieldColumnKey = (field) => `pf:${field.id}`;
+export const userCustomFieldColumnKey = (field) => `pf:${field.key}`;
 
 export function customFieldListDisplay(entry, field) {
   if (!entry) return '';

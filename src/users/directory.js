@@ -1,6 +1,9 @@
 import { HttpError } from '../auth/errors.js';
 import { uuid } from '../templates/input.js';
 import { userListInput, userSortColumns, userTextSorts } from './input.js';
+import { userCustomFields } from '../masters/custom-fields.js';
+import { userCustomFieldColumnKey } from '../custom-fields/listing-values.js';
+import { loadUserListingValues, userCustomFieldMatch, userCustomFieldOrder, userCustomFieldSortJoin, userListingCaptures } from './custom-field-listing.js';
 
 function requireRead(identity) {
   if (!identity.permission_codes?.some((permission) => ['users.read', 'users.manage'].includes(permission))) {
@@ -39,22 +42,33 @@ function userRecord(row) {
 }
 
 export async function listUsers(client, identity, value = {}) {
-  requireRead(identity); const input = userListInput(value);
+  requireRead(identity); const customFields = await userCustomFields(client, identity, { forListing: true });
+  const input = userListInput(value, customFields); const customColumns = new Map(customFields.map(field => [userCustomFieldColumnKey(field), field]));
+  const customSort = customColumns.get(input.sort.key);
   const args = [identity.organization_id]; const conditions = ['person.organization_id=$1'];
-  let matchingRoles = '';
+  const bind = (value) => { args.push(value); return `$${args.length}`; }; const commonTables = [];
+  const matchingKeys = [...new Set([
+    ...(input.search ? customFields.filter(field => field.showInFilter).map(field => field.key) : []),
+    ...Object.keys(input.filters).map(key => customColumns.get(key)?.key).filter(Boolean),
+    ...(customSort ? [customSort.key] : []),
+  ])];
+  if (matchingKeys.length) commonTables.push(`listing_definitions AS MATERIALIZED (
+    SELECT organization_id,field_id,revision,key FROM user_custom_field_versions WHERE organization_id=$1 AND key=ANY(${bind(matchingKeys)}::text[]))`, userListingCaptures);
   if (input.status !== 'all') { args.push(input.status === 'active'); conditions.push(`person.active=$${args.length}`); }
   if (input.search) {
     args.push(literalSearch(input.search)); const parameter = `$${args.length}`;
     // Match each scoped role once, rather than repeating its name search for every assignment.
-    matchingRoles = `WITH matching_roles AS MATERIALIZED (SELECT id FROM user_profile_references
-      WHERE organization_id=$1 AND kind='roles' AND name ILIKE ${parameter})`;
+    commonTables.push(`matching_roles AS MATERIALIZED (SELECT id FROM user_profile_references
+      WHERE organization_id=$1 AND kind='roles' AND name ILIKE ${parameter})`);
+    const searchable = customFields.filter(field => field.showInFilter);
+    const customMatch = searchable.length ? ` OR ${userCustomFieldMatch(bind, searchable.map(field => field.key), input.search)}` : '';
     conditions.push(`(person.display_name ILIKE ${parameter} OR person.username ILIKE ${parameter} OR person.email ILIKE ${parameter}
       OR person.default_role_name ILIKE ${parameter} OR person.business_unit_name ILIKE ${parameter}
       OR EXISTS (SELECT 1 FROM user_directory_roles assignment JOIN matching_roles matched ON matched.id=assignment.role_id
-        WHERE assignment.organization_id=person.organization_id AND assignment.user_id=person.id))`);
+        WHERE assignment.organization_id=person.organization_id AND assignment.user_id=person.id)${customMatch})`);
   }
-  const bind = (value) => { args.push(value); return `$${args.length}`; };
   for (const [key, filter] of Object.entries(input.filters)) {
+    if (customColumns.has(key)) { conditions.push(userCustomFieldMatch(bind, [customColumns.get(key).key], filter.value)); continue; }
     if (filter.type === 'text') conditions.push(`person.${userSortColumns[key]} ILIKE ${bind(literalSearch(filter.value))}`);
     if (filter.type === 'boolean') conditions.push(`person.membership_active=${bind(filter.value)}`);
     if (filter.type === 'relation') conditions.push(`person.default_role_id=ANY(${bind(filter.value)}::uuid[])`);
@@ -65,22 +79,29 @@ export async function listUsers(client, identity, value = {}) {
     }
   }
   const where = `WHERE ${conditions.join(' AND ')}`;
-  const totalCount = (await client.query(`${matchingRoles} SELECT count(*)::integer AS total FROM user_directory person ${where}`, args)).rows[0].total;
-  const column = userSortColumns[input.sort.key]; const order = `${userTextSorts.includes(input.sort.key) ? `lower(person.${column})` : `person.${column}`} ${input.sort.dir} NULLS LAST,person.id`;
+  const common = commonTables.length ? `WITH ${commonTables.join(', ')}` : '';
+  const totalCount = (await client.query(`${common} SELECT count(*)::integer AS total FROM user_directory person ${where}`, args)).rows[0].total;
+  const column = userSortColumns[input.sort.key];
+  const order = customSort ? `${userCustomFieldOrder('person', input.sort.dir)},person.id`
+    : `${userTextSorts.includes(input.sort.key) ? `lower(person.${column})` : `person.${column}`} ${input.sort.dir} NULLS LAST,person.id`;
+  const fieldSortJoin = customSort ? userCustomFieldSortJoin(bind, customSort.key) : '';
+  const sortFields = customSort ? ',ordering_field.field_sort_kind,ordering_field.field_sort_text,ordering_field.field_sort_number,ordering_field.field_sort_boolean' : '';
   args.push(input.pageSize, (input.page - 1) * input.pageSize);
   const activitySort = ['lastLoginAt', 'lastLogoutAt'].includes(input.sort.key);
   // Sort activity from one scoped aggregation. Ordinary sorts load it only for the requested page.
-  const activitySummary = activitySort ? `${matchingRoles ? ', ' : 'WITH '}sorted_activity AS MATERIALIZED (
+  const activitySummary = activitySort ? `sorted_activity AS MATERIALIZED (
     SELECT user_id,max(occurred_at) FILTER (WHERE kind='sign_in') AS last_login_at,
       max(occurred_at) FILTER (WHERE kind='sign_out') AS last_logout_at
     FROM user_directory_activity WHERE organization_id=$1 GROUP BY user_id)` : '';
   const activityJoin = activitySort ? 'LEFT JOIN sorted_activity activity ON activity.user_id=person.id' : '';
-  const innerOrder = activitySort ? `activity.${column} ${input.sort.dir} NULLS LAST,person.id` : order;
-  const result = await client.query(`${matchingRoles}${activitySummary} SELECT ${fields(activitySort ? 'person' : 'activity')} FROM (
-    SELECT ${pageColumns}${activitySort ? ',activity.last_login_at,activity.last_logout_at' : ''}
-    FROM user_directory person ${activityJoin} ${where} ORDER BY ${innerOrder} LIMIT $${args.length - 1} OFFSET $${args.length}
+  const innerOrder = customSort ? `${userCustomFieldOrder('ordering_field', input.sort.dir)},person.id`
+    : activitySort ? `activity.${column} ${input.sort.dir} NULLS LAST,person.id` : order;
+  const pageTables = [...commonTables, ...(activitySummary ? [activitySummary] : [])];
+  const result = await client.query(`${pageTables.length ? `WITH ${pageTables.join(', ')}` : ''} SELECT ${fields(activitySort ? 'person' : 'activity')} FROM (
+    SELECT ${pageColumns}${activitySort ? ',activity.last_login_at,activity.last_logout_at' : ''}${sortFields}
+    FROM user_directory person ${activityJoin} ${fieldSortJoin} ${where} ORDER BY ${innerOrder} LIMIT $${args.length - 1} OFFSET $${args.length}
   ) person ${details} ${activitySort ? '' : activityDetails} ORDER BY ${order}`, args);
-  return { rows: result.rows.map(userRecord), totalCount };
+  return { rows: await loadUserListingValues(client, identity, result.rows.map(userRecord), customFields), totalCount };
 }
 
 export async function loadUser(client, identity, userId) {
