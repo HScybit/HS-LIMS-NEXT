@@ -66,6 +66,7 @@ function productPayload(product, saved, currencyCode) {
   const savedTests = new Map((saved?.tests ?? []).map(test => [test.id, test]));
   return {
     ...(product.id ? { id: product.id } : {}), productId: product.productId, sampleCategoryId: product.sampleCategoryId,
+    imageFileId: product.imageFileId ?? null,
     quantity: editedValue(product, saved, 'quantity'), tagId: product.tagId || null,
     tag: saved && product.tagId === (saved.tagId ?? '') ? saved.tag : null,
     ...Object.fromEntries(['customerReference', 'description', 'sampleSize', 'quality', 'identificationMark', 'measurementUnitId'].map(key => [key, editedValue(product, saved, key)])),

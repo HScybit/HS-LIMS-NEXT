@@ -27,7 +27,7 @@ test('registration rejects invalid dates, quantities, duplicate tests and silent
     (v) => { v.quantity = 0; }, (v) => { v.quantity = Infinity; }, (v) => { v.products[0].quantity = ''; },
     (v) => { v.products[0].tests.push({ ...v.products[0].tests[0] }); }, (v) => { v.products[0].tests[0].requestedQuantity = 1.2; },
     (v) => { v.totalAmount = 0; }, (v) => { v.products[0].tests[0].isRetest = 'false'; }, (v) => { v.products = []; },
-    (v) => { v.products[0].imageFileId = randomUUID(); }, (v) => { v.customFields = [{ fieldId: randomUUID(), value: false }]; },
+    (v) => { v.products[0].imageFileId = 'invalid'; }, (v) => { v.customFields = [{ fieldId: randomUUID(), value: false }]; },
     (v) => { v.organizationId = randomUUID(); },
   ];
   for (const change of cases) { const value = input(); change(value); assert.throws(() => sampleRegistrationInput(value)); }

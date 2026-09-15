@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PageHeader from '../layout/PageHeader.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
@@ -26,6 +26,15 @@ export default function SampleRegistration({ requestedKind, receivedByName, canC
   const [options, setOptions] = useState(null); const [loadError, setLoadError] = useState(''); const [reload, setReload] = useState(0);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
   const [saved, setSaved] = useState('');
+  const [imageUploads, setImageUploads] = useState(() => new Set());
+  const onImageBusy = useCallback((key, uploading) => setImageUploads(current => {
+    if (current.has(key) === uploading) return current;
+    const next = new Set(current); if (uploading) next.add(key); else next.delete(key); return next;
+  }), []);
+  const updateProduct = useCallback((key, changes) => setForm(current => ({ ...current,
+    products: current.products.map(product => product.key === key ? { ...product, ...changes } : product),
+  })), []);
+  const removeProduct = useCallback(key => setForm(current => ({ ...current, products: current.products.filter(product => product.key !== key) })), []);
   useEffect(() => {
     if (!canUse) return;
     const controller = new AbortController();
@@ -68,7 +77,7 @@ export default function SampleRegistration({ requestedKind, receivedByName, canC
     setForm((current) => ({ ...current, customerId: id, customerAddress: address?.text ?? '', customerQuotationId: '' }));
   }
   async function submit(event) {
-    event.preventDefault(); if (busy) return;
+    event.preventDefault(); if (busy || imageUploads.size) return;
     setError(''); setBusy(true);
     try {
       const body = editing ? sampleEditPayload(form, editingSample, options) : registrationPayload(form, options);
@@ -81,7 +90,7 @@ export default function SampleRegistration({ requestedKind, receivedByName, canC
   return <>
     <PageHeader><section className="page-header"><div className="container-fluid h-100"><div className="row page-header__row h-100 align-items-center justify-content-between gx-0">
       <div className="col page-header__start"><div className="page-title-wrap">{canRead ? <SecondaryButton size="medium" className="page-header__back" aria-label={editing ? 'Back to sample details' : 'Back to all samples'} href={editing ? `/samples/${sampleId}` : '/samples'} disabled={busy}><AppIcon name="chevron-left" /></SecondaryButton> : null}<h1 className="page-title mb-0">{title}</h1></div></div>
-      <div className="col-auto"><div className="page-header__actions"><PrimaryButton type="submit" form={formId} leftIcon="save" disabled={busy}>{busy ? 'Saving...' : editing ? 'Update Sample' : 'Save Sample'}</PrimaryButton></div></div>
+      <div className="col-auto"><div className="page-header__actions"><PrimaryButton type="submit" form={formId} leftIcon="save" disabled={busy || imageUploads.size > 0}>{busy ? 'Saving...' : editing ? 'Update Sample' : 'Save Sample'}</PrimaryButton></div></div>
     </div></div></section></PageHeader>
     <div className="sample-form-page min-vh-100 bg-body-tertiary"><main className="sample-form-page__body px-4 py-4 pb-5">
       {error ? <div className="sample-form-error-banner-slot"><div className="alert alert-danger sample-form-error-banner d-flex align-items-center justify-content-between gap-3" role="alert"><span>{error}</span><button type="button" className="btn-close" aria-label="Dismiss error" onClick={() => setError('')} /></div></div> : null}
@@ -111,10 +120,9 @@ export default function SampleRegistration({ requestedKind, receivedByName, canC
           {form.kind === 'iqc' ? <div className="col-lg-6"><SampleSelectField label="IQC Type" required value={form.iqcType} options={iqcTypes} placeholder="Select IQC type" disabled={busy || editing} onChange={(value) => setField('iqcType', value)} /></div> : null}
         </div></div></SampleFormSection>
         <SampleFormSection id="new-sample-product-details" title="Product Details"><div className="container-fluid p-4"><div className="sample-form-products d-grid gap-4">
-          {form.products.map((product, index) => <SampleProductCard key={product.key} product={product} index={index} kind={form.kind} currency={form.currencyCode} options={options} disabled={busy || (editing && !policy.products)}
+          {form.products.map((product, index) => <SampleProductCard key={product.key} onImageBusy={onImageBusy} product={product} index={index} kind={form.kind} currency={form.currencyCode} options={options} disabled={busy || (editing && !policy.products)}
             savedProduct={editingSample?.products.find(line => line.id === product.id)} canEditRetest={!busy && Boolean(policy?.retests)}
-            onChange={(changes) => setForm((current) => ({ ...current, products: current.products.map((item) => item.key === product.key ? { ...item, ...changes } : item) }))}
-            onRemove={() => setForm((current) => ({ ...current, products: current.products.filter((item) => item.key !== product.key) }))} />)}
+            onChange={updateProduct} onRemove={removeProduct} />)}
         </div><hr className="my-4" /><button className="smplfy-btn btn btn-outline-secondary w-100 py-3 add_new_product_btn" type="button" disabled={busy || (editing && !policy.products) || form.products.length >= 100}
           onClick={() => setField('products', [...form.products, newProduct(form.products[0]?.sampleCategoryId)])}><AppIcon name="plus" /><span>Add New Product</span></button></div></SampleFormSection>
         <SampleFormSection id="new-sample-additional-details" title="Additional Details"><div className="container-fluid p-4"><div className="row g-4">

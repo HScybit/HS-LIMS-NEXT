@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, bigint, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, integer, bigint, numeric, date, primaryKey, unique, uniqueIndex, index, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 import { templates, templateInstances, templateOccurrences, templateValues } from './template-schema.js';
 import { sampleCategories, products, productSampleCategories, customers, customerQuotations, laboratories, measurementUnits, testParameters, methodsOfAnalysis, parameterMethods, decisionRules, tags } from './master-schema.js';
@@ -50,15 +50,30 @@ export const samples = pgTable('samples', {
   check('sample_required_variant_details', sql`(${t.sampleType} <> 'quality_control' or ${t.iqcType} is not null) and (${t.sampleType} <> 'interlaboratory' or ${t.ilcMode} is not null)`),
   check('sample_amount', amount(t.totalAmount, t.currencyCode))]);
 
+const bytes = customType({ dataType: () => 'bytea' });
+export const sampleImageAssets = pgTable('sample_image_assets', {
+  organizationId: tenant(), id: uuid('id').notNull(), originalName: text('original_name').notNull(), mediaType: text('media_type').notNull(),
+  content: bytes('content').notNull(), byteLength: integer('byte_length').notNull(), sha256: text('sha256').notNull(),
+  width: integer('width').notNull(), height: integer('height').notNull(), frameCount: integer('frame_count').notNull(),
+  uploadedBy: uuid('uploaded_by').notNull(), uploadedAt: time('uploaded_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ name: 'sample_image_asset_pk', columns: [t.organizationId, t.id] }),
+  foreignKey({ name: 'sample_image_asset_actor_fk', columns: [t.organizationId, t.uploadedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('sample_image_asset_shape', sql`${t.mediaType} in ('image/png','image/jpeg','image/webp') and length(trim(${t.originalName})) between 1 and 500
+    and ${t.byteLength} between 1 and 10485760 and ${t.byteLength}=octet_length(${t.content}) and ${t.sha256}=encode(sha256(${t.content}),'hex')
+    and ${t.width} between 1 and 10000 and ${t.height} between 1 and 10000 and ${t.frameCount} between 1 and 200
+    and ${t.width}::bigint*${t.height}::bigint*${t.frameCount}::bigint<=40000000`),
+]);
+
 export const sampleProducts = pgTable('sample_products', {
   ...identity(), sampleId: uuid('sample_id').notNull(), productId: uuid('product_id').notNull(), sampleCategoryId: uuid('sample_category_id').notNull(),
-  productRevision: integer('product_revision'),
+  productRevision: integer('product_revision'), imageFileId: uuid('image_file_id'),
   productCode: text('product_code').notNull(), productName: text('product_name').notNull(), categoryCode: text('category_code').notNull(), categoryName: text('category_name').notNull(),
   quantity: numeric('quantity').notNull().default('1'), customerReference: text('customer_reference'), description: text('description'), displayOrder: integer('display_order').notNull(),
   sampleSize: text('sample_size'), quality: text('quality'), identificationMark: text('identification_mark'), receivedCondition: text('received_condition'),
   measurementUnitId: uuid('measurement_unit_id'), unitCode: text('unit_code'), unitSymbol: text('unit_symbol'), tag: text('tag'), tagId: uuid('tag_id'),
 }, (t) => [key(t), link(t, t.sampleId, samples), link(t, t.productId, products), link(t, t.sampleCategoryId, sampleCategories), link(t, t.measurementUnitId, measurementUnits),
   foreignKey({ name: 'sample_product_history_fk', columns: [t.organizationId, t.productId, t.productRevision], foreignColumns: [productVersions.organizationId, productVersions.productId, productVersions.revision] }),
+  foreignKey({ name: 'sample_product_image_fk', columns: [t.organizationId, t.imageFileId], foreignColumns: [sampleImageAssets.organizationId, sampleImageAssets.id] }),
   link(t, t.tagId, tags), check('sample_product_tag', sql`${t.tagId} is null or (${t.tag} is not null and length(trim(${t.tag})) between 1 and 250)`),
   foreignKey({ columns: [t.organizationId, t.productId, t.sampleCategoryId], foreignColumns: [productSampleCategories.organizationId, productSampleCategories.productId, productSampleCategories.sampleCategoryId] }),
   unique('sample_product_order_key').on(t.organizationId, t.sampleId, t.displayOrder),

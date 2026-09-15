@@ -3,11 +3,13 @@ import { HttpError } from '../auth/errors.js';
 import { database } from '../db/pool.js';
 import * as masters from '../db/master-schema.js';
 import { lockReferences } from './reference-locks.js';
+import { sampleImageReferences } from './images.js';
 
 const invalid = (message) => { throw new HttpError(422, 'invalid_sample_reference', message); };
 const uniqueIds = (values) => [...new Set(values.filter(Boolean))];
 
 export async function registrationReferences(client, organizationId, input) {
+  await sampleImageReferences(client, organizationId, input.products);
   const db = database(client);
   async function activeRows(table, ids, label) {
     const selected = uniqueIds(ids);

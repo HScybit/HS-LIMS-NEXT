@@ -8,6 +8,7 @@ import { sampleProductsUpdateInput, temporarySampleOrders } from './lines-input.
 import { sampleEditReferences } from './edit-references.js';
 import { sampleReportingRowsChanged } from './reporting-date.js';
 import { sampleReportingDate } from './reporting-estimates.js';
+import { sampleImageReferences } from './images.js';
 
 const conflict = message => { throw new HttpError(409, 'sample_lines_changed', message); };
 const invalid = message => { throw new HttpError(400, 'invalid_sample', message); };
@@ -18,7 +19,7 @@ const productColumns = [
   ['quantity', 'quantity', 'numeric'], ['customerReference', 'customer_reference', 'text'], ['description', 'description', 'text'],
   ['sampleSize', 'sample_size', 'text'], ['quality', 'quality', 'text'], ['identificationMark', 'identification_mark', 'text'], ['receivedCondition', 'received_condition', 'text'],
   ['measurementUnitId', 'measurement_unit_id', 'uuid'], ['unitCode', 'unit_code', 'text'], ['unitSymbol', 'unit_symbol', 'text'], ['tagId', 'tag_id', 'uuid'], ['tag', 'tag', 'text'],
-  ['displayOrder', 'display_order', 'integer'],
+  ['imageFileId', 'image_file_id', 'uuid'], ['displayOrder', 'display_order', 'integer'],
 ];
 const testColumns = [
   ['decisionRuleId', 'decision_rule_id', 'uuid'], ['requestedQuantity', 'requested_quantity', 'integer'], ['requestedSize', 'requested_size', 'text'],
@@ -51,6 +52,7 @@ export async function reconcileSampleProducts(client, identity, sample, rawProdu
     .where(and(eq(sampleTests.organizationId, organizationId), inArray(sampleTests.sampleProductId, lineIds))).orderBy(sampleTests.id).limit(5001).for('update') : [];
   if (selected.length > 5000) invalid('This sample exceeds the supported test-edit limit.');
   const oldLines = new Map(previousLines.map(line => [line.id, line]));
+  await sampleImageReferences(client, organizationId, lines);
   const oldTests = new Map(selected.map(({ test, hasRequest }) => [test.id, { ...test, hasRequest, used: hasRequest || test.status !== 'planned' }]));
   const keptLines = new Set(lines.map(line => line.id).filter(Boolean));
   const keptTests = new Map();

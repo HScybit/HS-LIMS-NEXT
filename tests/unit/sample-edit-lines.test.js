@@ -29,7 +29,7 @@ test('edit input rejects duplicate identities, invalid text, quantities and unsu
   duplicate.id = randomUUID(); assert.throws(() => sampleProductsUpdateInput([original, duplicate]));
   for (const value of [null, [], Array.from({ length: 101 }, line)]) assert.throws(() => sampleProductsUpdateInput(value));
   for (const patch of [{ id: '' }, { id: false }, { sampleId: randomUUID() }, { productRevision: 1 }, { customFields: [{ id: randomUUID() }] },
-    { imageFileId: randomUUID() }, { description: '\ud800' }, { description: 'Bad\0text' }, { quantity: '0' }, { tests: [] }]) {
+    { imageFileId: 'invalid' }, { description: '\ud800' }, { description: 'Bad\0text' }, { quantity: '0' }, { tests: [] }]) {
     assert.throws(() => sampleProductsUpdateInput([{ ...line(), ...patch }]));
   }
   for (const patch of [{ id: '' }, { sampleProductId: randomUUID() }, { requestedSize: '\udfff' }, { rate: '-1e-999' }, { rate: '-1' },

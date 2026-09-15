@@ -4,6 +4,7 @@ import { samples, sampleProducts, sampleParticipatingLabs } from '../db/sample-s
 import { uuid, requirePermission } from '../templates/input.js';
 import { HttpError } from '../auth/errors.js';
 import { workflowStateAccess } from '../workflows/access.js';
+import { sampleImageReferences } from './images.js';
 
 export async function loadSample(client, identity, sampleId) {
   requirePermission(identity, 'samples.read'); uuid(sampleId, 'Sample');
@@ -32,7 +33,8 @@ export async function loadSample(client, identity, sampleId) {
   const actorIds = [...new Set(events.rows.map((event) => event.actorUserId))];
   const actors = actorIds.length ? (await client.query('SELECT * FROM laboratory_actor_labels($1::uuid[])', [actorIds])).rows : [];
   const actorNames = new Map(actors.map((actor) => [actor.user_id, actor.display_name]));
-  const productMap = new Map(products.map((product) => [product.id, { ...product, tests: [] }]));
+  const images = await sampleImageReferences(client, organizationId, products);
+  const productMap = new Map(products.map((product) => [product.id, { ...product, image: images.get(product.imageFileId) ?? null, tests: [] }]));
   for (const test of tests.rows) productMap.get(test.sampleProductId).tests.push(test);
   return { ...sample, products: [...productMap.values()], participatingLabs, quotationNumber: quotation?.quotationNumber ?? null,
     workflowRunId: workflow.state?.workflow_run_id ?? null, stateName: workflow.state?.name ?? null, stateColor: workflow.state?.color ?? null,

@@ -23,7 +23,7 @@ export function newTest() {
 
 export function newProduct(sampleCategoryId = '') {
   return { key: crypto.randomUUID(), sampleCategoryId, productId: '', tagId: '', quantity: '1', customerReference: '', description: '',
-    sampleSize: '', quality: '', identificationMark: '', condition: '', measurementUnitId: '', tests: [newTest()] };
+    sampleSize: '', quality: '', identificationMark: '', condition: '', measurementUnitId: '', imageFileId: null, image: null, tests: [newTest()] };
 }
 
 export function newRegistration(kind = 'base', receivedByName = '', now = new Date()) {
@@ -112,7 +112,7 @@ export function registrationPayload(form, options) {
     amendmentRemarks: form.kind === 'amendment' ? form.amendmentRemarks : null, complaintRemarks: form.kind === 'complaint' ? form.complaintRemarks : null, description: form.description,
     products: products.map((product) => ({ productId: product.productId, sampleCategoryId: product.sampleCategoryId, tagId: product.tagId || null, quantity: product.quantity,
       customerReference: product.customerReference, description: product.description, sampleSize: product.sampleSize, quality: product.quality, identificationMark: product.identificationMark,
-      condition: product.condition, measurementUnitId: product.measurementUnitId || null,
+      condition: product.condition, measurementUnitId: product.measurementUnitId || null, imageFileId: product.imageFileId ?? null,
       tests: product.tests.map((test) => ({ testParameterId: test.testParameterId, methodId: test.methodId, decisionRuleId: test.decisionRuleId || null,
         requestedQuantity: Number(test.requestedQuantity), requestedSize: test.requestedSize, rate: test.rate === '' ? null : test.rate, currencyCode: test.rate === '' ? null : form.currencyCode,
         estimatedDurationMinutes: test.estimatedDurationDays === '' ? null : Math.round(Number(test.estimatedDurationDays) * 480),

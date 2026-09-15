@@ -60,7 +60,6 @@ function testInput(input, editing = false) {
 export function sampleProductInput(input, categoryId, editing = false) {
   fieldsOnly(input, ['productId', 'sampleCategoryId', 'quantity', 'customerReference', 'description', 'sampleSize', 'quality', 'identificationMark', 'condition', 'measurementUnitId', 'imageFileId', 'tag', 'tagId', 'customFields', 'tests', ...(editing ? ['id'] : [])]);
   pendingCustomFields(input.customFields);
-  if (input.imageFileId != null) throw new HttpError(422, 'sample_image_unavailable', 'The sample image cannot be saved yet.');
   if (!Array.isArray(input.tests) || !input.tests.length || input.tests.length > 1000) invalid('Select between 1 and 1,000 tests per product.');
   const tests = input.tests.map((test) => testInput(test, editing));
   if (editing) for (const test of tests) for (const key of ['testParameterId', 'methodId', 'decisionRuleId']) test[key] = test[key]?.toLowerCase() ?? null;
@@ -72,6 +71,7 @@ export function sampleProductInput(input, categoryId, editing = false) {
     customerReference: optionalText(input.customerReference, 'Product reference', 150), description: optionalText(input.description, 'Product description', 2000),
     sampleSize: optionalText(input.sampleSize, 'Sample size', 120), quality: optionalText(input.quality, 'Quality', 200),
     identificationMark: optionalText(input.identificationMark, 'Identification mark', 250), receivedCondition: optionalText(input.condition, 'Received condition', 250),
+    imageFileId: optionalId(input.imageFileId, 'Sample image')?.toLowerCase() ?? null,
     measurementUnitId: optionalId(input.measurementUnitId, 'Unit'), tag: optionalText(input.tag, 'Tag', 250), tagId: optionalId(input.tagId, 'Tag'), tests,
   };
 }

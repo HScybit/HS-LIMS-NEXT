@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import AppIcon from '../ui/AppIcon.jsx';
 import PageHeader from '../layout/PageHeader.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import MoreActionButton from '../ui/MoreActionButton.jsx';
@@ -73,10 +74,10 @@ export default function SampleDetails({ sampleId }) {
         <section className="smplfy-sample-details-products-section"><SectionHeader>Product-wise Details</SectionHeader><div className="card-body p-0"><div className="smplfy-sample-details-products vstack gap-3">
           {sample.products.map((product, index) => <article className="card smplfy-card overflow-hidden smplfy-sample-details-product-card" key={product.id}>
             <div className="card-header"><h3 className="card-title mb-0"><span className="product_sr_no">{index + 1}.</span> {product.productName}</h3></div>
-            <div className="card-body p-0"><DetailGrid columns={3} items={[
+            <div className="card-body p-0"><div className="row g-0"><div className="col"><DetailGrid columns={3} items={[
               ['Category', product.categoryName], ['Product', product.productName], ['Description', product.description, true], ['Quantity', product.quantity],
               ['Sample Size', [product.sampleSize, product.unitSymbol].filter(Boolean).join(' ')], ['Quality', product.quality], ['Identification Mark', product.identificationMark], ['Condition', product.receivedCondition],
-            ]} /><div className="px-4 pb-3 pt-2"><div className="smplfy-sample-parameter-table-wrap"><table className="smplfy-table table table-bordered table-sm smplfy-sample-parameter-table">
+            ]} /></div><div className="col-auto p-2"><div className="text-secondary fw-normal mb-1">Image (Click to expand)</div>{product.imageFileId ? <a className="smplfy-sample-product-image" href={`/api/samples/images/${product.imageFileId}`} target="_blank" rel="noreferrer" aria-label={`Open image for ${product.productName}`}><img src={`/api/samples/images/${product.imageFileId}`} alt="" /></a> : <span className="smplfy-sample-product-image-empty"><AppIcon name="file-description" size={20} /></span>}</div></div><div className="px-4 pb-3 pt-2"><div className="smplfy-sample-parameter-table-wrap"><table className="smplfy-table table table-bordered table-sm smplfy-sample-parameter-table">
               <thead><tr><th scope="col">Sr.</th>{sample.sampleType === 'complaint' ? <th scope="col">Retest</th> : null}<th className="smplfy-sample-parameter-col" scope="col">Parameter</th><th scope="col">Test Method</th><th scope="col">Req. Size</th><th scope="col">Charges</th><th scope="col">Est. Time</th></tr></thead>
               <tbody>{product.tests.map((test, testIndex) => <tr key={test.id}><td>{testIndex + 1}</td>{sample.sampleType === 'complaint' ? <td>{test.isRetest ? 'Yes' : 'No'}</td> : null}<td>{test.parameterName}</td><td>{test.methodName}</td><td>{display(test.requestedSize)}</td><td className="text-end">{display(test.rate)}</td><td>{test.estimatedDurationMinutes == null ? '-' : test.estimatedDurationMinutes / 480}</td></tr>)}</tbody>
             </table></div></div></div>

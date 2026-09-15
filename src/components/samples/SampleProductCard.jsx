@@ -1,14 +1,18 @@
 'use client';
 
+import { memo } from 'react';
 import AppIcon from '../ui/AppIcon.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
 import { SampleTextField, SampleSelectField, optionList } from './SampleFormFields.jsx';
 import { newTest, productParameters, availableMethods, estimatedAmount, testSelection } from '../../samples/form.js';
 import { retainedSampleOption } from '../../samples/edit-form.js';
+import SampleImageField from './SampleImageField.jsx';
 
 const testInUse = test => Boolean(test.requestId || (test.status && test.status !== 'planned'));
 
-export default function SampleProductCard({ product, index, kind, currency, options, disabled, onChange, onRemove, savedProduct, canEditRetest = false }) {
+export default memo(function SampleProductCard({ product, index, kind, currency, options, disabled, onChange: updateProduct, onRemove: removeProduct, savedProduct, onImageBusy, canEditRetest = false }) {
+  const onChange = changes => updateProduct(product.key, changes);
+  const onRemove = () => removeProduct(product.key);
   const categoryProducts = options.products.filter((item) => item.sampleCategoryIds.includes(product.sampleCategoryId));
   const categoryTags = new Set(categoryProducts.flatMap((item) => item.tagIds));
   const products = categoryProducts.filter((item) => !product.tagId || item.tagIds.includes(product.tagId));
@@ -50,6 +54,8 @@ export default function SampleProductCard({ product, index, kind, currency, opti
       <div className="col-lg-6">{textField('quality', 'Quality', { placeholder: 'Quality of sample', maxLength: 200 })}</div>
       <div className="col-lg-6">{textField('identificationMark', 'Identification Mark', { placeholder: 'if any', maxLength: 250 })}</div>
       <div className="col-lg-6">{textField('condition', 'Condition', { placeholder: 'eg. good, fair', maxLength: 250 })}</div>
+      <div className="col-lg-6"><SampleImageField productKey={product.key} imageFileId={product.imageFileId} image={product.image}
+        disabled={disabled} onChange={onChange} onBusy={onImageBusy} /></div>
     </div>
     <div className="d-flex align-items-center justify-content-between gap-3 mt-4 mb-3 flex-wrap">
       <h3 className="h5 fw-semibold text-body mb-0">Parameter Data</h3>
@@ -86,4 +92,4 @@ export default function SampleProductCard({ product, index, kind, currency, opti
         onClick={() => onChange({ tests: [...product.tests, newTest()] })}><AppIcon name="plus" /><span>Add New Parameter</span></button>
     </div>
   </div>;
-}
+});
