@@ -10,9 +10,11 @@ import { apiRequest } from '../../lib/api-client.js';
 import { customFieldDateFormats, customFieldDateTimeFormats } from '../../masters/custom-field-config.js';
 import { organizationDateFormatDefaults } from '../../organization-settings/date-formats.js';
 import { sampleWorkflowTypes } from '../../organization-settings/sample-workflows.js';
+import { instrumentServiceSettingsInput } from '../../organization-settings/instrument-services.js';
+import InstrumentServices, { blankInstrumentService } from './InstrumentServices.jsx';
 
 const tabs = [{ id: 'sample_page', label: 'Sample Page' }, { id: 'tr_settings', label: 'TR Settings' }, { id: 'nabl_settings', label: 'NABL Settings' },
-  { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }, { id: 'settings', label: 'Tenant Settings' }];
+  { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }, { id: 'instrument-mgmt', label: 'Instrument Management' }, { id: 'settings', label: 'Tenant Settings' }];
 
 function SettingsSelect({ id, label, value, options, disabled, onChange, helperText, placeholder = '— Select —' }) {
   const choices = options.filter(row => row.available !== false || row.id === value)
@@ -33,7 +35,9 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
     async function load() {
       try {
         const result = await apiRequest('/api/organization-settings/laboratory', { signal: controller.signal });
-        if (!controller.signal.aborted) { setData(result); setDraft({ ...result.settings, schemeMonthFormat: result.settings.schemeMonthFormat || 'short',
+        if (!controller.signal.aborted) { setData(result); setDraft({ ...result.settings,
+          instrumentServiceTypes: result.settings.instrumentServiceTypes.length ? result.settings.instrumentServiceTypes : [blankInstrumentService()],
+          schemeMonthFormat: result.settings.schemeMonthFormat || 'short',
           dateFormat: result.settings.dateFormat || organizationDateFormatDefaults.dateFormat,
           datetimeFormat: result.settings.datetimeFormat || organizationDateFormatDefaults.datetimeFormat }); setError(''); }
       } catch (failure) { if (!controller.signal.aborted) setError(failure.message); }
@@ -44,15 +48,19 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
     event.preventDefault(); if (saving || !data.canManage) return;
     setSaving(true); setError('');
     try {
+      let instrumentServiceTypes;
+      try { instrumentServiceTypes = instrumentServiceSettingsInput(draft); }
+      catch (failure) { setActiveTab('instrument-mgmt'); throw failure; }
       const workflowId = draft.testRequestWorkflowId || draft.jobWorkflowId || null;
       const result = await apiRequest('/api/organization-settings/laboratory', { method: 'PUT', body: {
         revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, selfAllocationEnabled: draft.selfAllocationEnabled, allowReceivingDateEdit: draft.allowReceivingDateEdit,
         resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: workflowId, testRequestWorkflowId: workflowId,
-        sampleWorkflows: draft.sampleWorkflows,
+        sampleWorkflows: draft.sampleWorkflows, instrumentServiceTypes,
         schemeCurrentYearDigits: draft.schemeCurrentYearDigits ?? '', schemeNextYearDigits: draft.schemeNextYearDigits ?? '',
         schemeSeparator: draft.schemeSeparator ?? '', schemeMonthFormat: draft.schemeMonthFormat,
         schemeNonNablStartNumber: draft.schemeNonNablStartNumber ?? '', dateFormat: draft.dateFormat, datetimeFormat: draft.datetimeFormat } });
-      setDraft((current) => ({ ...current, revision: result.revision, testRequestWorkflowId: workflowId, jobWorkflowId: workflowId })); showToast('Settings saved successfully.');
+      setDraft((current) => ({ ...current, revision: result.revision, testRequestWorkflowId: workflowId, jobWorkflowId: workflowId,
+        instrumentServiceTypes: instrumentServiceTypes.length ? instrumentServiceTypes : [blankInstrumentService()] })); showToast('Settings saved successfully.');
     } catch (failure) { setError(failure.message); }
     finally { setSaving(false); }
   }
@@ -72,6 +80,10 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
       </div>{data.canManage ? <div className="d-flex align-items-center gap-3"><PrimaryButton type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</PrimaryButton></div> : null}</div>
         <div className="settings-layout__surface-body">
           {error ? <div className="alert alert-danger" role="alert">{error}{retry}</div> : null}
+          <div role="tabpanel" id="tabpanel-instrument-mgmt" aria-labelledby="tab-instrument-mgmt" hidden={activeTab !== 'instrument-mgmt'}>
+            <InstrumentServices rows={draft.instrumentServiceTypes} disabled={disabled}
+              onChange={instrumentServiceTypes => setDraft(current => ({ ...current, instrumentServiceTypes }))} />
+          </div>
           <div role="tabpanel" id="tabpanel-sample_page" aria-labelledby="tab-sample_page" hidden={activeTab !== 'sample_page'}>
             <section className="settings-section"><h6 className="settings-section__title">Sample Listing Options</h6>
               <div className="mb-3"><div className="smplfy-checkbox-field">

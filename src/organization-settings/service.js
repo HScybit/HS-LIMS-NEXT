@@ -2,6 +2,7 @@ import { HttpError } from '../auth/errors.js';
 import { fieldsOnly, uuid, bool, integer, requirePermission } from '../templates/input.js';
 import { organizationDateFormatsInput } from './date-formats.js';
 import { sampleWorkflowSettingsInput, sampleWorkflowTypes } from './sample-workflows.js';
+import { instrumentServiceSettingsInput } from './instrument-services.js';
 
 const schemeColumns = { schemeCurrentYearDigits: 'scheme_current_year_digits', schemeNextYearDigits: 'scheme_next_year_digits',
   schemeSeparator: 'scheme_separator', schemeMonthFormat: 'scheme_month_format', schemeNonNablStartNumber: 'scheme_non_nabl_start_number' };
@@ -28,11 +29,17 @@ export async function loadLaboratorySettings(client, identity) {
   }
   const stored = (await client.query(`SELECT auto_create_jobs AS "autoCreateJobs",self_allocation_enabled AS "selfAllocationEnabled",allow_receiving_date_edit AS "allowReceivingDateEdit",result_summary_template_id AS "resultSummaryTemplateId",
     job_workflow_id AS "jobWorkflowId",test_request_workflow_id AS "testRequestWorkflowId",revision,updated_by AS "updatedBy",updated_at AS "updatedAt",date_format AS "dateFormat",datetime_format AS "datetimeFormat",
-    ${Object.entries(schemeColumns).map(([key, column]) => `${column} AS "${key}"`).join(',')},${sampleWorkflowTypes.map(type => type.column).join(',')}
+    ${Object.entries(schemeColumns).map(([key, column]) => `${column} AS "${key}"`).join(',')},${sampleWorkflowTypes.map(type => type.column).join(',')},
+    coalesce((SELECT json_agg(json_build_object('id',entry.id,'serviceCode',entry.service_code,'displayLabel',entry.display_label,'isActive',entry.active) ORDER BY entry.position)
+      FROM organization_instrument_service_entries entry
+      WHERE entry.organization_id=organization_laboratory_settings.organization_id AND entry.revision=(
+        SELECT version.revision FROM organization_instrument_service_versions version
+        WHERE version.organization_id=organization_laboratory_settings.organization_id AND version.revision<=organization_laboratory_settings.revision
+        ORDER BY version.revision DESC LIMIT 1)), '[]'::json) AS "instrumentServiceTypes"
     FROM organization_laboratory_settings WHERE organization_id=$1`, [identity.organization_id])).rows[0];
   const options = (await client.query('SELECT * FROM laboratory_settings_options() ORDER BY kind,label,id')).rows;
   const settings = stored ?? { autoCreateJobs: false, selfAllocationEnabled: false, allowReceivingDateEdit: false, resultSummaryTemplateId: null, jobWorkflowId: null, testRequestWorkflowId: null, dateFormat: null, datetimeFormat: null, revision: 0,
-    ...Object.fromEntries(Object.keys(schemeColumns).map((key) => [key, null])) };
+    instrumentServiceTypes: [], ...Object.fromEntries(Object.keys(schemeColumns).map((key) => [key, null])) };
   settings.sampleWorkflows = {};
   for (const { key, column } of sampleWorkflowTypes) { settings.sampleWorkflows[key] = settings[column] ?? null; delete settings[column]; }
   return { settings,
@@ -45,7 +52,8 @@ export async function loadLaboratorySettings(client, identity) {
 
 export async function saveLaboratorySettings(client, identity, input) {
   requirePermission(identity, 'settings.manage');
-  fieldsOnly(input, ['revision', 'autoCreateJobs', 'selfAllocationEnabled', 'allowReceivingDateEdit', 'resultSummaryTemplateId', 'jobWorkflowId', 'testRequestWorkflowId', ...Object.keys(schemeColumns), 'dateFormat', 'datetimeFormat', 'sampleWorkflows']);
+  fieldsOnly(input, ['revision', 'autoCreateJobs', 'selfAllocationEnabled', 'allowReceivingDateEdit', 'resultSummaryTemplateId', 'jobWorkflowId', 'testRequestWorkflowId', ...Object.keys(schemeColumns), 'dateFormat', 'datetimeFormat', 'sampleWorkflows', 'instrumentServiceTypes']);
+  const instrumentServices = instrumentServiceSettingsInput(input);
   const schemeSettings = laboratorySchemeSettingsInput(input);
   const dateFormats = organizationDateFormatsInput(input);
   const sampleWorkflows = sampleWorkflowSettingsInput(input);
@@ -56,6 +64,7 @@ export async function saveLaboratorySettings(client, identity, input) {
   if (input.jobWorkflowId != null) uuid(input.jobWorkflowId, 'Job workflow');
   const requestWorkflowProvided = Object.hasOwn(input, 'testRequestWorkflowId');
   if (requestWorkflowProvided && input.testRequestWorkflowId !== null) uuid(input.testRequestWorkflowId, 'Test request workflow');
+  if (instrumentServices !== null) await client.query('SELECT organization_lock_settings_writer()');
   const current = await loadLaboratorySettings(client, identity);
   if (current.settings.revision !== input.revision) throw new HttpError(409, 'stale_settings', 'Organization settings changed. Reload before saving.');
   const requestWorkflowId = requestWorkflowProvided ? input.testRequestWorkflowId?.toLowerCase() ?? null : current.settings.testRequestWorkflowId;
@@ -116,5 +125,8 @@ export async function saveLaboratorySettings(client, identity, input) {
     throw error;
   }
   if (!saved.rowCount) throw new HttpError(409, 'stale_settings', 'Organization settings changed. Reload before saving.');
+  if (instrumentServices !== null) await client.query('SELECT organization_save_instrument_services($1,$2::uuid[],$3::text[],$4::text[],$5::boolean[])',
+    [saved.rows[0].revision, instrumentServices.map(row => row.id), instrumentServices.map(row => row.serviceCode),
+      instrumentServices.map(row => row.displayLabel), instrumentServices.map(row => row.isActive)]);
   return { revision: saved.rows[0].revision };
 }

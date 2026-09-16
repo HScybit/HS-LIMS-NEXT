@@ -286,3 +286,7 @@ Each browser benchmark requires its completed server fixture report and a profil
 The runtime server report includes individual statement timings and app-role query plans captured immediately after warm and concurrent reads. Plans run outside timed samples, before the next fixture changes database statistics. Individual statement timings include client and transfer overhead; query plans record database execution time separately.
 
 Never commit `.env.local`, `.env.worker.local`, `.local/`, credentials, database dumps or browser traces. No GitHub Actions service is required.
+
+Organization Settings → Instrument Management maintains ordered service keys, labels and Active flags. Keys accept the verified PERN letters/numbers and `._/-` format (64 characters), labels accept 150 characters, and the list supports 100 definitions. Save Settings applies every tab atomically. An omitted `instrumentServiceTypes` API field preserves the list; an empty array clears it. Rows retain UUID identities and immutable definition versions with the actual settings revision and editor. Failed and stale saves retain the draft for review/reload. Instrument execution, service schedules and legacy import reconciliation remain under implementation.
+
+The local service benchmark is `scripts/benchmark-organization-instrument-services.js`; the production Chrome benchmark is `tests/performance/organization-instrument-services.spec.js`. Both require an isolated synthetic database and cover 3/100 full-length definitions.

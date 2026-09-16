@@ -181,11 +181,16 @@ try {
     assert.deepEqual(await loadRole(client, identity, command.id, { atRevision: 1 }), original);
     assert.equal((await listRoles(client, identity, { search: 'Fresh edited role' })).totalCount, 0);
     assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, false);
+    const instrumentServiceTypes = [{ id: randomUUID(), serviceCode: 'CAL-1', displayLabel: 'Calibration', isActive: true },
+      { id: randomUUID(), serviceCode: 'PM_1', displayLabel: 'Maintenance', isActive: false }];
     await saveLaboratorySettings(client, identity, { revision: 0, autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: null, selfAllocationEnabled: true,
-      dateFormat: 'Do MMMM YYYY', datetimeFormat: 'MMMM Do YYYY | hh:mm A' });
+      dateFormat: 'Do MMMM YYYY', datetimeFormat: 'MMMM Do YYYY | hh:mm A', instrumentServiceTypes });
     const settings = (await loadLaboratorySettings(client, identity)).settings;
     assert.equal(settings.dateFormat, 'Do MMMM YYYY'); assert.equal(settings.datetimeFormat, 'MMMM Do YYYY | hh:mm A');
     assert.equal(settings.updatedBy, account.userId);
+    assert.deepEqual(settings.instrumentServiceTypes, instrumentServiceTypes);
+    const serviceVersion = (await client.query('SELECT row_count,saved_by FROM organization_instrument_service_versions WHERE organization_id=$1 AND revision=1', [identity.organization_id])).rows[0];
+    assert.deepEqual(serviceVersion, { row_count: 2, saved_by: account.userId });
     assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, true);
   }, { csrfToken: session.csrfToken });
   // Enrollment must work from an empty schema using only the restricted app role.

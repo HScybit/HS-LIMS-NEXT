@@ -1,8 +1,10 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, integer, timestamp, primaryKey, foreignKey, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, integer, timestamp, primaryKey, foreignKey, check, unique, uniqueIndex, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 import { templates } from './template-schema.js';
 import { workflows } from './workflow-schema.js';
+
+const transactionId = customType({ dataType: () => 'xid8' });
 
 // Organization-level laboratory and workflow defaults. Scientific results and
 // template/workflow definitions remain in their own versioned relations.
@@ -36,4 +38,28 @@ export const organizationLaboratorySettings = pgTable('organization_laboratory_s
   check('lab_settings_scheme_values', sql`length(${t.schemeCurrentYearDigits})<=128 and length(${t.schemeNextYearDigits})<=128
     and length(${t.schemeSeparator})<=250 and length(${t.schemeNonNablStartNumber})<=128
     and (${t.schemeMonthFormat} is null or ${t.schemeMonthFormat} in ('','number','short','long'))`),
+]);
+
+// Complete service-definition sets are retained at the settings revision that saved them.
+export const organizationInstrumentServiceVersions = pgTable('organization_instrument_service_versions', {
+  organizationId: uuid('organization_id').notNull(), revision: integer('revision').notNull(), rowCount: integer('row_count').notNull(),
+  savedBy: uuid('saved_by').notNull(), savedAt: timestamp('saved_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, t => [
+  primaryKey({ name: 'organization_instrument_service_version_pk', columns: [t.organizationId, t.revision] }),
+  foreignKey({ name: 'organization_instrument_service_settings_fk', columns: [t.organizationId], foreignColumns: [organizationLaboratorySettings.organizationId] }),
+  foreignKey({ name: 'organization_instrument_service_actor_fk', columns: [t.organizationId, t.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('organization_instrument_service_version_bounds', sql`${t.revision}>0 and ${t.rowCount} between 0 and 100`),
+]);
+
+export const organizationInstrumentServiceEntries = pgTable('organization_instrument_service_entries', {
+  organizationId: uuid('organization_id').notNull(), revision: integer('revision').notNull(), id: uuid('id').notNull(), position: integer('position').notNull(),
+  serviceCode: text('service_code').notNull(), displayLabel: text('display_label').notNull(), active: boolean('active').notNull(),
+}, t => [
+  primaryKey({ name: 'organization_instrument_service_entry_pk', columns: [t.organizationId, t.revision, t.id] }),
+  foreignKey({ name: 'organization_instrument_service_entry_version_fk', columns: [t.organizationId, t.revision], foreignColumns: [organizationInstrumentServiceVersions.organizationId, organizationInstrumentServiceVersions.revision] }),
+  unique('organization_instrument_service_position').on(t.organizationId, t.revision, t.position),
+  uniqueIndex('organization_instrument_service_code').on(t.organizationId, t.revision, sql`lower(${t.serviceCode})`),
+  check('organization_instrument_service_entry_fields', sql`${t.position} between 0 and 99 and length(${t.serviceCode}) between 1 and 64
+    and ${t.serviceCode} ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$' and length(${t.displayLabel}) between 1 and 150 and ${t.displayLabel}=trim(${t.displayLabel})`),
 ]);
