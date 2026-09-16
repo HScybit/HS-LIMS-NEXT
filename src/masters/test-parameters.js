@@ -64,12 +64,12 @@ export async function loadTestParameter(client, identity, parameterId, { atRevis
   const history = atRevision !== undefined;
   const record = (await client.query(`SELECT parameter.${history ? 'parameter_id' : 'id'} AS id,parameter.revision,parameter.code,parameter.name,parameter.description,
     parameter.master_key AS key,parameter.scheme_abbreviation AS "schemeAbbreviation",parameter.display_order AS "order",parameter.active,
-    parameter.laboratory_id AS "laboratoryId",lab.name AS "laboratoryName",parameter.measurement_unit_id AS "measurementUnitId",parameter.default_scale AS "defaultScale",
+    parameter.laboratory_id AS "laboratoryId",${history ? 'parameter.laboratory_name' : 'lab.name'} AS "laboratoryName",parameter.measurement_unit_id AS "measurementUnitId",parameter.default_scale AS "defaultScale",
     parameter.${history ? 'has_uncertainty' : 'uncertainty_configured'} AS "hasUncertainty",
     parameter.custom_field_count AS "customFieldCount",parameter.custom_fields_provided AS "customFieldsProvided"
     ${history ? ',parameter.saved_by AS "savedBy",parameter.saved_at AS "savedAt",parameter.previous_revision AS "previousRevision",parameter.operation' : ''}
     FROM ${history ? 'test_parameter_versions' : 'test_parameters'} parameter
-    LEFT JOIN laboratories lab ON lab.organization_id=parameter.organization_id AND lab.id=parameter.laboratory_id
+    ${history ? '' : 'LEFT JOIN laboratories lab ON lab.organization_id=parameter.organization_id AND lab.id=parameter.laboratory_id'}
     WHERE parameter.organization_id=$1 AND parameter.${history ? 'parameter_id' : 'id'}=$2 ${history ? 'AND parameter.revision=$3' : 'AND parameter.active'}`,
   history ? [identity.organization_id, parameterId, atRevision] : [identity.organization_id, parameterId])).rows[0];
   if (!record) throw new HttpError(404, 'parameter_not_found', 'Test parameter was not found.');

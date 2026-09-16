@@ -1191,6 +1191,13 @@
       "when": 1789537784528,
       "tag": "0169_business_unit_authoring",
       "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "7",
+      "when": 1789537784529,
+      "tag": "0170_parameter_laboratory_labels",
+      "breakpoints": true
     }
   ]
 }

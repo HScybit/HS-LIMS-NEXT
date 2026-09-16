@@ -83,6 +83,7 @@ let owner; let worker;
 try {
   await admin.connect();
   await admin.query(`CREATE DATABASE "${databaseName}"`);
+  console.log(`Verifying fresh isolated database: ${databaseName}`);
   ownerUrl.pathname = `/${databaseName}`;
   appUrl.pathname = `/${databaseName}`;
   workerUrl.pathname = `/${databaseName}`;
@@ -369,10 +370,27 @@ try {
     const command = { ...parameter, id: randomUUID(), revision: 0, requestId: randomUUID(),
       customFields: [{ fieldId: field.id, fieldRevision: 1, value: generated.values[0].value }] };
     const saved = await saveTestParameter(client, identity, command);
+    assert.equal(saved.laboratoryName, null);
     assert.equal((await listTestParameters(client, identity, { search: 'Ni/1' })).rows[0].customFields[field.id].displayValue, 'Ni/1');
     await retireTestParameter(client, identity, { id: saved.id, revision: 1, requestId: randomUUID() });
     assert.deepEqual((await loadTestParameter(client, identity, saved.id, { atRevision: 2 })).customFields, saved.customFields);
     assert.deepEqual((await saveTestParameter(client, identity, command)).customFields, saved.customFields);
+  });
+  const historyAccount = await createAccount(owner, { permissions: ['masters.manage'] });
+  const historySession = await signIn({ identifier: historyAccount.username, password: historyAccount.password });
+  const historyWork = action => withSession(historySession.token, action, { csrfToken: historySession.csrfToken });
+  const historyLab = randomUUID();
+  await owner.query("INSERT INTO laboratories(organization_id,id,code,name) VALUES($1,$2::uuid,$2::text,'Fresh observed Lab')", [historyAccount.organizationId, historyLab]);
+  const historyParameter = { id: randomUUID(), revision: 0, requestId: randomUUID(), key: randomUUID(), name: 'Fresh Lab label history',
+    schemeAbbreviation: 'LAB-HISTORY', order: 0, laboratoryId: historyLab };
+  await historyWork((client, identity) => saveTestParameter(client, identity, historyParameter));
+  const observedParameter = await historyWork((client, identity) => loadTestParameter(client, identity, historyParameter.id, { atRevision: 1 }));
+  assert.equal(observedParameter.laboratoryName, 'Fresh observed Lab');
+  await owner.query("UPDATE laboratories SET name='Fresh renamed Lab',revision=revision+1 WHERE organization_id=$1 AND id=$2", [historyAccount.organizationId, historyLab]);
+  await historyWork(async (client, identity) => {
+    assert.equal((await loadTestParameter(client, identity, historyParameter.id)).laboratoryName, 'Fresh renamed Lab');
+    assert.deepEqual(await loadTestParameter(client, identity, historyParameter.id, { atRevision: 1 }), observedParameter);
+    assert.deepEqual(await saveTestParameter(client, identity, historyParameter), observedParameter);
   });
   const productJobSample = await withSession(session.token, (client, identity) => registerSample(client, identity, laboratory.registration), { csrfToken: session.csrfToken });
   assert.equal((await owner.query('SELECT product_revision FROM sample_products WHERE organization_id=$1 AND sample_id=$2',
