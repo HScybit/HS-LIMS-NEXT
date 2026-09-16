@@ -111,7 +111,7 @@ export default function SampleRegistration({ requestedKind, receivedByName, canC
           </div></div> : null}
           <div className="col-lg-6">{textField('receivedAt', 'Receiving Date', { type: 'date', required: true, disabled: locked('receivedAt') || !options.allowReceivingDateEdit })}</div>
           <div className="col-lg-6"><div className="d-flex align-items-end gap-3"><div className="flex-fill"><SampleSelectField label="Customer" required={!editing || editingSample.sampleType === 'customer'} value={form.customerId} options={customers} placeholder="Select a Customer or create new" disabled={locked('customerId')} onChange={(value) => changeCustomer(value)} /></div>
-            <PrimaryButton type="button" aria-label="Add customer" leftIcon="plus" onClick={() => setQuickCustomerOpen(true)} disabled={locked('customerId') || !canCreate} /></div></div>
+            <PrimaryButton type="button" aria-label="Add customer" leftIcon="plus" onClick={() => setQuickCustomerOpen(true)} disabled={locked('customerId') || !canCreate || !options.canQuickCreateCustomer} /></div></div>
           <div className="col-lg-6"><SampleSelectField label="Customer Quotation" value={form.customerQuotationId} options={quotations} placeholder="Select quotation" disabled={locked('customerQuotationId') || !form.customerId} onChange={(value) => {
             const quotation = customer?.quotations.find((item) => item.id === value);
             setForm((current) => ({ ...current, customerQuotationId: value, totalAmount: quotation?.totalAmount ?? current.totalAmount, currencyCode: quotation?.currencyCode ?? current.currencyCode }));

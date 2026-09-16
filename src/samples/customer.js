@@ -11,6 +11,8 @@ export async function quickCreateCustomer(client, identity, rawInput) {
       [input.name, input.legalName, input.contactPersonName, input.contactPersonEmail, input.contactPersonPhone, input.billToAddress, input.shipToAddress]);
     id = created.rows[0].id;
   } catch (error) {
+    if (error.code === '42501' && error.constraint === 'organization_module_access_required') throw new HttpError(403, 'customer_module_access_required', 'Customer module access is required.');
+    if (error.code === '42501') throw new HttpError(403, 'forbidden', 'Your sample creation permission changed. Reload before continuing.');
     if (error.code === '23505') throw new HttpError(409, 'customer_exists', 'A customer with this code already exists. Select the existing customer or use a distinct name.');
     throw error;
   }

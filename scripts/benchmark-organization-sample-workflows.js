@@ -30,7 +30,8 @@ try {
     for (; choices < count; choices += 1) alternative = await work((client, identity) => createWorkflowCloneFixture(client, identity, { edges: 1, details: false }));
     for (const table of ['workflows', 'workflow_versions', 'workflow_states', 'organization_laboratory_settings']) await owner.query(`ANALYZE ${table}`);
     const initial = await work(loadLaboratorySettings); assert.equal(initial.sampleWorkflowOptions.length, count);
-    for (const [operation, budgetMs, queryBudget] of [['load', count === 25 ? 100 : 300, 2], ['save', count === 25 ? 150 : 500, 3], ['registration', 250, 40]]) {
+    // Loading includes the bounded module-access version lookup; latency budgets stay unchanged.
+    for (const [operation, budgetMs, queryBudget] of [['load', count === 25 ? 100 : 300, 3], ['save', count === 25 ? 150 : 500, 3], ['registration', 250, 40]]) {
       const times = []; const queryCounts = []; let responseBytes;
       for (let iteration = -1; iteration < 5; iteration += 1) {
         const { settings } = await work(loadLaboratorySettings);

@@ -90,12 +90,12 @@ test('history is immutable, direct application DML is denied and worker/PUBLIC p
   await assert.rejects(work(user, client => client.query('SELECT organization_save_instrument_services(1,ARRAY[]::uuid[],ARRAY[]::text[],ARRAY[]::text[],ARRAY[]::boolean[])')), error => error.constraint === 'instrument_services_current_settings');
 });
 
-test('full source limits load in two queries and save in five action queries', async () => {
+test('full source limits load in three queries and save in five action queries', async () => {
   const user = await account(); const rows = Array.from({ length: 100 }, (_, index) => row({ serviceCode: String(index).padStart(64, 'A'), displayLabel: 'L'.repeat(150) }));
   await work(user, async (client, identity) => {
     let calls = 0; const counted = { query(...args) { calls++; return client.query(...args); } };
     await saveLaboratorySettings(counted, identity, { ...base, revision: 0, instrumentServiceTypes: rows }); assert.equal(calls, 5);
-    calls = 0; const result = await loadLaboratorySettings(counted, identity); assert.equal(calls, 2); assert.deepEqual(result.settings.instrumentServiceTypes, rows);
+    calls = 0; const result = await loadLaboratorySettings(counted, identity); assert.equal(calls, 3); assert.deepEqual(result.settings.instrumentServiceTypes, rows);
   });
 });
 

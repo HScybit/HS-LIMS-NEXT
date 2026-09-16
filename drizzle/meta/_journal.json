@@ -1219,6 +1219,13 @@
       "when": 1789555752409,
       "tag": "0173_nabl_scope_validation_batches",
       "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "7",
+      "when": 1789566058676,
+      "tag": "0174_party_module_access",
+      "breakpoints": true
     }
   ]
 }

@@ -22,7 +22,8 @@ try {
     const work = (action, readOnly = false) => withSession(session.token, action, { csrfToken: session.csrfToken, readOnly });
     await work((client, identity) => saveLaboratorySettings(client, identity, { ...base, revision: 0, instrumentServiceTypes: rows }));
     for (const table of ['organization_laboratory_settings', 'organization_instrument_service_versions', 'organization_instrument_service_entries']) await owner.query(`ANALYZE ${table}`);
-    for (const [operation, queryBudget] of [['load', 2], ['save', 5]]) {
+    // One additional query reads whether Customer/Vendor access is configured.
+    for (const [operation, queryBudget] of [['load', 3], ['save', 5]]) {
       const samples = []; const queryCounts = []; let responseBytes;
       for (let iteration = -1; iteration < 5; iteration++) {
         const revision = (await work(loadLaboratorySettings, true)).settings.revision;

@@ -12,9 +12,12 @@ import { organizationDateFormatDefaults } from '../../organization-settings/date
 import { sampleWorkflowTypes } from '../../organization-settings/sample-workflows.js';
 import { instrumentServiceSettingsInput } from '../../organization-settings/instrument-services.js';
 import InstrumentServices, { blankInstrumentService } from './InstrumentServices.jsx';
+import ModuleAccess from './ModuleAccess.jsx';
+import { moduleAccessSettingsInput } from '../../organization-settings/module-access-input.js';
 
 const tabs = [{ id: 'sample_page', label: 'Sample Page' }, { id: 'tr_settings', label: 'TR Settings' }, { id: 'nabl_settings', label: 'NABL Settings' },
-  { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }, { id: 'instrument-mgmt', label: 'Instrument Management' }, { id: 'settings', label: 'Tenant Settings' }];
+  { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }, { id: 'instrument-mgmt', label: 'Instrument Management' }, { id: 'settings', label: 'Tenant Settings' },
+  { id: 'permission', label: 'Access Control' }];
 
 function SettingsSelect({ id, label, value, options, disabled, onChange, helperText, placeholder = '— Select —' }) {
   const choices = options.filter(row => row.available !== false || row.id === value)
@@ -28,6 +31,7 @@ function SettingsSelect({ id, label, value, options, disabled, onChange, helperT
 export default function OrganizationSettings({ initialTab = 'template_configs' }) {
   const [activeTab, setActiveTab] = useState(initialTab); const [data, setData] = useState(null); const [draft, setDraft] = useState(null);
   const [error, setError] = useState(''); const [saving, setSaving] = useState(false); const [reload, setReload] = useState(0);
+  const [loading, setLoading] = useState(true);
   // This source checkbox is a local UI control; the source save command does not submit it.
   const [editNonNablStart, setEditNonNablStart] = useState(false);
   useEffect(() => {
@@ -41,11 +45,12 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
           dateFormat: result.settings.dateFormat || organizationDateFormatDefaults.dateFormat,
           datetimeFormat: result.settings.datetimeFormat || organizationDateFormatDefaults.datetimeFormat }); setError(''); }
       } catch (failure) { if (!controller.signal.aborted) setError(failure.message); }
+      finally { if (!controller.signal.aborted) setLoading(false); }
     }
     void load(); return () => controller.abort();
   }, [reload]);
   async function save(event) {
-    event.preventDefault(); if (saving || !data.canManage) return;
+    event.preventDefault(); if (saving || loading || !data.canManage) return;
     setSaving(true); setError('');
     try {
       let instrumentServiceTypes;
@@ -56,6 +61,7 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
         revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, selfAllocationEnabled: draft.selfAllocationEnabled, allowReceivingDateEdit: draft.allowReceivingDateEdit,
         resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: workflowId, testRequestWorkflowId: workflowId,
         sampleWorkflows: draft.sampleWorkflows, instrumentServiceTypes,
+        moduleAccess: moduleAccessSettingsInput({ moduleAccess: draft.moduleAccess.map(({ moduleKey, enabled, roleIds, userIds }) => ({ moduleKey, enabled, roleIds, userIds })) }),
         schemeCurrentYearDigits: draft.schemeCurrentYearDigits ?? '', schemeNextYearDigits: draft.schemeNextYearDigits ?? '',
         schemeSeparator: draft.schemeSeparator ?? '', schemeMonthFormat: draft.schemeMonthFormat,
         schemeNonNablStartNumber: draft.schemeNonNablStartNumber ?? '', dateFormat: draft.dateFormat, datetimeFormat: draft.datetimeFormat } });
@@ -64,9 +70,9 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
     } catch (failure) { setError(failure.message); }
     finally { setSaving(false); }
   }
-  const retry = <button type="button" className="btn btn-link" disabled={saving} onClick={() => setReload((value) => value + 1)}>Reload settings</button>;
+  const retry = <button type="button" className="btn btn-link" disabled={saving || loading} onClick={() => { setLoading(true); setReload((value) => value + 1); }}>Reload settings</button>;
   if (!data) return error ? <div className="alert alert-danger m-4" role="alert">{error}{retry}</div> : <AppLoader message="Loading organization settings..." />;
-  const disabled = saving || !data.canManage;
+  const disabled = saving || loading || !data.canManage;
   return <div className="settings-layout">
     <nav className="settings-layout__rail" aria-label="Settings sections"><div className="settings-layout__rail-head">
       <div className="settings-layout__rail-label">Settings</div><h1 className="settings-layout__rail-title">Organization</h1>
@@ -74,12 +80,15 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
       {tabs.map((tab) => <button key={tab.id} type="button" id={`tab-${tab.id}`} role="tab" aria-selected={activeTab === tab.id}
         aria-controls={`tabpanel-${tab.id}`} className={`settings-layout__tab ${activeTab === tab.id ? 'is-active' : ''}`} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
     </div></nav>
-    <form id="organization-settings-form" className="settings-layout__main settings-layout__form" onSubmit={save}>
+    <form id="organization-settings-form" className="settings-layout__main settings-layout__form" onSubmit={save} aria-busy={loading}>
       <div className="settings-layout__surface"><div className="settings-layout__surface-header"><div>
         <h2>{tabs.find((tab) => tab.id === activeTab)?.label}</h2><p>All settings are saved together, so you can move between tabs before submitting.</p>
-      </div>{data.canManage ? <div className="d-flex align-items-center gap-3"><PrimaryButton type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</PrimaryButton></div> : null}</div>
+      </div>{data.canManage ? <div className="d-flex align-items-center gap-3"><PrimaryButton type="submit" disabled={saving || loading}>{saving ? 'Saving...' : 'Save Settings'}</PrimaryButton></div> : null}</div>
         <div className="settings-layout__surface-body">
           {error ? <div className="alert alert-danger" role="alert">{error}{retry}</div> : null}
+          <div role="tabpanel" id="tabpanel-permission" aria-labelledby="tab-permission" hidden={activeTab !== 'permission'}>
+            <ModuleAccess modules={draft.moduleAccess} disabled={disabled} onChange={moduleAccess => setDraft(current => ({ ...current, moduleAccess }))} />
+          </div>
           <div role="tabpanel" id="tabpanel-instrument-mgmt" aria-labelledby="tab-instrument-mgmt" hidden={activeTab !== 'instrument-mgmt'}>
             <InstrumentServices rows={draft.instrumentServiceTypes} disabled={disabled}
               onChange={instrumentServiceTypes => setDraft(current => ({ ...current, instrumentServiceTypes }))} />

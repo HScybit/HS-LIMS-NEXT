@@ -66,6 +66,8 @@ import { loadReportRenderer } from '../src/reports/renderer.js';
 import { createReportWorkerPool, verifyReportWorkerRole, processNextReportJob } from '../src/reports/worker.js';
 import { createRole, updateRole, retireRole, loadRole, listRoles, loadRoleSettings } from '../src/roles/service.js';
 import { loadLaboratorySettings, saveLaboratorySettings } from '../src/organization-settings/service.js';
+import { emptyModuleAccess, moduleAccessValues } from '../tests/helpers/module-access.js';
+import { loadModuleAccess } from '../src/organization-settings/module-access.js';
 import { createChecklist, updateChecklist, retireChecklist, loadChecklist, listChecklists } from '../src/checklists/service.js';
 
 process.loadEnvFile('.env.worker.local');
@@ -189,12 +191,18 @@ try {
     assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, false);
     const instrumentServiceTypes = [{ id: randomUUID(), serviceCode: 'CAL-1', displayLabel: 'Calibration', isActive: true },
       { id: randomUUID(), serviceCode: 'PM_1', displayLabel: 'Maintenance', isActive: false }];
+    assert.equal((await client.query("SELECT organization_has_module_access('customer') AS allowed")).rows[0].allowed, false);
+    const moduleAccess = emptyModuleAccess(); moduleAccess[0] = { moduleKey: 'customer', enabled: true, roleIds: [account.roleId], userIds: [account.userId] };
     await saveLaboratorySettings(client, identity, { revision: 0, autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: null, selfAllocationEnabled: true,
-      dateFormat: 'Do MMMM YYYY', datetimeFormat: 'MMMM Do YYYY | hh:mm A', instrumentServiceTypes });
+      dateFormat: 'Do MMMM YYYY', datetimeFormat: 'MMMM Do YYYY | hh:mm A', instrumentServiceTypes, moduleAccess });
     const settings = (await loadLaboratorySettings(client, identity)).settings;
     assert.equal(settings.dateFormat, 'Do MMMM YYYY'); assert.equal(settings.datetimeFormat, 'MMMM Do YYYY | hh:mm A');
     assert.equal(settings.updatedBy, account.userId);
     assert.deepEqual(settings.instrumentServiceTypes, instrumentServiceTypes);
+    assert.deepEqual(moduleAccessValues(settings.moduleAccess), moduleAccess);
+    assert.equal((await client.query("SELECT organization_has_module_access('customer') AS customer,organization_has_module_access('vendor') AS vendor")).rows[0].customer, true);
+    const moduleHistory = await loadModuleAccess(client, identity, { atRevision: 1 });
+    assert.equal(moduleHistory.savedBy, account.userId); assert.deepEqual(moduleAccessValues(moduleHistory.modules), moduleAccess);
     const serviceVersion = (await client.query('SELECT row_count,saved_by FROM organization_instrument_service_versions WHERE organization_id=$1 AND revision=1', [identity.organization_id])).rows[0];
     assert.deepEqual(serviceVersion, { row_count: 2, saved_by: account.userId });
     assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, true);

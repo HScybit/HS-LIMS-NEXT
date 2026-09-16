@@ -3,6 +3,6 @@ import { loadLaboratorySettings, saveLaboratorySettings } from '@/organization-s
 
 export const GET = endpoint(async (request) => json(await authenticated(request, loadLaboratorySettings, { readOnly: true })));
 export const PUT = endpoint(async (request) => {
-  const input = await readInput(request);
+  const input = await readInput(request, { maxBytes: 1_048_576 });
   return json(await authenticated(request, (client, identity) => saveLaboratorySettings(client, identity, input), { permission: 'settings.manage' }));
 });

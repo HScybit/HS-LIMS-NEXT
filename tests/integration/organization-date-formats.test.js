@@ -31,7 +31,7 @@ test('absent settings stay absent on read; independent fields and older saves re
   await save(user, { revision: 2 });
   queries = 0;
   const { settings } = await work(user, (client, identity) => loadLaboratorySettings({ query: (...args) => { queries++; return client.query(...args); } }, identity), true);
-  assert.equal(queries, 2); assert.equal(settings.revision, 3); assert.equal(settings.dateFormat, first.dateFormat);
+  assert.equal(queries, 3); assert.equal(settings.revision, 3); assert.equal(settings.dateFormat, first.dateFormat);
   assert.equal(settings.datetimeFormat, '  YYYY [year] HH:mm Z  '); assert.equal(settings.selfAllocationEnabled, true);
 });
 

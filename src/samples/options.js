@@ -45,7 +45,8 @@ export async function sampleRegistrationOptions(client, identity) {
     JOIN test_parameters parameter ON parameter.organization_id=rule.organization_id AND parameter.id=rule.test_parameter_id AND parameter.active
     WHERE rule.organization_id=$1 AND rule.active ORDER BY lower(rule.name), rule.id`);
   const laboratories = await rows(`SELECT id, code, name FROM laboratories WHERE organization_id=$1 AND active ORDER BY lower(name), id`);
-  const { allowReceivingDateEdit } = (await client.query('SELECT sample_receiving_date_edit_enabled() AS "allowReceivingDateEdit"')).rows[0];
+  const { allowReceivingDateEdit, canQuickCreateCustomer } = (await client.query(`SELECT sample_receiving_date_edit_enabled() AS "allowReceivingDateEdit",
+    organization_has_module_access('customer') AND app_has_permission('samples.create') AS "canQuickCreateCustomer"`)).rows[0];
   const customerById = new Map(customers.map((customer) => [customer.id, { ...customer, addresses: [], quotations: [] }]));
   for (const address of addresses) customerById.get(address.customerId)?.addresses.push({ id: address.id, addressType: address.addressType, isDefault: address.isDefault, text: customerAddressText(address) });
   for (const quotation of quotations) customerById.get(quotation.customerId)?.quotations.push(quotation);
@@ -54,5 +55,5 @@ export async function sampleRegistrationOptions(client, identity) {
     if (!parameters.has(row.id)) parameters.set(row.id, { id: row.id, code: row.code, name: row.name, measurementUnitId: row.measurementUnitId, methods: [] });
     if (row.methodId) parameters.get(row.id).methods.push({ id: row.methodId, code: row.methodCode, name: row.methodName, isDefault: row.isDefault });
   }
-  return { sampleCategories, customers: [...customerById.values()], products, tags, measurementUnits, testParameters: [...parameters.values()], decisionRules, laboratories, allowReceivingDateEdit };
+  return { sampleCategories, customers: [...customerById.values()], products, tags, measurementUnits, testParameters: [...parameters.values()], decisionRules, laboratories, allowReceivingDateEdit, canQuickCreateCustomer };
 }

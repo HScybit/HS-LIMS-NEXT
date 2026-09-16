@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { ownerPool, createAccount } from '../helpers/database.js';
 import { createLaboratoryFixture } from '../helpers/laboratory.js';
+import { grantSyntheticCustomerAccess } from '../helpers/module-access.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool, database } from '../../src/db/pool.js';
 import { tags, productTags, customerAddresses, customerQuotations } from '../../src/db/master-schema.js';
@@ -24,6 +25,7 @@ before(async () => {
   operator = await createAccount(owner, { organizationId: registrar.organizationId, permissions: ['samples.read', 'test_requests.allocate', 'datasheets.execute'] });
   for (const account of [registrar, reader, foreign, operator]) Object.assign(account, await signIn({ identifier: account.username, password: account.password }));
   fixture = await createLaboratoryFixture(owner, registrar);
+  await grantSyntheticCustomerAccess(owner, registrar);
 });
 after(async () => { await closePool(); await owner.end(); });
 const work = (account, action) => withSession(account.token, action, { csrfToken: account.csrfToken });

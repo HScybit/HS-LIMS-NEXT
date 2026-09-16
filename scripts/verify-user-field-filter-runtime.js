@@ -24,7 +24,8 @@ try {
   report.runtimeFiles = runtime.fileList.size;
   const required = [...runtime.fileList].map(file => path.resolve(root, file));
   const routes = [...await routeTraces('.next/server/app/api/users'),
-    ...['products', 'test-parameters'].map(resource => `.next/server/app/api/masters/${resource}/custom-field-users/route.js.nft.json`)];
+    ...['products', 'test-parameters'].map(resource => `.next/server/app/api/masters/${resource}/custom-field-users/route.js.nft.json`),
+    '.next/server/app/api/organization-settings/module-access/options/route.js.nft.json'];
   for (const file of routes) {
     const trace = JSON.parse(await readFile(file, 'utf8')); const included = new Set(trace.files.map(entry => path.resolve(path.dirname(file), entry)));
     report.routes.push({ path: file, missing: required.filter(entry => !included.has(entry)).map(entry => path.relative(root, entry)) });

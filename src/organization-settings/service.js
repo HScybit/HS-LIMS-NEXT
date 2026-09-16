@@ -3,6 +3,7 @@ import { fieldsOnly, uuid, bool, integer, requirePermission } from '../templates
 import { organizationDateFormatsInput } from './date-formats.js';
 import { sampleWorkflowSettingsInput, sampleWorkflowTypes } from './sample-workflows.js';
 import { instrumentServiceSettingsInput } from './instrument-services.js';
+import { loadModuleAccess, moduleAccessSettingsInput, saveModuleAccess } from './module-access.js';
 
 const schemeColumns = { schemeCurrentYearDigits: 'scheme_current_year_digits', schemeNextYearDigits: 'scheme_next_year_digits',
   schemeSeparator: 'scheme_separator', schemeMonthFormat: 'scheme_month_format', schemeNonNablStartNumber: 'scheme_non_nabl_start_number' };
@@ -23,7 +24,7 @@ export function laboratorySchemeSettingsInput(input) {
   }));
 }
 
-export async function loadLaboratorySettings(client, identity) {
+export async function loadLaboratorySettings(client, identity, { includeModuleAccess = true } = {}) {
   if (!['settings.read', 'settings.manage'].some((permission) => identity.permission_codes?.includes(permission))) {
     throw new HttpError(403, 'forbidden', 'You cannot view organization settings.');
   }
@@ -42,6 +43,11 @@ export async function loadLaboratorySettings(client, identity) {
     instrumentServiceTypes: [], ...Object.fromEntries(Object.keys(schemeColumns).map((key) => [key, null])) };
   settings.sampleWorkflows = {};
   for (const { key, column } of sampleWorkflowTypes) { settings.sampleWorkflows[key] = settings[column] ?? null; delete settings[column]; }
+  if (includeModuleAccess) {
+    const moduleAccess = await loadModuleAccess(client, identity, { currentRevision: settings.revision });
+    settings.moduleAccess = moduleAccess.modules;
+    settings.moduleAccessRevision = moduleAccess.revision;
+  }
   return { settings,
     templates: options.filter((row) => row.kind === 'template'),
     workflows: options.filter(row => ['workflow', 'workflow_retained'].includes(row.kind)).map(row => ({ ...row, available: row.kind === 'workflow' })),
@@ -52,11 +58,12 @@ export async function loadLaboratorySettings(client, identity) {
 
 export async function saveLaboratorySettings(client, identity, input) {
   requirePermission(identity, 'settings.manage');
-  fieldsOnly(input, ['revision', 'autoCreateJobs', 'selfAllocationEnabled', 'allowReceivingDateEdit', 'resultSummaryTemplateId', 'jobWorkflowId', 'testRequestWorkflowId', ...Object.keys(schemeColumns), 'dateFormat', 'datetimeFormat', 'sampleWorkflows', 'instrumentServiceTypes']);
+  fieldsOnly(input, ['revision', 'autoCreateJobs', 'selfAllocationEnabled', 'allowReceivingDateEdit', 'resultSummaryTemplateId', 'jobWorkflowId', 'testRequestWorkflowId', ...Object.keys(schemeColumns), 'dateFormat', 'datetimeFormat', 'sampleWorkflows', 'instrumentServiceTypes', 'moduleAccess']);
   const instrumentServices = instrumentServiceSettingsInput(input);
   const schemeSettings = laboratorySchemeSettingsInput(input);
   const dateFormats = organizationDateFormatsInput(input);
   const sampleWorkflows = sampleWorkflowSettingsInput(input);
+  const moduleAccess = moduleAccessSettingsInput(input);
   integer(input.revision, 'Revision', 0, 2_147_483_646); bool(input.autoCreateJobs, 'Auto Create Jobs');
   if (input.selfAllocationEnabled !== undefined) bool(input.selfAllocationEnabled, 'Enable Self Allocation');
   if (input.allowReceivingDateEdit !== undefined) bool(input.allowReceivingDateEdit, 'Allow Editing Receiving Date');
@@ -64,8 +71,14 @@ export async function saveLaboratorySettings(client, identity, input) {
   if (input.jobWorkflowId != null) uuid(input.jobWorkflowId, 'Job workflow');
   const requestWorkflowProvided = Object.hasOwn(input, 'testRequestWorkflowId');
   if (requestWorkflowProvided && input.testRequestWorkflowId !== null) uuid(input.testRequestWorkflowId, 'Test request workflow');
-  if (instrumentServices !== null) await client.query('SELECT organization_lock_settings_writer()');
-  const current = await loadLaboratorySettings(client, identity);
+  if (instrumentServices !== null || moduleAccess !== null) {
+    try { await client.query('SELECT organization_lock_settings_writer()'); }
+    catch (error) {
+      if (error.code === '42501') throw new HttpError(403, 'forbidden', 'Your organization settings access changed. Reload before saving.');
+      throw error;
+    }
+  }
+  const current = await loadLaboratorySettings(client, identity, { includeModuleAccess: false });
   if (current.settings.revision !== input.revision) throw new HttpError(409, 'stale_settings', 'Organization settings changed. Reload before saving.');
   const requestWorkflowId = requestWorkflowProvided ? input.testRequestWorkflowId?.toLowerCase() ?? null : current.settings.testRequestWorkflowId;
   const jobWorkflowId = input.jobWorkflowId?.toLowerCase() ?? null;
@@ -128,5 +141,6 @@ export async function saveLaboratorySettings(client, identity, input) {
   if (instrumentServices !== null) await client.query('SELECT organization_save_instrument_services($1,$2::uuid[],$3::text[],$4::text[],$5::boolean[])',
     [saved.rows[0].revision, instrumentServices.map(row => row.id), instrumentServices.map(row => row.serviceCode),
       instrumentServices.map(row => row.displayLabel), instrumentServices.map(row => row.isActive)]);
+  await saveModuleAccess(client, saved.rows[0].revision, moduleAccess);
   return { revision: saved.rows[0].revision };
 }

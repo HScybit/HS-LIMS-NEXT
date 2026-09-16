@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { ownerPool, createAccount } from '../helpers/database.js';
 import { createLaboratoryFixture } from '../helpers/laboratory.js';
+import { grantSyntheticCustomerAccess } from '../helpers/module-access.js';
 import { closePool, database } from '../../src/db/pool.js';
 import { customerAddresses, customerQuotations, tags, productTags } from '../../src/db/master-schema.js';
 
@@ -144,6 +145,7 @@ test('create-only registration supports source quick-customer fields and bounded
   test.setTimeout(90_000);
   const account = await createAccount(owner, { permissions: ['samples.create'] });
   const source = await createLaboratoryFixture(owner, account);
+  await grantSyntheticCustomerAccess(owner, account);
   await login(page, account); await page.getByRole('link', { name: 'Samples', exact: true }).click();
   await expect(page).toHaveURL('/samples/new');
   await page.getByRole('button', { name: 'Add customer', exact: true }).click();

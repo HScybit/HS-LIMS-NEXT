@@ -11,6 +11,7 @@ const nextConfig = {
     // The Node-only user filter loads this existing dependency graph at runtime.
     '/api/users{,/**}': userOptionRuntimeFiles,
     '/api/masters/{products,test-parameters}/custom-field-users': userOptionRuntimeFiles,
+    '/api/organization-settings/module-access/options': userOptionRuntimeFiles,
     '/api/masters/products/custom-field-generation': ['./src/custom-fields/*.js', './src/masters/custom-field-config.js', './src/auth/errors.js',
       './node_modules/moment/**', './node_modules/moment-timezone/**'],
   },

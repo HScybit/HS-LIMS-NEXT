@@ -75,7 +75,17 @@ test('load failure retries, failed saves keep drafts and lost responses use the 
   expect((await save(page)).status()).toBe(409); await expect(page.locator('.alert[role="alert"]')).toContainText('Reload before saving');
   await expect(page.getByLabel('Instrument service 1 name', { exact: true })).toHaveValue('Calibration');
   expect((await owner.query('SELECT count(*)::integer AS count FROM organization_instrument_service_versions WHERE organization_id=$1', [user.organizationId])).rows[0].count).toBe(1);
-  await page.getByRole('button', { name: 'Reload settings', exact: true }).click(); await expect(page.getByLabel('Instrument service 1 name', { exact: true })).toHaveValue('Calibration');
+  let releaseReload; const reloadGate = new Promise(resolve => { releaseReload = resolve; });
+  await page.route('**' + endpoint, async route => { await reloadGate; await route.continue(); });
+  const reloaded = page.waitForResponse(response => response.url().endsWith(endpoint) && response.request().method() === 'GET');
+  await page.getByRole('button', { name: 'Reload settings', exact: true }).click();
+  try {
+    await expect(page.getByLabel('Instrument service 1 name', { exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save Settings', exact: true })).toBeDisabled();
+  } finally { releaseReload(); }
+  expect((await reloaded).status()).toBe(200); await page.unroute('**' + endpoint);
+  await expect(page.getByLabel('Instrument service 1 name', { exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Instrument service 1 name', { exact: true })).toHaveValue('Calibration');
   await page.getByLabel('Instrument service 1 name', { exact: true }).fill('New local draft');
   expect((await update(page, { dateFormat: 'YYYY-MM-DD' })).status()).toBe(200); expect((await save(page)).status()).toBe(409);
   await expect(page.getByLabel('Instrument service 1 name', { exact: true })).toHaveValue('New local draft');

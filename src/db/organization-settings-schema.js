@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, boolean, integer, timestamp, primaryKey, foreignKey, check, unique, uniqueIndex, customType } from 'drizzle-orm/pg-core';
-import { organizations, memberships } from './schema.js';
+import { organizations, memberships, roles } from './schema.js';
 import { templates } from './template-schema.js';
 import { workflows } from './workflow-schema.js';
 
@@ -62,4 +62,49 @@ export const organizationInstrumentServiceEntries = pgTable('organization_instru
   uniqueIndex('organization_instrument_service_code').on(t.organizationId, t.revision, sql`lower(${t.serviceCode})`),
   check('organization_instrument_service_entry_fields', sql`${t.position} between 0 and 99 and length(${t.serviceCode}) between 1 and 64
     and ${t.serviceCode} ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$' and length(${t.displayLabel}) between 1 and 150 and ${t.displayLabel}=trim(${t.displayLabel})`),
+]);
+
+export const organizationModuleAccessVersions = pgTable('organization_module_access_versions', {
+  organizationId: uuid('organization_id').notNull(), revision: integer('revision').notNull(), savedBy: uuid('saved_by').notNull(),
+  savedAt: timestamp('saved_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, t => [
+  primaryKey({ name: 'module_access_version_pk', columns: [t.organizationId, t.revision] }),
+  foreignKey({ name: 'module_access_settings_fk', columns: [t.organizationId], foreignColumns: [organizationLaboratorySettings.organizationId] }),
+  foreignKey({ name: 'module_access_actor_fk', columns: [t.organizationId, t.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('module_access_revision', sql`${t.revision}>0`),
+]);
+
+export const organizationModuleAccessModules = pgTable('organization_module_access_modules', {
+  organizationId: uuid('organization_id').notNull(), revision: integer('revision').notNull(), moduleKey: text('module_key').notNull(),
+  enabled: boolean('enabled').notNull(), roleCount: integer('role_count').notNull(), userCount: integer('user_count').notNull(),
+}, t => [
+  primaryKey({ name: 'module_access_module_pk', columns: [t.organizationId, t.revision, t.moduleKey] }),
+  foreignKey({ name: 'module_access_module_version_fk', columns: [t.organizationId, t.revision],
+    foreignColumns: [organizationModuleAccessVersions.organizationId, organizationModuleAccessVersions.revision] }),
+  check('module_access_module_fields', sql`${t.moduleKey} in ('customer','vendor') and ${t.roleCount} between 0 and 500 and ${t.userCount} between 0 and 500`),
+]);
+
+export const organizationModuleAccessRoles = pgTable('organization_module_access_roles', {
+  organizationId: uuid('organization_id').notNull(), revision: integer('revision').notNull(), moduleKey: text('module_key').notNull(),
+  roleId: uuid('role_id').notNull(), position: integer('position').notNull(), roleName: text('role_name').notNull(), roleActive: boolean('role_active').notNull(),
+}, t => [
+  primaryKey({ name: 'module_access_role_pk', columns: [t.organizationId, t.revision, t.moduleKey, t.roleId] }),
+  unique('module_access_role_position').on(t.organizationId, t.revision, t.moduleKey, t.position),
+  foreignKey({ name: 'module_access_role_module_fk', columns: [t.organizationId, t.revision, t.moduleKey],
+    foreignColumns: [organizationModuleAccessModules.organizationId, organizationModuleAccessModules.revision, organizationModuleAccessModules.moduleKey] }),
+  foreignKey({ name: 'module_access_role_reference_fk', columns: [t.organizationId, t.roleId], foreignColumns: [roles.organizationId, roles.id] }),
+  check('module_access_role_fields', sql`${t.position} between 0 and 499`),
+]);
+
+export const organizationModuleAccessUsers = pgTable('organization_module_access_users', {
+  organizationId: uuid('organization_id').notNull(), revision: integer('revision').notNull(), moduleKey: text('module_key').notNull(),
+  userId: uuid('user_id').notNull(), position: integer('position').notNull(), userName: text('user_name').notNull(), userUsername: text('user_username').notNull(), userActive: boolean('user_active').notNull(),
+}, t => [
+  primaryKey({ name: 'module_access_user_pk', columns: [t.organizationId, t.revision, t.moduleKey, t.userId] }),
+  unique('module_access_user_position').on(t.organizationId, t.revision, t.moduleKey, t.position),
+  foreignKey({ name: 'module_access_user_module_fk', columns: [t.organizationId, t.revision, t.moduleKey],
+    foreignColumns: [organizationModuleAccessModules.organizationId, organizationModuleAccessModules.revision, organizationModuleAccessModules.moduleKey] }),
+  foreignKey({ name: 'module_access_user_reference_fk', columns: [t.organizationId, t.userId], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('module_access_user_fields', sql`${t.position} between 0 and 499`),
 ]);
