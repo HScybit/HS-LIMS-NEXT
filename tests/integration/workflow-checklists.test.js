@@ -284,6 +284,9 @@ test('actual requests and approvals keep frozen master prompts and independently
   const laboratory = await createLaboratoryFixture(owner, operator, { workflow: false });
   await owner.query("INSERT INTO sample_category_workflows(organization_id,sample_category_id,workflow_id,applies_to,is_default) VALUES($1,$2,$3,'sample',true)",
     [operator.organizationId, laboratory.category.id, fixture.workflowId]);
+  await owner.query(`INSERT INTO organization_laboratory_settings(organization_id,updated_by,sample_workflow_base_id) VALUES($1,$2,$3)
+    ON CONFLICT(organization_id) DO UPDATE SET sample_workflow_base_id=$3,revision=organization_laboratory_settings.revision+1,updated_by=$2,updated_at=now()`,
+  [operator.organizationId, operator.userId, fixture.workflowId]);
   const sample = await work((client, identity) => registerSample(client, identity, laboratory.registration), operator);
   const readRun = (actor = operator) => work((client, identity) => loadWorkflowRun(client, identity, sample.workflowRunId), actor, true);
   const run = await readRun(); const checks = run.transitions[0].checklistItems;

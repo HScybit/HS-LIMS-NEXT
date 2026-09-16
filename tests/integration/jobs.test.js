@@ -52,7 +52,7 @@ const create = (flow, options = {}, user = creator) => work(user, (client, ident
   { requestIds: flow.requests.map((request) => request.id), analystUserId: analyst.userId, reviewerUserId: reviewer.userId, ...options }));
 
 test('job settings are tenant scoped, require management access, validate references and serialize first creation', async () => {
-  const source = await createLaboratoryFixture(owner, creator);
+  const source = await createLaboratoryFixture(owner, creator, { configureSampleWorkflows: false });
   const initial = await work(reader, loadLaboratorySettings, { readOnly: true });
   assert.equal(initial.settings.revision, 0); assert.equal(initial.canManage, false);
   assert.ok(initial.templates.some((row) => row.id === source.template.templateId));

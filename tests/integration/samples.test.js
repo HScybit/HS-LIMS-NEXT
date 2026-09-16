@@ -61,8 +61,10 @@ test('a registrar without master editing creates typed sample/products/tests, re
 
 test('missing workflow and invalid references roll back all dependent writes and the allocated number', async () => {
   const source = await fixture({ workflow: false });
+  await owner.query(`UPDATE organization_laboratory_settings SET sample_workflow_base_id=NULL,revision=revision+1,updated_at=now()
+    WHERE organization_id=$1`, [author.organizationId]);
   const before = (await owner.query("SELECT (SELECT count(*) FROM samples WHERE organization_id=$1) AS sample_count, next_value FROM number_sequences WHERE organization_id=$1 AND sequence_key='sample' AND period_key='2026'", [author.organizationId])).rows[0];
-  await assert.rejects(register(source), { code: 'workflow_not_configured' });
+  await assert.rejects(register(source), { code: 'sample_workflow_not_configured' });
   const after = (await owner.query("SELECT (SELECT count(*) FROM samples WHERE organization_id=$1) AS sample_count, next_value FROM number_sequences WHERE organization_id=$1 AND sequence_key='sample' AND period_key='2026'", [author.organizationId])).rows[0];
   assert.deepEqual(after, before);
   const valid = await fixture();

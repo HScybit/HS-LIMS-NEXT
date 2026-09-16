@@ -4,7 +4,7 @@ import { organizations, memberships } from './schema.js';
 import { templates } from './template-schema.js';
 import { workflows } from './workflow-schema.js';
 
-// The job workflow's organization-level defaults. Scientific results and
+// Organization-level laboratory and workflow defaults. Scientific results and
 // template/workflow definitions remain in their own versioned relations.
 export const organizationLaboratorySettings = pgTable('organization_laboratory_settings', {
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
@@ -12,6 +12,9 @@ export const organizationLaboratorySettings = pgTable('organization_laboratory_s
   selfAllocationEnabled: boolean('self_allocation_enabled').notNull().default(false),
   allowReceivingDateEdit: boolean('allow_receiving_date_edit').notNull().default(false),
   resultSummaryTemplateId: uuid('result_summary_template_id'), jobWorkflowId: uuid('job_workflow_id'),
+  sampleWorkflowBaseId: uuid('sample_workflow_base_id'), sampleWorkflowIqcId: uuid('sample_workflow_iqc_id'),
+  sampleWorkflowIlcId: uuid('sample_workflow_ilc_id'), sampleWorkflowPtId: uuid('sample_workflow_pt_id'),
+  sampleWorkflowAmendmentId: uuid('sample_workflow_amendment_id'), sampleWorkflowComplaintId: uuid('sample_workflow_complaint_id'),
   // GenericForm scheme settings are source text-input lexemes; parseInt prefixes and absent fallbacks are meaningful.
   schemeCurrentYearDigits: text('scheme_current_year_digits'), schemeNextYearDigits: text('scheme_next_year_digits'),
   schemeSeparator: text('scheme_separator'), schemeMonthFormat: text('scheme_month_format'), schemeNonNablStartNumber: text('scheme_non_nabl_start_number'),
@@ -22,6 +25,9 @@ export const organizationLaboratorySettings = pgTable('organization_laboratory_s
   primaryKey({ columns: [t.organizationId] }),
   foreignKey({ name: 'lab_settings_result_template_fk', columns: [t.organizationId, t.resultSummaryTemplateId], foreignColumns: [templates.organizationId, templates.id] }),
   foreignKey({ name: 'lab_settings_job_workflow_fk', columns: [t.organizationId, t.jobWorkflowId], foreignColumns: [workflows.organizationId, workflows.id] }),
+  ...[['base', t.sampleWorkflowBaseId], ['iqc', t.sampleWorkflowIqcId], ['ilc', t.sampleWorkflowIlcId], ['pt', t.sampleWorkflowPtId],
+    ['amendment', t.sampleWorkflowAmendmentId], ['complaint', t.sampleWorkflowComplaintId]]
+    .map(([key, column]) => foreignKey({ name: `lab_settings_sample_${key}_workflow_fk`, columns: [t.organizationId, column], foreignColumns: [workflows.organizationId, workflows.id] })),
   foreignKey({ name: 'lab_settings_actor_fk', columns: [t.organizationId, t.updatedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
   check('lab_settings_revision', sql`${t.revision}>0`),
   check('lab_settings_date_format', sql`length(${t.dateFormat})<=40`),

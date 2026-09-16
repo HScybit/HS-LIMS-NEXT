@@ -9,15 +9,17 @@ import { showToast } from '../ui/toast.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import { customFieldDateFormats, customFieldDateTimeFormats } from '../../masters/custom-field-config.js';
 import { organizationDateFormatDefaults } from '../../organization-settings/date-formats.js';
+import { sampleWorkflowTypes } from '../../organization-settings/sample-workflows.js';
 
 const tabs = [{ id: 'sample_page', label: 'Sample Page' }, { id: 'tr_settings', label: 'TR Settings' }, { id: 'nabl_settings', label: 'NABL Settings' },
   { id: 'template_configs', label: 'Template Configs' }, { id: 'workflow_configs', label: 'Workflow Configs' }, { id: 'settings', label: 'Tenant Settings' }];
 
-function SettingsSelect({ id, label, value, options, disabled, onChange, helperText }) {
-  const choices = options.map((row) => ({ value: row.id, label: row.label }));
+function SettingsSelect({ id, label, value, options, disabled, onChange, helperText, placeholder = '— Select —' }) {
+  const choices = options.filter(row => row.available !== false || row.id === value)
+    .map((row) => ({ value: row.id, label: row.available === false ? `${row.label} (unavailable)` : row.label }));
   if (value && !choices.some((row) => row.value === value)) choices.unshift({ value, label: 'Unavailable selection', disabled: true });
   return <div className="col-md-6"><div className="mb-3"><FormElement type="dropdown" label={label} helperText={helperText}
-    inputProps={{ id, name: id, value: value ?? '', placeholder: '— Select —', options: choices, disabled,
+    inputProps={{ id, name: id, value: value ?? '', placeholder, options: choices, disabled,
       onChange: (event) => onChange(event.target.value || null) }} /></div></div>;
 }
 
@@ -45,6 +47,7 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
       const result = await apiRequest('/api/organization-settings/laboratory', { method: 'PUT', body: {
         revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, selfAllocationEnabled: draft.selfAllocationEnabled, allowReceivingDateEdit: draft.allowReceivingDateEdit,
         resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: draft.jobWorkflowId,
+        sampleWorkflows: draft.sampleWorkflows,
         schemeCurrentYearDigits: draft.schemeCurrentYearDigits ?? '', schemeNextYearDigits: draft.schemeNextYearDigits ?? '',
         schemeSeparator: draft.schemeSeparator ?? '', schemeMonthFormat: draft.schemeMonthFormat,
         schemeNonNablStartNumber: draft.schemeNonNablStartNumber ?? '', dateFormat: draft.dateFormat, datetimeFormat: draft.datetimeFormat } });
@@ -98,6 +101,15 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
             </div></section>
           </div>
           <div role="tabpanel" id="tabpanel-workflow_configs" aria-labelledby="tab-workflow_configs" hidden={activeTab !== 'workflow_configs'}>
+            <section className="settings-section"><h6 className="settings-section__title">Sample Workflows</h6>
+              {sampleWorkflowTypes.some(type => !draft.sampleWorkflows[type.key]) ? <div className="alert alert-warning mb-3">
+                Workflow is not configured for: {sampleWorkflowTypes.filter(type => !draft.sampleWorkflows[type.key]).map(type => type.label).join(', ')}.
+              </div> : null}
+              <div className="row gx-3">{sampleWorkflowTypes.map(({ key, label }) => <SettingsSelect key={key} id={`sample_workflow_${key}`}
+                label={label} value={draft.sampleWorkflows[key]} options={data.sampleWorkflowOptions} disabled={disabled} placeholder="— Select workflow —"
+                helperText="Required before this sample type can be created."
+                onChange={value => setDraft(current => ({ ...current, sampleWorkflows: { ...current.sampleWorkflows, [key]: value } }))} />)}</div>
+            </section>
             <section className="settings-section"><h6 className="settings-section__title">Test Request Workflow</h6><div className="row gx-3">
               <SettingsSelect id="job_workflow" label="Job Workflow" value={draft.jobWorkflowId} options={data.workflows} disabled={disabled}
                 helperText="Used when jobs are allocated. Leave empty to use the sample category's test request workflow."

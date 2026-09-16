@@ -25,7 +25,7 @@ try {
   if (matches.rowCount !== 1) throw new Error('Run db:seed first; the expected synthetic analyst, laboratory and administrator role are required.');
   const account = matches.rows[0];
   const existing = await client.query('SELECT id FROM sample_categories WHERE organization_id=$1 AND code=$2', [account.organizationId, categoryCode]);
-  if (!existing.rowCount) await createLaboratoryFixture(owner, account, { categoryCode, customerCode });
+  if (!existing.rowCount) await createLaboratoryFixture(owner, account, { categoryCode, customerCode, configureSampleWorkflows: false });
   const customer = await client.query('SELECT id FROM customers WHERE organization_id=$1 AND code=$2', [account.organizationId, customerCode]);
   if (customer.rowCount !== 1) throw new Error('The existing synthetic laboratory fixture is incomplete; no existing record was replaced.');
   await client.query(`INSERT INTO customer_addresses(organization_id, customer_id, address_type, freeform_address, is_default)

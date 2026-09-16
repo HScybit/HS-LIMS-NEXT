@@ -30,18 +30,48 @@ async function configure(user, templateId, automatic = false) {
   return work(user, (client, identity) => saveLaboratorySettings(client, identity, { revision: settings.revision,
     autoCreateJobs: automatic, resultSummaryTemplateId: templateId, jobWorkflowId: null }));
 }
-async function setup({ lines = 2, automatic = false } = {}) {
+async function setup({ lines = 2, automatic = false, historical = false } = {}) {
   const user = await account({ permissions: ['masters.manage', 'templates.manage', 'samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'settings.manage'] });
   const sources = [];
   for (let index = 0; index < lines; index += 1) {
-    const source = await createLaboratoryFixture(owner, user, { repeated: false, generateTestRequests: automatic });
+    const source = await createLaboratoryFixture(owner, user, { repeated: false, generateTestRequests: automatic, configureSampleWorkflows: !historical });
     await setTemplate(user, source, source.template.templateId); sources.push(source);
   }
   const registration = { ...sources[0].registration, products: sources.map((source) => ({ ...source.registration.products[0], sampleCategoryId: source.category.id })) };
-  return { user, sources, registration };
+  return { user, sources, registration, historical };
+}
+// Restore a typed synthetic pre-configuration sample, with all database guards enabled.
+// Historical jobs must remain usable even when no organization settings row exists.
+async function historicalSample(flow) {
+  const client = await owner.connect(); const source = flow.sources[0]; const organizationId = flow.user.organizationId;
+  try {
+    await client.query('BEGIN');
+    const sample = (await client.query(`INSERT INTO samples(organization_id,sample_number,sample_category_id,category_code,category_name,
+      category_abbreviation,sample_type,received_at,registered_at,due_at,registered_by)
+      VALUES($1,$2,$3,$4,$5,$6,'internal',$7,$7,$8,$9) RETURNING id`,
+    [organizationId, `SYNTHETIC-HISTORICAL-${randomUUID()}`, source.category.id, source.category.code, source.category.name,
+      source.category.abbreviation, flow.registration.receivedAt, flow.registration.dueAt, flow.user.userId])).rows[0];
+    for (const [index, item] of flow.sources.entries()) {
+      const line = (await client.query(`INSERT INTO sample_products(organization_id,sample_id,product_id,sample_category_id,
+        product_code,product_name,category_code,category_name,quantity,display_order)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,1,$9) RETURNING id`,
+      [organizationId, sample.id, item.product.id, item.category.id, item.product.code, item.product.name, item.category.code, item.category.name, index])).rows[0];
+      await client.query(`INSERT INTO sample_tests(organization_id,sample_product_id,test_parameter_id,method_id,decision_rule_id,display_order)
+        VALUES($1,$2,$3,$4,$5,0)`, [organizationId, line.id, item.parameter.id, item.method.id, item.rule.id]);
+    }
+    const workflow = source.workflowRecords.find(record => record.workflow.appliesTo === 'sample');
+    const run = (await client.query(`INSERT INTO workflow_runs(organization_id,workflow_version_id,sample_id,current_state_id,started_by)
+      VALUES($1,$2,$3,$4,$5) RETURNING id`, [organizationId, workflow.version.id, sample.id, workflow.state.id, flow.user.userId])).rows[0];
+    await client.query(`INSERT INTO workflow_run_history(organization_id,workflow_run_id,workflow_version_id,to_state_id,action,actor_user_id)
+      VALUES($1,$2,$3,$4,'started',$5)`, [organizationId, run.id, workflow.version.id, workflow.state.id, flow.user.userId]);
+    await client.query(`INSERT INTO sample_events(organization_id,sample_id,event_type,actor_user_id,description)
+      VALUES($1,$2,'sample_registered',$3,'Synthetic historical registration')`, [organizationId, sample.id, flow.user.userId]);
+    await client.query('COMMIT'); return sample;
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
 }
 async function generate(flow) {
-  const sample = await work(flow.user, (client, identity) => registerSample(client, identity, flow.registration));
+  const sample = flow.historical ? await historicalSample(flow) : await work(flow.user, (client, identity) => registerSample(client, identity, flow.registration));
   const generated = await work(flow.user, (client, identity) => generateTestRequests(client, identity, sample.id));
   return { ...flow, sample, requests: generated.items };
 }
@@ -51,8 +81,8 @@ const jobs = async (flow) => (await owner.query(`SELECT request.id,request.datas
   FROM test_requests request JOIN laboratory_test_request_context context ON context.organization_id=request.organization_id AND context.test_request_id=request.id
   WHERE request.organization_id=$1 AND context.sample_id=$2 AND request.is_job ORDER BY context.product_id`, [flow.user.organizationId, flow.sample.id])).rows;
 
-test('manual jobs use each Product template with no organization settings and keep existing captures after Product edits', async () => {
-  const flow = await generate(await setup());
+test('historical manual jobs use each Product template with no organization settings and keep existing captures after Product edits', async () => {
+  const flow = await generate(await setup({ historical: true }));
   assert.equal((await owner.query('SELECT 1 FROM organization_laboratory_settings WHERE organization_id=$1', [flow.user.organizationId])).rowCount, 0);
   const created = await create(flow); assert.equal(created.items.length, 2);
   const selected = await jobs(flow);
@@ -117,7 +147,8 @@ test('the Product job resolver enforces actual automatic generation, tenant/samp
 
 test('concurrent Product and organization edits wait for job selection and cannot retarget the created capture', async () => {
   const flow = await generate(await setup({ lines: 1 })); await configure(flow.user, null);
-  const replacement = await createLaboratoryFixture(owner, flow.user, { repeated: false });
+  const replacement = await createLaboratoryFixture(owner, flow.user, { repeated: false, configureSampleWorkflows: false });
+  const { settings } = await work(flow.user, loadLaboratorySettings);
   let release; const gate = new Promise((resolve) => { release = resolve; });
   let selected; let selectionFailed; const ready = new Promise((resolve, reject) => { selected = resolve; selectionFailed = reject; });
   const creating = work(flow.user, async (client, identity) => {
@@ -139,7 +170,7 @@ test('concurrent Product and organization edits wait for job selection and canno
   });
   const settingsChange = work(flow.user, async (client, identity) => {
     settingsPid = (await client.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
-    return saveLaboratorySettings(client, identity, { revision: 1, autoCreateJobs: false, resultSummaryTemplateId: replacement.template.templateId, jobWorkflowId: null });
+    return saveLaboratorySettings(client, identity, { revision: settings.revision, autoCreateJobs: false, resultSummaryTemplateId: replacement.template.templateId, jobWorkflowId: null });
   });
   // Observe real PostgreSQL blockers rather than assuming timing proves a lock.
   const changes = Promise.allSettled([productChange, settingsChange]);
@@ -153,7 +184,10 @@ test('concurrent Product and organization edits wait for job selection and canno
     assert.equal(blocked, true, 'Both metadata writers must wait for the active job transaction.');
   } finally { release(); }
   const created = await creating; const edited = await changes;
-  assert.ok(edited.every((result) => result.status === 'fulfilled')); assert.equal(created.items.length, 1);
+  for (const [index, result] of edited.entries()) if (result.status === 'rejected') {
+    assert.fail(`Writer ${index}: ${result.reason.code}: ${result.reason.message}; ${result.reason.detail ?? ''}; ${result.reason.where ?? ''}`);
+  }
+  assert.equal(created.items.length, 1);
   assert.equal((await jobs(flow))[0].datasheet_template_id, source.template.templateId);
   const captured = (await owner.query(`SELECT version.template_id FROM datasheets sheet JOIN template_instances capture ON capture.organization_id=sheet.organization_id AND capture.id=sheet.template_instance_id
     JOIN template_versions version ON version.organization_id=capture.organization_id AND version.id=capture.version_id WHERE sheet.organization_id=$1 AND sheet.id=$2`,
@@ -162,7 +196,9 @@ test('concurrent Product and organization edits wait for job selection and canno
 });
 
 test('a first organization-settings insertion after Product resolution cannot commit a job with a conflicting template', async () => {
-  const flow = await generate(await setup({ lines: 1 })); const replacement = await createLaboratoryFixture(owner, flow.user, { repeated: false });
+  const flow = await generate(await setup({ lines: 1, historical: true }));
+  const replacement = await createLaboratoryFixture(owner, flow.user, { repeated: false, configureSampleWorkflows: false });
+  assert.equal((await owner.query('SELECT 1 FROM organization_laboratory_settings WHERE organization_id=$1', [flow.user.organizationId])).rowCount, 0);
   await assert.rejects(work(flow.user, async (client, identity) => {
     const query = client.query; let changed = false;
     client.query = async (...args) => {
@@ -180,4 +216,30 @@ test('a first organization-settings insertion after Product resolution cannot co
     [flow.user.organizationId, flow.requests.map((row) => row.id)])).rows.every((row) => row.parent_test_request_id === null && row.status === 'created'));
   assert.equal((await create(flow)).items.length, 1);
   assert.equal((await jobs(flow))[0].datasheet_template_id, replacement.template.templateId);
+});
+
+test('master writer guards continue to exclude account and organization updates until commit', async () => {
+  const user = await account({ permissions: ['masters.manage'] });
+  for (const [table, id] of [['users', user.userId], ['organizations', user.organizationId]]) {
+    const held = Promise.withResolvers(); const release = Promise.withResolvers(); const contender = await owner.connect(); let locking;
+    const writing = work(user, async client => { await client.query('SELECT masters_lock_field_writer()'); held.resolve(); await release.promise; });
+    writing.catch(held.reject);
+    try {
+      await held.promise; await contender.query('BEGIN');
+      const pid = (await contender.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      // This is the lock mode PostgreSQL takes when non-key account status fields change.
+      locking = contender.query(`SELECT id FROM ${table} WHERE id=$1 FOR NO KEY UPDATE`, [id]); locking.catch(() => {});
+      let blocked = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        blocked = (await owner.query('SELECT cardinality(pg_blocking_pids($1))>0 AS blocked', [pid])).rows[0].blocked;
+        if (blocked) break;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(blocked, true, `${table} status changes must wait for the master writer.`);
+      release.resolve(); await writing; assert.equal((await locking).rowCount, 1);
+    } finally {
+      release.resolve(); await writing; if (locking) await locking;
+      await contender.query('ROLLBACK'); contender.release();
+    }
+  }
 });

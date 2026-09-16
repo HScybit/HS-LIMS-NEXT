@@ -98,6 +98,9 @@ async function registeredWorkflow(options) {
   const fixture = await definition(options);
   const laboratory = await createLaboratoryFixture(owner, manager, { workflow: false });
   await owner.query("INSERT INTO sample_category_workflows(organization_id,sample_category_id,workflow_id,applies_to,is_default) VALUES($1,$2,$3,'sample',true)", [manager.organizationId, laboratory.category.id, fixture.workflowId]);
+  await owner.query(`INSERT INTO organization_laboratory_settings(organization_id,updated_by,sample_workflow_base_id) VALUES($1,$2,$3)
+    ON CONFLICT(organization_id) DO UPDATE SET sample_workflow_base_id=$3,revision=organization_laboratory_settings.revision+1,updated_by=$2,updated_at=now()`,
+  [manager.organizationId, manager.userId, fixture.workflowId]);
   const sample = await work(manager, (client, identity) => registerSample(client, identity, laboratory.registration));
   return { ...fixture, sample, laboratory };
 }
@@ -255,7 +258,8 @@ test('automatic test generation uses the actual approving actor and rolls the wh
 test('a generating approval can initialize automatic job children without granting its responder allocation permission', async () => {
   const fixture = await registeredWorkflow({ mode: 'all', targetFlags: { generateTestRequests: true } });
   await owner.query(`INSERT INTO organization_laboratory_settings(organization_id,auto_create_jobs,result_summary_template_id,updated_by)
-    VALUES($1,true,$2,$3)`, [manager.organizationId, fixture.laboratory.template.templateId, manager.userId]);
+    VALUES($1,true,$2,$3) ON CONFLICT(organization_id) DO UPDATE SET auto_create_jobs=true,result_summary_template_id=$2,
+      revision=organization_laboratory_settings.revision+1,updated_by=$3,updated_at=now()`, [manager.organizationId, fixture.laboratory.template.templateId, manager.userId]);
   await command(fixture, await commandInput(fixture));
   assert.equal((await approve(fixture, first)).status, 'approval_pending');
   const failChildCapture = (client) => ({ query(...args) {
