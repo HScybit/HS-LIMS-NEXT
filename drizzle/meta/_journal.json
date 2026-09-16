@@ -1163,6 +1163,13 @@
       "when": 1789513975922,
       "tag": "0165_test_request_workflow_configuration",
       "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1789525342887,
+      "tag": "0166_material_category_authoring",
+      "breakpoints": true
     }
   ]
 }

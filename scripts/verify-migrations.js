@@ -39,6 +39,7 @@ import { emptyUncertaintyGrid, updateUncertaintyGrid } from '../src/masters/para
 import { loadTestParameter, saveTestParameter, retireTestParameter, listTestParameters } from '../src/masters/test-parameters.js';
 import { generateParameterCustomFields } from '../src/masters/parameter-custom-field-generation.js';
 import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
+import { loadMaterialCategory, saveMaterialCategory, retireMaterialCategory, listMaterialCategories } from '../src/masters/material-categories.js';
 import { loadProduct, saveProduct, retireProduct, listProducts } from '../src/masters/products.js';
 import { loadCustomField, saveCustomField, retireCustomField, listCustomFields } from '../src/masters/custom-fields.js';
 import { uploadCustomFieldAttachment, readCustomFieldAttachment } from '../src/custom-fields/attachments.js';
@@ -210,6 +211,20 @@ try {
     assert.equal(loaded.instance.version_id, template.versionId);
     assert.equal(loaded.occurrences.length, 3);
     assert(!loaded.values.some((value) => value.fieldId === field.id));
+  }, { csrfToken: session.csrfToken });
+  await withSession(session.token, async (client, identity) => {
+    const input = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh material category', description: 'Reference materials', reusable: true, expirable: false };
+    const created = await saveMaterialCategory(client, identity, input);
+    assert.equal(created.createdBy, account.userId); assert.equal(created.revision, 1);
+    assert.equal((await saveMaterialCategory(client, identity, input)).revision, 1);
+    await saveMaterialCategory(client, identity, { ...input, requestId: randomUUID(), revision: 1, reusable: false, expirable: true });
+    const historical = await loadMaterialCategory(client, identity, input.id, { atRevision: 1 });
+    assert.equal(historical.reusable, true); assert.equal(historical.expirable, false); assert.equal(historical.savedBy, account.userId);
+    const removal = { id: input.id, requestId: randomUUID(), revision: 2 };
+    assert.equal((await retireMaterialCategory(client, identity, removal)).revision, 3);
+    assert.equal((await retireMaterialCategory(client, identity, removal)).revision, 3);
+    assert.equal((await listMaterialCategories(client, identity)).totalCount, 0);
+    assert.deepEqual(await loadMaterialCategory(client, identity, input.id, { atRevision: 1 }), historical);
   }, { csrfToken: session.csrfToken });
   const laboratory = await createLaboratoryFixture(owner, account);
   const masterGrid = updateUncertaintyGrid(emptyUncertaintyGrid(), { headers: ['Sr. no.', 'Text', 'Notes'], data: [['1', '000.00', '=A1*2'], ['2', '  exact text  ', '']] });
