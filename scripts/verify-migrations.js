@@ -39,6 +39,7 @@ import { emptyUncertaintyGrid, updateUncertaintyGrid } from '../src/masters/para
 import { loadTestParameter, saveTestParameter, retireTestParameter, listTestParameters } from '../src/masters/test-parameters.js';
 import { generateParameterCustomFields } from '../src/masters/parameter-custom-field-generation.js';
 import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
+import { saveBusinessUnit, loadBusinessUnit, listBusinessUnits } from '../src/masters/business-units.js';
 import { loadMaterialCategory, saveMaterialCategory, retireMaterialCategory, listMaterialCategories } from '../src/masters/material-categories.js';
 import { createMaterialTransaction, loadMaterial, retireMaterial, saveMaterial } from '../src/materials/service.js';
 import { listMaterials, listMaterialTransactions } from '../src/materials/listing.js';
@@ -194,6 +195,17 @@ try {
     assert.equal((await loadRoleSettings(client, identity)).selfAllocationEnabled, true);
   }, { csrfToken: session.csrfToken });
   // Enrollment must work from an empty schema using only the restricted app role.
+  const unitAccount = await createAccount(owner, { permissions: ['users.manage'] });
+  const unitSession = await signIn({ identifier: unitAccount.username, password: unitAccount.password });
+  await withSession(unitSession.token, async (client, identity) => {
+    const input = { id: randomUUID(), requestId: randomUUID(), revision: 0, code: 'FRESH-UNIT', name: 'Fresh unit', description: null, active: true };
+    const created = await saveBusinessUnit(client, identity, input);
+    assert.equal(created.savedBy, unitAccount.userId);
+    await saveBusinessUnit(client, identity, { ...input, requestId: randomUUID(), revision: 1, active: false });
+    assert.deepEqual(await saveBusinessUnit(client, identity, input), created);
+    assert.equal((await loadBusinessUnit(client, identity, input.id)).active, false);
+    assert.equal((await listBusinessUnits(client, identity, {})).totalCount, 1);
+  }, { csrfToken: unitSession.csrfToken });
   const mfaSetup = await withSession(session.token, startMfaSetup, { csrfToken: session.csrfToken, accountAction: true });
   const mfaInput = { setupId: mfaSetup.setupId, code: totpAt(mfaSetup.secret, Date.now()) };
   const mfaResult = await withSession(session.token, (client, identity) => verifyMfaSetup(client, identity, mfaInput), { csrfToken: session.csrfToken, accountAction: true });

@@ -27,6 +27,20 @@ export const businessUnits = pgTable('business_units', {
   check('business_unit_fields', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 200
     and (${t.description} is null or length(${t.description})<=2000) and ${t.revision}>0`)]);
 
+// Only actual native saves create versions; preexisting support rows retain their original provenance.
+export const businessUnitVersions = pgTable('business_unit_versions', {
+  organizationId: uuid('organization_id').notNull(), unitId: uuid('unit_id').notNull(), revision: integer('revision').notNull(),
+  previousRevision: integer('previous_revision'), requestId: uuid('request_id').notNull(), code: text('code').notNull(), name: text('name').notNull(),
+  description: text('description'), active: boolean('active').notNull(), savedBy: uuid('saved_by').notNull(),
+  savedByUsername: text('saved_by_username').notNull(), savedByName: text('saved_by_name').notNull(),
+  savedAt: time('saved_at').notNull().defaultNow(), createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, (t) => [primaryKey({ name: 'business_unit_version_pk', columns: [t.organizationId, t.unitId, t.revision] }),
+  unique('business_unit_request_key').on(t.organizationId, t.requestId), reference(t, t.unitId, businessUnits, 'business_unit_version_head_fk'),
+  member(t, t.savedBy, 'business_unit_version_actor_fk'),
+  check('business_unit_version_revision', sql`(${t.previousRevision} is null and ${t.revision}=1) or (${t.previousRevision} is not null and ${t.previousRevision}>0 and ${t.revision}=${t.previousRevision}+1)`),
+  check('business_unit_version_fields', sql`length(${t.code}) between 1 and 64 and ${t.code} ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
+    and length(trim(${t.name})) between 1 and 200 and (${t.description} is null or length(${t.description})<=2000)`)]);
+
 // Absence means these membership details have not been recorded, rather than a guessed default role/lab.
 export const userProfiles = pgTable('user_profiles', {
   ...scope(), ...fields(), revision: integer('revision').notNull(),
