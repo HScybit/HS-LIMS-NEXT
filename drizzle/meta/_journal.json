@@ -1226,6 +1226,20 @@
       "when": 1789566058676,
       "tag": "0174_party_module_access",
       "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1789573271878,
+      "tag": "0175_customer_module_write_boundaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1789577456646,
+      "tag": "0176_customer_module_tenant_scope",
+      "breakpoints": true
     }
   ]
 }

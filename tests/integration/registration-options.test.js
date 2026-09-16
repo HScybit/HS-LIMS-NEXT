@@ -75,7 +75,10 @@ test('quick customer creation is atomic and scoped without conferring general ma
   await assert.rejects(work(reader, (client) => client.query('SELECT laboratory_quick_customer($1,$2,$3,$4,$5,$6,$7)', Object.values(input()))), { code: '42501' });
   await assert.rejects(work(registrar, (client) => client.query('SELECT laboratory_quick_customer($1,$2,$3,$4,$5,$6,$7)', [null, ...Object.values(input()).slice(1)])), { code: '23514' });
   await assert.rejects(work(registrar, (client) => client.query("INSERT INTO customers(organization_id, code, name, legal_name) VALUES($1,$2,'Arbitrary','Arbitrary')", [registrar.organizationId, randomUUID()])), { code: '42501' });
-  assert.equal((await work(registrar, (client) => client.query('UPDATE customers SET name=$3, revision=revision+1 WHERE organization_id=$1 AND id=$2', [registrar.organizationId, customer.id, 'Denied']))).rowCount, 0);
+  const beforeDeniedUpdate = (await owner.query('SELECT name,revision FROM customers WHERE organization_id=$1 AND id=$2', [registrar.organizationId, customer.id])).rows[0];
+  await assert.rejects(work(registrar, (client) => client.query('UPDATE customers SET name=$3, revision=revision+1 WHERE organization_id=$1 AND id=$2', [registrar.organizationId, customer.id, 'Denied'])),
+    { code: '42501', constraint: 'master_field_session_required' });
+  assert.deepEqual((await owner.query('SELECT name,revision FROM customers WHERE organization_id=$1 AND id=$2', [registrar.organizationId, customer.id])).rows[0], beforeDeniedUpdate);
   assert.equal((await work(foreign, sampleRegistrationOptions)).customers.length, 0);
   await assert.rejects(owner.query("UPDATE customer_addresses SET city='Invented' WHERE organization_id=$1 AND customer_id=$2", [registrar.organizationId, customer.id]), { code: '23514' });
 });

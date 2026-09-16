@@ -192,6 +192,11 @@ try {
     const instrumentServiceTypes = [{ id: randomUUID(), serviceCode: 'CAL-1', displayLabel: 'Calibration', isActive: true },
       { id: randomUUID(), serviceCode: 'PM_1', displayLabel: 'Maintenance', isActive: false }];
     assert.equal((await client.query("SELECT organization_has_module_access('customer') AS allowed")).rows[0].allowed, false);
+    const customerWriteId = randomUUID();
+    const customerWriteSql = "INSERT INTO customers(organization_id,id,code,name,legal_name) VALUES($1,$2::uuid,$2::text,'Fresh Customer write','Synthetic legal name') RETURNING id";
+    await client.query('SAVEPOINT customer_write_denied');
+    await assert.rejects(client.query(customerWriteSql, [identity.organization_id, customerWriteId]), { code: '42501', constraint: 'organization_module_access_required' });
+    await client.query('ROLLBACK TO SAVEPOINT customer_write_denied'); await client.query('RELEASE SAVEPOINT customer_write_denied');
     const moduleAccess = emptyModuleAccess(); moduleAccess[0] = { moduleKey: 'customer', enabled: true, roleIds: [account.roleId], userIds: [account.userId] };
     await saveLaboratorySettings(client, identity, { revision: 0, autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: null, selfAllocationEnabled: true,
       dateFormat: 'Do MMMM YYYY', datetimeFormat: 'MMMM Do YYYY | hh:mm A', instrumentServiceTypes, moduleAccess });
@@ -201,6 +206,17 @@ try {
     assert.deepEqual(settings.instrumentServiceTypes, instrumentServiceTypes);
     assert.deepEqual(moduleAccessValues(settings.moduleAccess), moduleAccess);
     assert.equal((await client.query("SELECT organization_has_module_access('customer') AS customer,organization_has_module_access('vendor') AS vendor")).rows[0].customer, true);
+    await client.query('SAVEPOINT customer_write_allowed');
+    assert.equal((await client.query(customerWriteSql, [identity.organization_id, customerWriteId])).rows[0].id, customerWriteId);
+    assert.equal((await client.query('UPDATE customers SET revision=revision+1 WHERE organization_id=$1 AND id=$2 RETURNING id', [identity.organization_id, customerWriteId])).rowCount, 1);
+    assert.equal((await client.query('DELETE FROM customers WHERE organization_id=$1 AND id=$2 RETURNING id', [identity.organization_id, customerWriteId])).rowCount, 1);
+    await client.query('ROLLBACK TO SAVEPOINT customer_write_allowed'); await client.query('RELEASE SAVEPOINT customer_write_allowed');
+    await client.query('SAVEPOINT customer_scope_denied');
+    await assert.rejects(client.query(`INSERT INTO customers(organization_id,id,code,name,legal_name)
+      SELECT CASE WHEN position=1 THEN $1::uuid ELSE set_config('app.organization_id',$2,true)::uuid END,
+        gen_random_uuid(),$3||'-'||position,'Fresh mixed-scope Customer','Synthetic legal name'
+      FROM generate_series(1,2) selected(position)`, [identity.organization_id, randomUUID(), randomUUID()]), { code: '42501' });
+    await client.query('ROLLBACK TO SAVEPOINT customer_scope_denied'); await client.query('RELEASE SAVEPOINT customer_scope_denied');
     const moduleHistory = await loadModuleAccess(client, identity, { atRevision: 1 });
     assert.equal(moduleHistory.savedBy, account.userId); assert.deepEqual(moduleAccessValues(moduleHistory.modules), moduleAccess);
     const serviceVersion = (await client.query('SELECT row_count,saved_by FROM organization_instrument_service_versions WHERE organization_id=$1 AND revision=1', [identity.organization_id])).rows[0];
