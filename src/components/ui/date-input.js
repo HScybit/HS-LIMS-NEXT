@@ -102,3 +102,19 @@ export function formatDateInput(value) {
 
   return [day, month, year].filter(Boolean).join('/');
 }
+
+// Calendar-only records must not pass through local midnight, Date's 0–99 year
+// coercion, rollover parsing, or the permissive source-format fallback above.
+export function parseCalendarDate(value) {
+  if (typeof value !== 'string') return null;
+  if (!value) return { display: '', iso: '' };
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const display = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!iso && !display) return null;
+  const [year, month, day] = iso ? iso.slice(1).map(Number) : [Number(display[3]), Number(display[2]), Number(display[1])];
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]) return null;
+  const fullYear = String(year).padStart(4, '0');
+  return { display: `${pad(day)}/${pad(month)}/${fullYear}`, iso: `${fullYear}-${pad(month)}-${pad(day)}` };
+}

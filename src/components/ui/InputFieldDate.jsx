@@ -3,7 +3,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import cx from 'classnames';
 import AppIcon from './AppIcon.jsx';
-import { toDisplayDate, parseVisibleDate, formatDateInput } from './date-input.js';
+import { toDisplayDate, parseVisibleDate, parseCalendarDate, formatDateInput } from './date-input.js';
 import '../../styles/form-controls.scss';
 
 function createChangeEvent(sourceEvent, value) {
@@ -23,6 +23,7 @@ export default function InputFieldDate({
   placeholder = 'DD/MM/YYYY',
   className = '',
   disabled = false,
+  calendarOnly = false,
   onChange,
   onBlur,
   onClick,
@@ -34,7 +35,7 @@ export default function InputFieldDate({
   const pointerOpenedPickerRef = useRef(false);
   const isControlled = value !== undefined;
   const sourceValue = isControlled ? value ?? '' : defaultValue ?? '';
-  const initialParsed = useMemo(() => parseVisibleDate(sourceValue) ?? { display: sourceValue, iso: '' }, [sourceValue]);
+  const initialParsed = useMemo(() => (calendarOnly ? parseCalendarDate(sourceValue) : parseVisibleDate(sourceValue)) ?? { display: sourceValue, iso: '' }, [sourceValue, calendarOnly]);
   const [textValue, setTextValue] = useState(initialParsed.display);
   const [pickerValue, setPickerValue] = useState(initialParsed.iso);
   const [lastValidText, setLastValidText] = useState(initialParsed.display);
@@ -146,7 +147,7 @@ export default function InputFieldDate({
           }
         }}
         onBlur={(event) => {
-          const parsed = parseVisibleDate(event.target.value);
+          const parsed = calendarOnly ? parseCalendarDate(event.target.value) : parseVisibleDate(event.target.value);
 
           if (parsed) {
             setTextValue(parsed.display);
@@ -154,11 +155,11 @@ export default function InputFieldDate({
             setLastValidText(parsed.display);
             setLastValidPickerValue(parsed.iso);
             onChange?.(createChangeEvent(event, parsed.display));
-          } else if (event.target.value.trim()) {
+          } else if (event.target.value.trim() && !calendarOnly) {
             setTextValue(lastValidText);
             setPickerValue(lastValidPickerValue);
             onChange?.(createChangeEvent(event, lastValidText));
-          } else {
+          } else if (!event.target.value.trim()) {
             setTextValue('');
             setPickerValue('');
             setLastValidText('');
@@ -185,6 +186,8 @@ export default function InputFieldDate({
         ref={pickerRef}
         className="visually-hidden"
         type="date"
+        min={calendarOnly ? '0001-01-01' : undefined}
+        max={calendarOnly ? '9999-12-31' : undefined}
         tabIndex={-1}
         aria-hidden="true"
         value={pickerValue}
@@ -195,7 +198,7 @@ export default function InputFieldDate({
           if (event.target.value) {
             const [year, month, day] = event.target.value.split('-').map(Number);
             const nextDate = new Date(year, month - 1, day);
-            const nextDisplay = toDisplayDate(nextDate);
+            const nextDisplay = calendarOnly ? parseCalendarDate(event.target.value)?.display ?? event.target.value : toDisplayDate(nextDate);
             setTextValue(nextDisplay);
             setLastValidText(nextDisplay);
             setLastValidPickerValue(event.target.value);

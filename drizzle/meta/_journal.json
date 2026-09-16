@@ -1205,6 +1205,20 @@
       "when": 1789537784530,
       "tag": "0171_laboratory_authoring",
       "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1789551963987,
+      "tag": "0172_nabl_certification_authoring",
+      "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1789555752409,
+      "tag": "0173_nabl_scope_validation_batches",
+      "breakpoints": true
     }
   ]
 }
