@@ -62,7 +62,7 @@ export function CustomFieldControl({ kind, field, value, stored, disabled, error
 }
 
 export default function MasterCustomFields({ kind, fields, loading, loadError, values, storedFields = [], lookupSources, errors, disabled, generatingId, onChange, onBusy, onGenerate, onReload }) {
-  const resource = kind === 'parameter' ? 'test-parameters' : 'products';
+  const resource = kind === 'method' ? 'methods' : kind === 'parameter' ? 'test-parameters' : 'products';
   const requests = useRef(new Map()); const controllers = useRef(new Set());
   const [users, setUsers] = useState([]); const [userError, setUserError] = useState(''); const [moreUsers, setMoreUsers] = useState(false);
   const storedByKey = useMemo(() => new Map(storedFields.map((field) => [field.key, field])), [storedFields]);

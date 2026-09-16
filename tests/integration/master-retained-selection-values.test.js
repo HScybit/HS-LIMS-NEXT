@@ -5,12 +5,14 @@ import { ownerPool, createAccount } from '../helpers/database.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { closePool } from '../../src/db/pool.js';
 import { saveCustomField, retireCustomField } from '../../src/masters/custom-fields.js';
+import { saveMethod, loadMethod, retireMethod } from '../../src/masters/methods.js';
 import { saveProduct, loadProduct, retireProduct } from '../../src/masters/products.js';
 import { saveTestParameter, loadTestParameter, retireTestParameter } from '../../src/masters/test-parameters.js';
 
 const owner = ownerPool();
 after(async () => { await closePool(); await owner.end(); });
-const apis = { product: { save: saveProduct, load: loadProduct, retire: retireProduct, versions: 'product_versions', idColumn: 'product_id' },
+const apis = { method: { save: saveMethod, load: loadMethod, retire: retireMethod, versions: 'method_versions', idColumn: 'method_id' },
+  product: { save: saveProduct, load: loadProduct, retire: retireProduct, versions: 'product_versions', idColumn: 'product_id' },
   parameter: { save: saveTestParameter, load: loadTestParameter, retire: retireTestParameter, versions: 'test_parameter_versions', idColumn: 'parameter_id' } };
 const work = (actor, action, readOnly = false) => withSession(actor.token, action, { csrfToken: actor.csrfToken, readOnly });
 const choice = (key, label = key) => ({ id: randomUUID(), key, label });
@@ -18,10 +20,10 @@ async function fixture(kind, changes = {}) {
   const user = await createAccount(owner, { permissions: ['masters.manage'] });
   const actor = { ...user, ...await signIn({ identifier: user.username, password: user.password }) };
   let definition = { id: randomUUID(), requestId: randomUUID(), revision: 0, key: 'saved_key', label: 'Saved field',
-    fieldType: 'select', associatedWith: kind, options: [choice('A', 'Original A')], ...changes };
+    fieldType: 'select', associatedWith: kind === 'method' ? 'method_of_analysis' : kind, options: [choice('A', 'Original A')], ...changes };
   let field = await work(actor, (c, i) => saveCustomField(c, i, definition));
   const id = randomUUID(); const key = randomUUID(); const api = apis[kind];
-  const input = (value, revision, requestId = randomUUID(), target = { id, key }) => ({ ...target, requestId, revision, name: 'Retained selection master',
+  const input = (value, revision, requestId = randomUUID(), target = { id, key }) => ({ ...(kind === 'method' ? { id: target.id, uuid: target.key } : target), requestId, revision, name: 'Retained selection master',
     ...(kind === 'parameter' ? { schemeAbbreviation: 'Retained' } : {}), customFields: [{ fieldId: field.id, fieldRevision: field.revision, value }] });
   return { kind, actor, api, id, key, input, field: () => field,
     define: async changes => {
@@ -71,7 +73,7 @@ async function direct(f, { value, revision, state = 'invalid', optionId = null, 
   finally { assert.equal(inserted, true, 'The actual value INSERT must reach its database guard.'); }
 }
 
-for (const kind of ['product', 'parameter']) {
+for (const kind of ['product', 'parameter', 'method']) {
   test(`${kind} replacement dropdowns retain unresolved values, exact concurrent retries and frozen history`, async () => {
     const f = await fixture(kind); const original = await f.save('A', 0); await f.replace(); const requestId = randomUUID();
     const outcomes = await Promise.allSettled([f.save('A', 1, requestId), f.save('A', 1, requestId)]);

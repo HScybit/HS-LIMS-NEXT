@@ -43,7 +43,7 @@ export async function uploadCustomFieldAttachment(client, identity, input) {
   }
   const field = (await client.query(`SELECT revision,field_type,associated_with,active FROM custom_field_definitions
     WHERE organization_id=$1 AND id=$2 FOR SHARE`, [identity.organization_id, fieldId])).rows[0];
-  if (!field?.active || field.field_type !== 'attachment' || !['product', 'parameter'].includes(field.associated_with)) {
+  if (!field?.active || field.field_type !== 'attachment' || !['product', 'parameter', 'method_of_analysis'].includes(field.associated_with)) {
     throw new HttpError(404, 'attachment_field_not_found', 'The attachment field was not found.');
   }
   if (field.revision !== fieldRevision) throw new HttpError(409, 'stale_custom_field', 'The Custom Field changed. Reload before uploading.');

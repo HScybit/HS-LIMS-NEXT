@@ -24,7 +24,7 @@ try {
   report.runtimeFiles = runtime.fileList.size;
   const required = [...runtime.fileList].map(file => path.resolve(root, file));
   const routes = [...await routeTraces('.next/server/app/api/users'),
-    ...['products', 'test-parameters'].map(resource => `.next/server/app/api/masters/${resource}/custom-field-users/route.js.nft.json`),
+    ...['products', 'test-parameters', 'methods'].map(resource => `.next/server/app/api/masters/${resource}/custom-field-users/route.js.nft.json`),
     '.next/server/app/api/organization-settings/module-access/options/route.js.nft.json'];
   for (const file of routes) {
     const trace = JSON.parse(await readFile(file, 'utf8')); const included = new Set(trace.files.map(entry => path.resolve(path.dirname(file), entry)));
@@ -32,6 +32,18 @@ try {
   }
   assert(report.routes.length > 2, 'Build the user and master API routes before checking their runtime files.');
   assert(report.routes.every(route => route.missing.length === 0), 'A user-choice API deployment trace is missing filter runtime files.');
+  const generationRuntime = await nodeFileTrace(['src/custom-fields/product-generation-worker.js'], { base: root, processCwd: root });
+  assert.equal(generationRuntime.warnings.size, 0, 'Resolve scheme-worker runtime dependency tracing warnings before release.');
+  report.generationRuntimeFiles = generationRuntime.fileList.size;
+  const generationFiles = [...generationRuntime.fileList].map(file => path.resolve(root, file));
+  report.generationRoutes = [];
+  for (const resource of ['products', 'test-parameters', 'methods']) {
+    const file = `.next/server/app/api/masters/${resource}/custom-field-generation/route.js.nft.json`;
+    const trace = JSON.parse(await readFile(file, 'utf8')); const included = new Set(trace.files.map(entry => path.resolve(path.dirname(file), entry)));
+    report.generationRoutes.push({ path: file, missing: generationFiles.filter(entry => !included.has(entry)).map(entry => path.relative(root, entry)) });
+  }
+  assert(report.generationRoutes.every(route => route.missing.length === 0), 'A master scheme API deployment trace is missing worker runtime files.');
   report.status = 'passed';
 } catch (error) { report.status = 'failed'; report.error = error.message; throw error; }
-finally { await writeFile('.local/user-field-filter-runtime-verification.json', JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify({ status: report.status, buildId: report.buildId, runtimeFiles: report.runtimeFiles, routes: report.routes.length, error: report.error })); }
+finally { await writeFile('.local/user-field-filter-runtime-verification.json', JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify({ status: report.status, buildId: report.buildId, runtimeFiles: report.runtimeFiles, routes: report.routes.length,
+  generationRuntimeFiles: report.generationRuntimeFiles, generationRoutes: report.generationRoutes?.length, error: report.error })); }

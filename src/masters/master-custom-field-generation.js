@@ -4,13 +4,15 @@ import { customFieldFormDisplayValue, customFieldNeedsGeneration } from '../cust
 import { customFieldTimeZone, customFieldDateDisplayInZone } from '../custom-fields/server-dates.js';
 import { schemeTokens } from '../custom-fields/product-generation.js';
 import { runMasterGeneration } from '../custom-fields/product-generation-runner.js';
-import { productCustomFields, parameterCustomFields } from './custom-fields.js';
+import { productCustomFields, parameterCustomFields, methodCustomFields } from './custom-fields.js';
 
 const stores = Object.freeze({
   product: Object.freeze({ label: 'Product', collection: 'Product', table: 'products', fieldTable: 'product_version_custom_fields', idColumn: 'product_id',
     context: 'masters_product_scheme_context', definitions: productCustomFields, countKey: 'products', countColumn: 'productCount' }),
   parameter: Object.freeze({ label: 'Parameter', collection: 'TestParameter', table: 'test_parameters', fieldTable: 'parameter_version_custom_fields', idColumn: 'parameter_id',
     context: 'masters_parameter_scheme_context', definitions: parameterCustomFields, countKey: 'parameters', countColumn: 'parameterCount' }),
+  method: Object.freeze({ label: 'Method', collection: 'MethodOfAnalysis', table: 'methods_of_analysis', fieldTable: 'method_version_custom_fields', idColumn: 'method_id',
+    context: 'masters_method_scheme_context', definitions: methodCustomFields, countKey: 'methods', countColumn: 'methodCount' }),
 });
 
 export async function generateMasterCustomFields(kind, client, identity, command) {

@@ -63,6 +63,7 @@ async function masterCustomFields(association, client, identity, { forListing = 
 
 export const productCustomFields = (...args) => masterCustomFields('product', ...args);
 export const parameterCustomFields = (...args) => masterCustomFields('parameter', ...args);
+export const methodCustomFields = (...args) => masterCustomFields('method_of_analysis', ...args);
 export const userCustomFields = (...args) => masterCustomFields('users', ...args);
 
 export async function loadCustomField(client, identity, fieldId, { atRevision } = {}) {

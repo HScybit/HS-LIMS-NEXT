@@ -7,22 +7,24 @@ import { closePool } from '../../src/db/pool.js';
 import { saveCustomField, retireCustomField } from '../../src/masters/custom-fields.js';
 import { uploadCustomFieldAttachment, readCustomFieldAttachment } from '../../src/custom-fields/attachments.js';
 import { uploadUserFieldAttachment } from '../../src/users/custom-field-attachments.js';
+import { saveMethod, loadMethod, retireMethod } from '../../src/masters/methods.js';
 import { saveProduct, loadProduct, retireProduct } from '../../src/masters/products.js';
 import { saveTestParameter, loadTestParameter, retireTestParameter } from '../../src/masters/test-parameters.js';
 
 const owner = ownerPool();
 after(async () => { await closePool(); await owner.end(); });
-const apis = { product: { save: saveProduct, load: loadProduct, retire: retireProduct, versions: 'product_versions', idColumn: 'product_id' },
+const apis = { method: { save: saveMethod, load: loadMethod, retire: retireMethod, versions: 'method_versions', idColumn: 'method_id' },
+  product: { save: saveProduct, load: loadProduct, retire: retireProduct, versions: 'product_versions', idColumn: 'product_id' },
   parameter: { save: saveTestParameter, load: loadTestParameter, retire: retireTestParameter, versions: 'test_parameter_versions', idColumn: 'parameter_id' } };
 const work = (actor, action, readOnly = false) => withSession(actor.token, action, { csrfToken: actor.csrfToken, readOnly });
 async function fixture(kind, changes = {}) {
   const user = await createAccount(owner, { permissions: ['masters.manage', 'users.manage'] });
   const actor = { ...user, ...await signIn({ identifier: user.username, password: user.password }) };
   let definition = { id: randomUUID(), requestId: randomUUID(), revision: 0, key: 'saved_key', label: 'Saved field',
-    fieldType: 'attachment', associatedWith: kind, options: [], ...changes };
+    fieldType: 'attachment', associatedWith: kind === 'method' ? 'method_of_analysis' : kind, options: [], ...changes };
   let field = await work(actor, (c, i) => saveCustomField(c, i, definition));
   const id = randomUUID(); const key = randomUUID(); const api = apis[kind];
-  const input = (value, revision, requestId = randomUUID(), target = { id, key }) => ({ ...target, requestId, revision, name: 'Retained attachment master',
+  const input = (value, revision, requestId = randomUUID(), target = { id, key }) => ({ ...(kind === 'method' ? { id: target.id, uuid: target.key } : target), requestId, revision, name: 'Retained attachment master',
     ...(kind === 'parameter' ? { schemeAbbreviation: target.key } : {}), customFields: [{ fieldId: field.id, fieldRevision: field.revision, value }] });
   return { kind, actor, api, id, key, input, field: () => field,
     define: async changes => {
@@ -75,7 +77,17 @@ async function direct(f, file, revision, allowed, target) {
   finally { assert.equal(inserted, true, 'The actual attachment INSERT must reach its database guard.'); }
 }
 
-for (const kind of ['product', 'parameter']) {
+for (const kind of ['product', 'parameter', 'method']) {
+  test(`${kind} captures accept files observed under every supported master association`, async () => {
+    for (const association of ['product', 'parameter', 'method_of_analysis']) {
+      const f = await fixture(kind, { associatedWith: association }); const file = await f.upload();
+      await f.define({ associatedWith: kind === 'method' ? 'method_of_analysis' : kind });
+      const saved = await f.save(file.id, 0);
+      assert.equal(saved.customFields[0].items[0].attachmentId, file.id);
+      assert.deepEqual((await f.bytes(file)).content, Buffer.from('Original bytes'));
+    }
+  });
+
   test(`${kind} retained files preserve captured-key metadata, concurrent exact retries and immutable history`, async () => {
     const f = await fixture(kind); const original = f.field(); const file = await f.upload(); const bytes = await f.bytes(file);
     await f.define({ key: 'captured_key' }); const first = await f.save(file.id, 0); await f.replace();
@@ -141,7 +153,7 @@ for (const kind of ['product', 'parameter']) {
 
   test(`${kind} same-definition reassociation cannot expose private user files through service or direct SQL`, async () => {
     const f = await fixture(kind, { associatedWith: 'users' }); const privateFile = await f.upload('Private.txt', Buffer.from('User only'), true);
-    await f.define({ associatedWith: kind }); const allowed = await f.upload('Master.txt'); await f.save(allowed.id, 0);
+    await f.define({ associatedWith: kind === 'method' ? 'method_of_analysis' : kind }); const allowed = await f.upload('Master.txt'); await f.save(allowed.id, 0);
     await unchanged(f, () => f.save(privateFile.id, 1), { code: `invalid_${kind}_custom_field_attachment` });
     await unchanged(f, () => direct(f, privateFile, 1, allowed), { code: '23514', constraint: `${kind}_custom_value_attachment` });
     await assert.rejects(f.bytes(privateFile), { code: 'attachment_not_found' });

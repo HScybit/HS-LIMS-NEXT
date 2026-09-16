@@ -63,7 +63,7 @@ function replaceToken(scheme, token, value) {
 const finish = (value) => value.replace(/}}/g, '').replace(/{{/g, '');
 
 // The caller supplies an explicit clock/zone, tenant settings, batched counts and a latest-value reader.
-// The source Product and Parameter forms have no hidden NABL/category/customer context.
+// The source Product, Parameter and Method forms have no hidden NABL/category/customer context.
 async function generateMasterScheme({ field, doc, settings = {}, clock, counts, latestValue }, kind) {
   async function tokenValue(token) {
     switch (token) {
@@ -111,3 +111,4 @@ async function generateMasterScheme({ field, doc, settings = {}, clock, counts, 
 
 export const generateProductScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.products } }, 'product');
 export const generateParameterScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.parameters } }, 'parameter');
+export const generateMethodScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.methods } }, 'method');

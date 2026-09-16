@@ -334,11 +334,16 @@ try {
     await assert.rejects(loadTestParameter(client, identity, masterInput.id), { code: 'parameter_not_found' });
   }, { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
+    const fields = [];
+    for (const [fieldType, key] of [['text', 'fresh_method_note'], ['number', 'fresh_method_number']]) fields.push(await saveCustomField(client, identity,
+      { id: randomUUID(), requestId: randomUUID(), revision: 0, label: key, key, fieldType, associatedWith: 'method_of_analysis' }));
     const command = { id: randomUUID(), revision: 0, requestId: randomUUID(), name: 'Fresh method history', uuid: `ISO ${randomUUID()}`,
-      description: '  Exact notes  ', decimalScale: 0, parseNumber: false, accessUserIds: [account.userId] };
+      description: '  Exact notes  ', decimalScale: 0, parseNumber: false, accessUserIds: [account.userId],
+      customFields: fields.map((field, index) => ({ fieldId: field.id, fieldRevision: field.revision, value: index ? 0 : 'Fresh Method value' })) };
     const saved = await saveMethod(client, identity, command);
     assert.equal((await saveMethod(client, identity, command)).revision, 1);
     assert.equal(saved.decimalScale, 0); assert.equal(saved.parseNumber, false); assert.deepEqual(saved.accessUserIds, [account.userId]);
+    assert.deepEqual(saved.customFields.map(field => field.value), ['Fresh Method value', 0]);
     const historical = await loadMethod(client, identity, command.id, { atRevision: 1 });
     assert.equal(historical.savedBy, account.userId);
     assert.equal((await listMethods(client, identity, { search: command.uuid })).totalCount, 1);
@@ -348,6 +353,7 @@ try {
     assert.equal((await retireMethod(client, identity, removal)).revision, 3);
     assert.deepEqual(await loadMethod(client, identity, command.id, { atRevision: 1 }), historical);
     await assert.rejects(loadMethod(client, identity, command.id), { code: 'method_not_found' });
+    for (const field of fields) await retireCustomField(client, identity, { id: field.id, revision: field.revision, requestId: randomUUID() });
   }, { csrfToken: session.csrfToken });
   const productTags = (await owner.query(`INSERT INTO tags(organization_id,code,name) VALUES($1,$2,'Fresh Alpha'),($1,$3,'Fresh Beta') RETURNING id`,
     [account.organizationId, randomUUID(), randomUUID()])).rows.map((row) => row.id);

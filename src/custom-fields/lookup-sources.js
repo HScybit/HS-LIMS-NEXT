@@ -9,7 +9,7 @@ function requireRead(identity) {
 }
 
 export async function loadMasterFieldLookupOptions(kind, client, identity, input) {
-  if (!['product', 'parameter'].includes(kind)) throw new TypeError('Unsupported lookup field master.');
+  if (!['product', 'parameter', 'method'].includes(kind)) throw new TypeError('Unsupported lookup field master.');
   requireRead(identity); fieldsOnly(input, ['sourceId', 'revision', 'knownOrganizationId']);
   const sourceId = uuid(input.sourceId, 'Lookup source').toLowerCase();
   if (input.revision !== undefined) integer(input.revision, 'Known lookup revision', 1, 2_147_483_647);
@@ -21,7 +21,7 @@ export async function loadMasterFieldLookupOptions(kind, client, identity, input
     WHERE source.organization_id=$1 AND source.id=$2 AND EXISTS (
       SELECT 1 FROM custom_field_definitions definition WHERE definition.organization_id=source.organization_id
         AND definition.associated_with=$3 AND definition.active AND definition.field_type='lookup' AND definition.lookup_source_id=source.id
-    )`, [identity.organization_id, sourceId, kind])).rows[0];
+    )`, [identity.organization_id, sourceId, kind === 'method' ? 'method_of_analysis' : kind])).rows[0];
   if (!current) return { ...context, revision: null, options: [] };
   const incomplete = () => new HttpError(409, 'incomplete_master_lookup', 'Lookup choices changed. Reload before continuing.');
   if (!Number.isInteger(current.lineCount) || current.lineCount < 0 || current.lineCount > lookupSourceLineLimit || current.lineCount !== current.headLineCount) throw incomplete();

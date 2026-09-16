@@ -7,6 +7,7 @@ import { customFieldTimeZone, customFieldTimeZoneDataVersion, customFieldDatePar
 const stores = Object.freeze({
   product: Object.freeze({ label: 'Product', fieldTable: 'product_version_custom_fields', valueTable: 'product_version_custom_field_values', idColumn: 'product_id', lookupValues: true }),
   parameter: Object.freeze({ label: 'Parameter', fieldTable: 'parameter_version_custom_fields', valueTable: 'parameter_version_custom_field_values', idColumn: 'parameter_id', lookupValues: true }),
+  method: Object.freeze({ label: 'Method', fieldTable: 'method_version_custom_fields', valueTable: 'method_version_custom_field_values', idColumn: 'method_id', lookupValues: true }),
   user: Object.freeze({ label: 'User', fieldTable: 'user_version_custom_fields', valueTable: 'user_version_custom_field_values', idColumn: 'subject_user_id',
     definitionTable: 'user_custom_field_versions', optionTable: 'user_custom_field_version_options', attachmentTable: 'user_custom_field_attachments',
     userTable: 'user_directory', userIdColumn: 'id', frozenUsers: true, lookupValues: true, attachmentPath: '/api/users/custom-fields/attachments' }),

@@ -102,7 +102,7 @@ test('method listing batches ordered user labels, literal searches, boolean filt
   const calls = [];
   const listing = await work((client, identity) => listMethods({ query: (...args) => { calls.push(args[0]); return client.query(...args); } }, identity,
     { search: tag, sort: { key: 'decimal_places', dir: 'asc' }, pageSize: 2 }), viewer, true);
-  assert.equal(calls.length, 2); assert.equal(listing.totalCount, 3);
+  assert.equal(calls.length, 3, 'one field-definition batch plus the count and page queries'); assert.equal(listing.totalCount, 3);
   assert.deepEqual(listing.rows.map((row) => row.decimal_places), [0, 2]);
   assert.equal(listing.rows[0].has_access, `Selected_% ${tag}, Synthetic Analyst`);
   const last = await work((client, identity) => listMethods(client, identity, { search: tag, sort: { key: 'decimal_places', dir: 'asc' }, pageSize: 2, page: 2 }));

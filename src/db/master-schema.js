@@ -108,7 +108,9 @@ export const methodsOfAnalysis = pgTable('methods_of_analysis', {
   ...identity(), ...metadata(), description: text('description').notNull().default(''), methodUuid: text('method_uuid').notNull(),
   decimalScale: integer('decimal_scale').notNull().default(2), parseNumber: boolean('parse_number').notNull().default(false),
   accessUserCount: integer('access_user_count').notNull().default(0), saveRequestId: uuid('save_request_id'),
+  customFieldCount: integer('custom_field_count').notNull().default(0), customFieldsProvided: boolean('custom_fields_provided').notNull().default(false),
 }, (t) => [...named(t, 'methods_of_analysis'), uniqueIndex('method_uuid_key').on(t.organizationId, sql`lower(${t.methodUuid})`),
+  check('method_custom_field_count', sql`${t.customFieldCount} between 0 and 500`),
   check('method_access_user_count', sql`${t.accessUserCount} between 0 and 500`),
   check('method_number_settings', sql`${t.decimalScale} between 0 and 12 and length(trim(${t.methodUuid})) between 1 and 100`)]);
 
