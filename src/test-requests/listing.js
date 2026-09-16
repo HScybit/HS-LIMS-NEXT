@@ -14,10 +14,10 @@ export async function sampleTestRequests(client, identity, sampleId) {
     coalesce(specification.parameter_name,'Job') AS "parameterName", coalesce(specification.method_name,'Job') AS "methodName", coalesce(inherited.target_state_name,state.name) AS "stateName",
     EXISTS(SELECT 1 FROM test_request_assignments assignment WHERE assignment.organization_id=request.organization_id
       AND assignment.test_request_id=request.id AND assignment.assignment_type='analyst' AND assignment.unassigned_at IS NULL) AS "hasAnalyst",
-    EXISTS(SELECT 1 FROM sample_category_workflows mapping JOIN workflows workflow
+    coalesce(request.using_dynamic_workflow,EXISTS(SELECT 1 FROM sample_category_workflows mapping JOIN workflows workflow
       ON workflow.organization_id=mapping.organization_id AND workflow.id=mapping.workflow_id AND workflow.active
       JOIN workflow_versions version ON version.organization_id=workflow.organization_id AND version.workflow_id=workflow.id AND version.status='published'
-      WHERE mapping.organization_id=request.organization_id AND mapping.sample_category_id=product.sample_category_id AND mapping.applies_to='test_request' AND mapping.is_default) AS "usesDynamicWorkflow"
+      WHERE mapping.organization_id=request.organization_id AND mapping.sample_category_id=product.sample_category_id AND mapping.applies_to='test_request' AND mapping.is_default)) AS "usesDynamicWorkflow"
     FROM test_requests request JOIN laboratory_test_request_context product ON product.organization_id=request.organization_id AND product.test_request_id=request.id
     LEFT JOIN analytical_specifications specification ON specification.organization_id=request.organization_id AND specification.id=request.specification_id
     LEFT JOIN workflow_runs run ON run.organization_id=request.organization_id AND run.test_request_id=request.id
