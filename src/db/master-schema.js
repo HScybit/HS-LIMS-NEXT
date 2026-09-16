@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, boolean, timestamp, integer, numeric, doublePrecision, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
-import { organizations } from './schema.js';
+import { organizations, memberships } from './schema.js';
 import { templates } from './template-schema.js';
 
 const tenant = () => uuid('organization_id').notNull().references(() => organizations.id);
@@ -20,7 +20,23 @@ export const measurementUnits = pgTable('measurement_units', {
   ...identity(), ...metadata(), symbol: text('symbol').notNull(), dimension: text('dimension'),
 }, (t) => [...named(t, 'measurement_units'), check('measurement_units_symbol', sql`length(${t.symbol}) between 1 and 32`)]);
 
-export const laboratories = pgTable('laboratories', { ...identity(), ...metadata() }, (t) => named(t, 'laboratories'));
+// Shared Unit identity supports User Management and laboratory authoring.
+export const businessUnits = pgTable('business_units', {
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id), id: uuid('id').notNull().defaultRandom(),
+  code: text('code').notNull(), name: text('name').notNull(), description: text('description'), active: boolean('active').notNull().default(true),
+  revision: integer('revision').notNull().default(1), createdAt: time('created_at').notNull().defaultNow(), updatedAt: time('updated_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.organizationId, t.id] }), uniqueIndex('business_units_code_key').on(t.organizationId, sql`lower(${t.code})`),
+  check('business_unit_fields', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 200
+    and (${t.description} is null or length(${t.description})<=2000) and ${t.revision}>0`)]);
+
+export const laboratories = pgTable('laboratories', {
+  ...identity(), ...metadata(), description: text('description'), abbreviation: text('abbreviation'), businessUnitId: uuid('business_unit_id'),
+  headUserId: uuid('head_user_id'), delegateUserId: uuid('delegate_user_id'),
+  minimumTemperature: text('minimum_temperature_text'), maximumTemperature: text('maximum_temperature_text'),
+  minimumHumidity: text('minimum_humidity_text'), maximumHumidity: text('maximum_humidity_text'),
+}, (t) => [...named(t, 'laboratories'), link(t, t.businessUnitId, businessUnits, 'laboratory_unit_fk'),
+  foreignKey({ name: 'laboratory_head_user_fk', columns: [t.organizationId, t.headUserId], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  foreignKey({ name: 'laboratory_delegate_user_fk', columns: [t.organizationId, t.delegateUserId], foreignColumns: [memberships.organizationId, memberships.userId] })]);
 
 export const sampleCategories = pgTable('sample_categories', {
   ...identity(), ...metadata(), description: text('description').notNull().default(''), abbreviation: text('abbreviation').notNull(),

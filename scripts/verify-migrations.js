@@ -40,6 +40,7 @@ import { loadTestParameter, saveTestParameter, retireTestParameter, listTestPara
 import { generateParameterCustomFields } from '../src/masters/parameter-custom-field-generation.js';
 import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
 import { saveBusinessUnit, loadBusinessUnit, listBusinessUnits } from '../src/masters/business-units.js';
+import { saveLaboratory, loadLaboratory, retireLaboratory, listLaboratories } from '../src/masters/laboratories.js';
 import { loadMaterialCategory, saveMaterialCategory, retireMaterialCategory, listMaterialCategories } from '../src/masters/material-categories.js';
 import { createMaterialTransaction, loadMaterial, retireMaterial, saveMaterial } from '../src/materials/service.js';
 import { listMaterials, listMaterialTransactions } from '../src/materials/listing.js';
@@ -206,6 +207,15 @@ try {
     assert.deepEqual(await saveBusinessUnit(client, identity, input), created);
     assert.equal((await loadBusinessUnit(client, identity, input.id)).active, false);
     assert.equal((await listBusinessUnits(client, identity, {})).totalCount, 1);
+    const labInput = { id: randomUUID(), requestId: randomUUID(), revision: 0, code: 'FRESH-LAB', name: 'Fresh authored Lab',
+      headUserId: unitAccount.userId, delegateUserId: unitAccount.userId, minimumTemperature: '0', maximumTemperature: '30C', minimumHumidity: ' ', maximumHumidity: 'Infinity' };
+    const lab = await saveLaboratory(client, identity, labInput);
+    assert.equal(lab.savedBy, unitAccount.userId); assert.equal(lab.minimumHumidity, ' ');
+    await saveLaboratory(client, identity, { ...labInput, revision: 1, requestId: randomUUID(), name: 'Renamed fresh Lab' });
+    const removal = { id: lab.id, revision: 2, requestId: randomUUID() }; const removed = await retireLaboratory(client, identity, removal);
+    assert.equal(removed.active, false); assert.equal(removed.operation, 'retire'); assert.deepEqual(await retireLaboratory(client, identity, removal), removed);
+    assert.deepEqual(await saveLaboratory(client, identity, labInput), lab); assert.deepEqual(await loadLaboratory(client, identity, lab.id, { atRevision: 1 }), lab);
+    assert.equal((await listLaboratories(client, identity, {})).totalCount, 1);
   }, { csrfToken: unitSession.csrfToken });
   const mfaSetup = await withSession(session.token, startMfaSetup, { csrfToken: session.csrfToken, accountAction: true });
   const mfaInput = { setupId: mfaSetup.setupId, code: totpAt(mfaSetup.secret, Date.now()) };

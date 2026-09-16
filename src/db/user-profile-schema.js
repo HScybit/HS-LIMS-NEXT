@@ -1,7 +1,8 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, integer, boolean, timestamp, primaryKey, unique, uniqueIndex, check, foreignKey, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, boolean, timestamp, primaryKey, unique, check, foreignKey, customType } from 'drizzle-orm/pg-core';
 import { organizations, memberships, membershipRoles, roles } from './schema.js';
-import { laboratories } from './master-schema.js';
+import { businessUnits, laboratories } from './master-schema.js';
+export { businessUnits } from './master-schema.js';
 import { roleVersions } from './role-history-schema.js';
 
 const time = (name) => timestamp(name, { withTimezone: true, mode: 'date' });
@@ -18,15 +19,6 @@ const validFields = (t, name) => check(name, sql`(${t.employeeCode} is null or l
   and (${t.phone} is null or length(${t.phone}) between 1 and 50) and (${t.designation} is null or length(${t.designation}) between 1 and 150)
   and ${t.reportingManagerId} is distinct from ${t.userId}`);
 
-// Required by the in-scope User Management unit selector; management screens follow separately.
-export const businessUnits = pgTable('business_units', {
-  organizationId: uuid('organization_id').notNull().references(() => organizations.id), id: uuid('id').notNull().defaultRandom(),
-  code: text('code').notNull(), name: text('name').notNull(), description: text('description'), active: boolean('active').notNull().default(true),
-  revision: integer('revision').notNull().default(1), createdAt: time('created_at').notNull().defaultNow(), updatedAt: time('updated_at').notNull().defaultNow(),
-}, (t) => [primaryKey({ columns: [t.organizationId, t.id] }), uniqueIndex('business_units_code_key').on(t.organizationId, sql`lower(${t.code})`),
-  check('business_unit_fields', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 200
-    and (${t.description} is null or length(${t.description})<=2000) and ${t.revision}>0`)]);
-
 // Only actual native saves create versions; preexisting support rows retain their original provenance.
 export const businessUnitVersions = pgTable('business_unit_versions', {
   organizationId: uuid('organization_id').notNull(), unitId: uuid('unit_id').notNull(), revision: integer('revision').notNull(),
@@ -40,6 +32,32 @@ export const businessUnitVersions = pgTable('business_unit_versions', {
   check('business_unit_version_revision', sql`(${t.previousRevision} is null and ${t.revision}=1) or (${t.previousRevision} is not null and ${t.previousRevision}>0 and ${t.revision}=${t.previousRevision}+1)`),
   check('business_unit_version_fields', sql`length(${t.code}) between 1 and 64 and ${t.code} ~ '^[A-Za-z0-9][A-Za-z0-9._/-]*$'
     and length(trim(${t.name})) between 1 and 200 and (${t.description} is null or length(${t.description})<=2000)`)]);
+
+// Lab thresholds remain the source's raw text; only actual saves record observations.
+export const laboratoryVersions = pgTable('laboratory_versions', {
+  organizationId: uuid('organization_id').notNull(), laboratoryId: uuid('laboratory_id').notNull(), revision: integer('revision').notNull(),
+  previousRevision: integer('previous_revision'), requestId: uuid('request_id').notNull(), operation: text('operation').notNull(),
+  code: text('code').notNull(), name: text('name').notNull(), description: text('description'), abbreviation: text('abbreviation'),
+  businessUnitId: uuid('business_unit_id'), headUserId: uuid('head_user_id'), delegateUserId: uuid('delegate_user_id'),
+  minimumTemperature: text('minimum_temperature_text'), maximumTemperature: text('maximum_temperature_text'),
+  minimumHumidity: text('minimum_humidity_text'), maximumHumidity: text('maximum_humidity_text'), active: boolean('active').notNull(),
+  businessUnitCode: text('business_unit_code'), businessUnitName: text('business_unit_name'), headUsername: text('head_username'), headUserName: text('head_user_name'),
+  delegateUsername: text('delegate_username'), delegateUserName: text('delegate_user_name'),
+  savedBy: uuid('saved_by').notNull(), savedByUsername: text('saved_by_username').notNull(), savedByName: text('saved_by_name').notNull(),
+  savedAt: time('saved_at').notNull().defaultNow(), createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, (t) => [primaryKey({ name: 'laboratory_version_pk', columns: [t.organizationId, t.laboratoryId, t.revision] }),
+  unique('laboratory_request_key').on(t.organizationId, t.requestId), reference(t, t.laboratoryId, laboratories, 'laboratory_version_head_fk'),
+  reference(t, t.businessUnitId, businessUnits, 'laboratory_version_unit_fk'), member(t, t.headUserId, 'laboratory_version_head_user_fk'),
+  member(t, t.delegateUserId, 'laboratory_version_delegate_user_fk'), member(t, t.savedBy, 'laboratory_version_actor_fk'),
+  check('laboratory_version_revision', sql`(${t.operation}='create' and ${t.previousRevision} is null and ${t.revision}=1)
+    or (${t.operation} in ('update','retire') and ${t.previousRevision} is not null and ${t.previousRevision}>0 and ${t.revision}=${t.previousRevision}+1)`),
+  check('laboratory_version_fields', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 250 and (${t.operation}<>'retire' or not ${t.active})`),
+  check('laboratory_version_labels', sql`((${t.businessUnitId} is null and ${t.businessUnitCode} is null and ${t.businessUnitName} is null)
+      or (${t.businessUnitId} is not null and ${t.businessUnitCode} is not null and ${t.businessUnitName} is not null))
+    and ((${t.headUserId} is null and ${t.headUsername} is null and ${t.headUserName} is null)
+      or (${t.headUserId} is not null and ${t.headUsername} is not null and ${t.headUserName} is not null))
+    and ((${t.delegateUserId} is null and ${t.delegateUsername} is null and ${t.delegateUserName} is null)
+      or (${t.delegateUserId} is not null and ${t.delegateUsername} is not null and ${t.delegateUserName} is not null))`)]);
 
 // Absence means these membership details have not been recorded, rather than a guessed default role/lab.
 export const userProfiles = pgTable('user_profiles', {
