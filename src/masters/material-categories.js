@@ -74,8 +74,13 @@ export async function retireMaterialCategory(client, identity, input) {
   const current = (await client.query('SELECT revision,active FROM material_categories WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, id])).rows[0];
   if (!current?.active) throw new HttpError(404, 'material_category_not_found', 'Material category was not found.');
   if (current.revision !== revision) throw new HttpError(409, 'stale_material_category', 'The category changed. Reload before deleting.');
-  await client.query(`UPDATE material_categories SET active=false,save_request_id=$3,updated_by=$4,revision=revision+1,updated_at=transaction_timestamp()
-    WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id, requestId, identity.user_id]);
+  try {
+    await client.query(`UPDATE material_categories SET active=false,save_request_id=$3,updated_by=$4,revision=revision+1,updated_at=transaction_timestamp()
+      WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id, requestId, identity.user_id]);
+  } catch (error) {
+    if (error.constraint === 'material_category_in_use') throw new HttpError(409, 'material_category_in_use', 'This category is assigned to one or more materials.');
+    throw error;
+  }
   return { id, revision: revision + 1 };
 }
 

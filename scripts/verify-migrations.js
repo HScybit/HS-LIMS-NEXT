@@ -40,6 +40,8 @@ import { loadTestParameter, saveTestParameter, retireTestParameter, listTestPara
 import { generateParameterCustomFields } from '../src/masters/parameter-custom-field-generation.js';
 import { loadMethod, saveMethod, retireMethod, listMethods } from '../src/masters/methods.js';
 import { loadMaterialCategory, saveMaterialCategory, retireMaterialCategory, listMaterialCategories } from '../src/masters/material-categories.js';
+import { createMaterialTransaction, loadMaterial, retireMaterial, saveMaterial } from '../src/materials/service.js';
+import { listMaterials, listMaterialTransactions } from '../src/materials/listing.js';
 import { loadProduct, saveProduct, retireProduct, listProducts } from '../src/masters/products.js';
 import { loadCustomField, saveCustomField, retireCustomField, listCustomFields } from '../src/masters/custom-fields.js';
 import { uploadCustomFieldAttachment, readCustomFieldAttachment } from '../src/custom-fields/attachments.js';
@@ -227,6 +229,24 @@ try {
     assert.deepEqual(await loadMaterialCategory(client, identity, input.id, { atRevision: 1 }), historical);
   }, { csrfToken: session.csrfToken });
   const laboratory = await createLaboratoryFixture(owner, account);
+  await withSession(session.token, async (client, identity) => {
+    const category = await saveMaterialCategory(client, identity, { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh manual stock category' });
+    const input = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh stock material', code: 'FRESH_STOCK', categoryId: category.id,
+      measurementUnitId: laboratory.unit.id, initialQuantity: '1.0000000001', minimumQuantity: '0' };
+    const material = await saveMaterial(client, identity, input); assert.equal(material.initialQuantity, '1.0000000001'); assert.equal(material.initialStockCreatedBy, account.userId);
+    const receipt = { id: randomUUID(), requestId: randomUUID(), materialId: material.id, type: 'in', quantity: '2', cost: '0', batchSerialNumber: 'Fresh batch', supplier: 'Fresh supplier' };
+    const created = await createMaterialTransaction(client, identity, receipt); assert.equal(created.createdBy, account.userId); assert.equal(created.cost, '0');
+    assert.deepEqual(await createMaterialTransaction(client, identity, receipt), created);
+    await createMaterialTransaction(client, identity, { ...receipt, id: randomUUID(), requestId: randomUUID(), type: 'out', quantity: '0.0000000001' });
+    assert.equal((await loadMaterial(client, identity, material.id)).currentQuantity, '3.0000000000');
+    const entries = await listMaterialTransactions(client, identity, material.id); assert.equal(entries.totalCount, 3); assert.equal(entries.items.filter(item => item.initial).length, 1);
+    const updated = await saveMaterial(client, identity, { ...input, requestId: randomUUID(), revision: 1, initialQuantity: '2.0000000001' });
+    assert.equal(updated.initialStockId, material.initialStockId); assert.equal((await loadMaterial(client, identity, material.id, { atRevision: 1 })).initialQuantity, '1.0000000001');
+    const removal = { id: material.id, revision: 2, requestId: randomUUID() }; assert.equal((await retireMaterial(client, identity, removal)).revision, 3);
+    assert.equal((await retireMaterial(client, identity, removal)).revision, 3); assert.equal((await listMaterials(client, identity)).totalCount, 0);
+    assert.deepEqual(await createMaterialTransaction(client, identity, receipt), created);
+    await retireMaterialCategory(client, identity, { id: category.id, revision: 1, requestId: randomUUID() });
+  }, { csrfToken: session.csrfToken });
   const masterGrid = updateUncertaintyGrid(emptyUncertaintyGrid(), { headers: ['Sr. no.', 'Text', 'Notes'], data: [['1', '000.00', '=A1*2'], ['2', '  exact text  ', '']] });
   const masterKey = `FRESH_${randomUUID().slice(0, 8)}`;
   const masterInput = { id: randomUUID(), revision: 0, requestId: randomUUID(), name: 'Fresh uncertainty parameter', description: '',

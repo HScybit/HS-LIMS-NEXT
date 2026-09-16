@@ -1170,6 +1170,13 @@
       "when": 1789525342887,
       "tag": "0166_material_category_authoring",
       "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "7",
+      "when": 1789531638270,
+      "tag": "0167_material_manual_stock",
+      "breakpoints": true
     }
   ]
 }
