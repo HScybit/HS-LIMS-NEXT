@@ -34,7 +34,7 @@ test('six source workflow controls persist, gate new samples, clear explicitly a
   const fixture = await createLaboratoryFixture(owner, account, { repeated: false, configureSampleWorkflows: false });
   const workflowId = fixture.workflowRecords[0].workflow.id; const errors = []; page.on('pageerror', error => errors.push(error.message));
   await login(page, account); await openSettings(page);
-  const warning = page.locator('#tabpanel-workflow_configs .alert-warning');
+  const warning = page.locator('#tabpanel-workflow_configs .alert-warning').filter({ hasText: 'Workflow is not configured for:' });
   for (const { label } of sampleWorkflowTypes) {
     await expect(warning).toContainText(label); await expect(page.getByLabel(label, { exact: true })).toHaveValue('');
   }

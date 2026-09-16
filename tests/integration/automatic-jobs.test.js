@@ -29,7 +29,7 @@ after(async () => { await closePool(); await owner.end(); });
 async function configure(templateId, enabled = true) {
   const { settings } = await work(admin, loadLaboratorySettings);
   await work(admin, (client, identity) => saveLaboratorySettings(client, identity,
-    { revision: settings.revision, autoCreateJobs: enabled, resultSummaryTemplateId: templateId, jobWorkflowId: null }));
+    { revision: settings.revision, autoCreateJobs: enabled, resultSummaryTemplateId: templateId, jobWorkflowId: settings.jobWorkflowId }));
 }
 const records = async (sampleId) => (await owner.query(`SELECT request.*,context.sample_product_id,context.sample_id,
   assignment.assigned_user_id,sheet.id AS datasheet_id,sheet.template_instance_id,capture.created_by AS capture_creator,

@@ -49,13 +49,15 @@ export async function createLaboratoryFixture(owner, account, options = {}) {
       workflowRecords.push({ workflow, version, state });
     }
     const sampleWorkflow = workflowRecords.find(record => record.workflow.appliesTo === 'sample');
+    const requestWorkflow = workflowRecords.find(record => record.workflow.appliesTo === 'test_request');
     if (sampleWorkflow && options.configureSampleWorkflows !== false) {
       await client.query(`INSERT INTO organization_laboratory_settings(organization_id,updated_by,
-        sample_workflow_base_id,sample_workflow_iqc_id,sample_workflow_ilc_id,sample_workflow_pt_id,sample_workflow_amendment_id,sample_workflow_complaint_id)
-        VALUES($1,$2,$3,$3,$3,$3,$3,$3) ON CONFLICT(organization_id) DO UPDATE SET
+        sample_workflow_base_id,sample_workflow_iqc_id,sample_workflow_ilc_id,sample_workflow_pt_id,sample_workflow_amendment_id,sample_workflow_complaint_id,test_request_workflow_id,job_workflow_id)
+        VALUES($1,$2,$3,$3,$3,$3,$3,$3,$4,$4) ON CONFLICT(organization_id) DO UPDATE SET
           sample_workflow_base_id=$3,sample_workflow_iqc_id=$3,sample_workflow_ilc_id=$3,sample_workflow_pt_id=$3,
-          sample_workflow_amendment_id=$3,sample_workflow_complaint_id=$3,revision=organization_laboratory_settings.revision+1,updated_by=$2,updated_at=now()`,
-      [organizationId, account.userId, sampleWorkflow.workflow.id]);
+          sample_workflow_amendment_id=$3,sample_workflow_complaint_id=$3,test_request_workflow_id=$4,job_workflow_id=$4,
+          revision=organization_laboratory_settings.revision+1,updated_by=$2,updated_at=now()`,
+      [organizationId, account.userId, sampleWorkflow.workflow.id, requestWorkflow?.workflow.id ?? null]);
     }
     await client.query('COMMIT');
     const registration = { sampleType: 'internal', sampleCategoryId: category.id, receivedAt: '2026-09-12T10:30:00+05:30', dueAt: '2026-09-14T10:30:00+05:30',

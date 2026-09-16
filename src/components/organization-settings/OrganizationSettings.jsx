@@ -44,14 +44,15 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
     event.preventDefault(); if (saving || !data.canManage) return;
     setSaving(true); setError('');
     try {
+      const workflowId = draft.testRequestWorkflowId || draft.jobWorkflowId || null;
       const result = await apiRequest('/api/organization-settings/laboratory', { method: 'PUT', body: {
         revision: draft.revision, autoCreateJobs: draft.autoCreateJobs, selfAllocationEnabled: draft.selfAllocationEnabled, allowReceivingDateEdit: draft.allowReceivingDateEdit,
-        resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: draft.jobWorkflowId,
+        resultSummaryTemplateId: draft.resultSummaryTemplateId, jobWorkflowId: workflowId, testRequestWorkflowId: workflowId,
         sampleWorkflows: draft.sampleWorkflows,
         schemeCurrentYearDigits: draft.schemeCurrentYearDigits ?? '', schemeNextYearDigits: draft.schemeNextYearDigits ?? '',
         schemeSeparator: draft.schemeSeparator ?? '', schemeMonthFormat: draft.schemeMonthFormat,
         schemeNonNablStartNumber: draft.schemeNonNablStartNumber ?? '', dateFormat: draft.dateFormat, datetimeFormat: draft.datetimeFormat } });
-      setDraft((current) => ({ ...current, revision: result.revision })); showToast('Settings saved successfully.');
+      setDraft((current) => ({ ...current, revision: result.revision, testRequestWorkflowId: workflowId, jobWorkflowId: workflowId })); showToast('Settings saved successfully.');
     } catch (failure) { setError(failure.message); }
     finally { setSaving(false); }
   }
@@ -110,10 +111,14 @@ export default function OrganizationSettings({ initialTab = 'template_configs' }
                 helperText="Required before this sample type can be created."
                 onChange={value => setDraft(current => ({ ...current, sampleWorkflows: { ...current.sampleWorkflows, [key]: value } }))} />)}</div>
             </section>
-            <section className="settings-section"><h6 className="settings-section__title">Test Request Workflow</h6><div className="row gx-3">
-              <SettingsSelect id="job_workflow" label="Job Workflow" value={draft.jobWorkflowId} options={data.workflows} disabled={disabled}
-                helperText="Used when jobs are allocated. Leave empty to use the sample category's test request workflow."
-                onChange={(value) => setDraft((current) => ({ ...current, jobWorkflowId: value }))} />
+            <section className="settings-section"><h6 className="settings-section__title">Test Request Workflow</h6>
+              {!draft.testRequestWorkflowId && !draft.jobWorkflowId ? <div className="alert alert-warning mb-3">Test Request / Job Workflow is not configured.</div> : null}
+              {draft.testRequestWorkflowId && draft.jobWorkflowId && draft.testRequestWorkflowId !== draft.jobWorkflowId
+                ? <div className="alert alert-warning mb-3">Test Requests and Jobs have different workflows. Saving applies the selected workflow to both.</div> : null}
+              <div className="row gx-3">
+              <SettingsSelect id="test_request_workflow" label="Test Request / Job Workflow" value={draft.testRequestWorkflowId || draft.jobWorkflowId} options={data.workflows} disabled={disabled}
+                helperText="Used when dynamic Test Requests or Jobs are allocated."
+                onChange={(value) => setDraft((current) => ({ ...current, testRequestWorkflowId: value, jobWorkflowId: value }))} />
             </div></section>
           </div>
           <div role="tabpanel" id="tabpanel-nabl_settings" aria-labelledby="tab-nabl_settings" hidden={activeTab !== 'nabl_settings'}>

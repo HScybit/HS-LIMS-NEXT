@@ -41,7 +41,7 @@ test('manual job creation uses the Product form fallback when organization summa
   await expect(page.getByRole('link', { name: result.items[0].requestNumber, exact: true })).toBeVisible();
   const job = (await owner.query('SELECT datasheet_template_id FROM test_requests WHERE organization_id=$1 AND id=$2', [user.organizationId, result.items[0].id])).rows[0];
   expect(job.datasheet_template_id).toBe(fixture.template.templateId);
-  expect((await owner.query('SELECT 1 FROM organization_laboratory_settings WHERE organization_id=$1', [user.organizationId])).rowCount).toBe(0);
+  expect((await owner.query('SELECT result_summary_template_id FROM organization_laboratory_settings WHERE organization_id=$1', [user.organizationId])).rows[0].result_summary_template_id).toBeNull();
 });
 
 test('source settings and job selection preserve failed choices and create one assigned job per product line', async ({ page, context }, testInfo) => {
@@ -71,7 +71,7 @@ test('source settings and job selection preserve failed choices and create one a
   await expect(template).toHaveValue(fixture.template.templateId);
   await page.getByRole('tab', { name: 'Workflow Configs', exact: true }).click();
   const workflowId = fixture.workflowRecords.find((record) => record.workflow.appliesTo === 'test_request').workflow.id;
-  await page.getByRole('combobox', { name: 'Job Workflow', exact: true }).selectOption(workflowId);
+  await page.getByRole('combobox', { name: 'Test Request / Job Workflow', exact: true }).selectOption(workflowId);
   await page.unroute(settingsRoute);
   const saved = page.waitForResponse((response) => response.url().endsWith('/api/organization-settings/laboratory') && response.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Save Settings', exact: true }).click();
@@ -79,7 +79,7 @@ test('source settings and job selection preserve failed choices and create one a
   await page.reload();
   await expect(template).toHaveValue(fixture.template.templateId);
   await page.getByRole('tab', { name: 'Workflow Configs', exact: true }).click();
-  await expect(page.getByRole('combobox', { name: 'Job Workflow', exact: true })).toHaveValue(workflowId);
+  await expect(page.getByRole('combobox', { name: 'Test Request / Job Workflow', exact: true })).toHaveValue(workflowId);
   await page.screenshot({ path: testInfo.outputPath('job-settings-desktop.png'), fullPage: true, animations: 'disabled' });
   const cookies = await context.cookies();
   const headers = { Origin: 'http://127.0.0.1:3100', 'X-CSRF-Token': cookies.find((cookie) => cookie.name === 'sampleify_csrf').value };

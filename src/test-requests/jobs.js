@@ -53,10 +53,10 @@ export async function createTestRequestJobs(client, identity, rawInput) {
   const sampleId = sampleIds[0].sample_id;
   await client.query('SELECT laboratory_lock_sample($1)', [sampleId]);
   const selected = (await client.query(`SELECT request.id,request.revision,request.priority,context.sample_product_id,context.sample_category_id,
-    EXISTS (SELECT 1 FROM sample_category_workflows mapping JOIN workflows workflow
+    coalesce(request.using_dynamic_workflow,EXISTS (SELECT 1 FROM sample_category_workflows mapping JOIN workflows workflow
       ON workflow.organization_id=mapping.organization_id AND workflow.id=mapping.workflow_id AND workflow.active
       JOIN workflow_versions version ON version.organization_id=workflow.organization_id AND version.workflow_id=workflow.id AND version.status='published'
-      WHERE mapping.organization_id=request.organization_id AND mapping.sample_category_id=context.sample_category_id AND mapping.applies_to='test_request' AND mapping.is_default) AS uses_dynamic_workflow
+      WHERE mapping.organization_id=request.organization_id AND mapping.sample_category_id=context.sample_category_id AND mapping.applies_to='test_request' AND mapping.is_default)) AS uses_dynamic_workflow
     FROM test_requests request JOIN laboratory_test_request_context context ON context.organization_id=request.organization_id AND context.test_request_id=request.id
     JOIN sample_tests selected ON selected.organization_id=request.organization_id AND selected.id=request.sample_test_id
     WHERE request.organization_id=$1 AND request.id=ANY($2::uuid[]) AND NOT request.is_job AND request.parent_test_request_id IS NULL AND request.status='created'

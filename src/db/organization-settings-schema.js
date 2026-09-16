@@ -11,7 +11,7 @@ export const organizationLaboratorySettings = pgTable('organization_laboratory_s
   autoCreateJobs: boolean('auto_create_jobs').notNull().default(false),
   selfAllocationEnabled: boolean('self_allocation_enabled').notNull().default(false),
   allowReceivingDateEdit: boolean('allow_receiving_date_edit').notNull().default(false),
-  resultSummaryTemplateId: uuid('result_summary_template_id'), jobWorkflowId: uuid('job_workflow_id'),
+  resultSummaryTemplateId: uuid('result_summary_template_id'), jobWorkflowId: uuid('job_workflow_id'), testRequestWorkflowId: uuid('test_request_workflow_id'),
   sampleWorkflowBaseId: uuid('sample_workflow_base_id'), sampleWorkflowIqcId: uuid('sample_workflow_iqc_id'),
   sampleWorkflowIlcId: uuid('sample_workflow_ilc_id'), sampleWorkflowPtId: uuid('sample_workflow_pt_id'),
   sampleWorkflowAmendmentId: uuid('sample_workflow_amendment_id'), sampleWorkflowComplaintId: uuid('sample_workflow_complaint_id'),
@@ -25,6 +25,7 @@ export const organizationLaboratorySettings = pgTable('organization_laboratory_s
   primaryKey({ columns: [t.organizationId] }),
   foreignKey({ name: 'lab_settings_result_template_fk', columns: [t.organizationId, t.resultSummaryTemplateId], foreignColumns: [templates.organizationId, templates.id] }),
   foreignKey({ name: 'lab_settings_job_workflow_fk', columns: [t.organizationId, t.jobWorkflowId], foreignColumns: [workflows.organizationId, workflows.id] }),
+  foreignKey({ name: 'lab_settings_request_workflow_fk', columns: [t.organizationId, t.testRequestWorkflowId], foreignColumns: [workflows.organizationId, workflows.id] }),
   ...[['base', t.sampleWorkflowBaseId], ['iqc', t.sampleWorkflowIqcId], ['ilc', t.sampleWorkflowIlcId], ['pt', t.sampleWorkflowPtId],
     ['amendment', t.sampleWorkflowAmendmentId], ['complaint', t.sampleWorkflowComplaintId]]
     .map(([key, column]) => foreignKey({ name: `lab_settings_sample_${key}_workflow_fk`, columns: [t.organizationId, column], foreignColumns: [workflows.organizationId, workflows.id] })),

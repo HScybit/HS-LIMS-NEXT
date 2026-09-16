@@ -41,7 +41,7 @@ async function prepare({ products = 1, parameters = 1, configure = true } = {}) 
   if (configure) {
     const current = await work(creator, loadLaboratorySettings, { readOnly: true });
     await work(creator, (client, identity) => saveLaboratorySettings(client, identity, { revision: current.settings.revision,
-      autoCreateJobs: false, resultSummaryTemplateId: source.template.templateId, jobWorkflowId: null }));
+      autoCreateJobs: false, resultSummaryTemplateId: source.template.templateId, jobWorkflowId: current.settings.jobWorkflowId }));
   }
   const sample = await work(creator, (client, identity) => registerSample(client, identity, { ...source.registration,
     products: Array.from({ length: products }, () => structuredClone(source.registration.products[0])) }));
@@ -114,11 +114,11 @@ test('an unavailable job template and a failed transaction leave requests ungrou
   const flow = await prepare();
   const settings = await work(creator, loadLaboratorySettings, { readOnly: true });
   await work(creator, (client, identity) => saveLaboratorySettings(client, identity, { revision: settings.settings.revision,
-    autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: null }));
+    autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: settings.settings.jobWorkflowId }));
   await assert.rejects(create(flow), { code: 'job_template_not_configured' });
   const after = await work(creator, loadLaboratorySettings, { readOnly: true });
   await work(creator, (client, identity) => saveLaboratorySettings(client, identity, { revision: after.settings.revision,
-    autoCreateJobs: false, resultSummaryTemplateId: flow.source.template.templateId, jobWorkflowId: null }));
+    autoCreateJobs: false, resultSummaryTemplateId: flow.source.template.templateId, jobWorkflowId: after.settings.jobWorkflowId }));
   await assert.rejects(work(creator, async (client, identity) => {
     await createTestRequestJobs(client, identity, { requestIds: flow.requests.map((request) => request.id), analystUserId: analyst.userId });
     throw new Error('Synthetic job failure');
@@ -130,7 +130,7 @@ test('an unavailable job template and a failed transaction leave requests ungrou
 
 test('job defaults freeze independently, reassignment retains child ownership, and workload includes jobs', async () => {
   const flow = await prepare({ parameters: 2 });
-  const alternate = await createLaboratoryFixture(owner, creator, { repeated: false });
+  const alternate = await createLaboratoryFixture(owner, creator, { repeated: false, configureSampleWorkflows: false });
   const alternateWorkflow = alternate.workflowRecords.find((record) => record.workflow.appliesTo === 'test_request');
   const settings = await work(creator, loadLaboratorySettings, { readOnly: true });
   await work(creator, (client, identity) => saveLaboratorySettings(client, identity, { revision: settings.settings.revision,

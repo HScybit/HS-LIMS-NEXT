@@ -35,7 +35,9 @@ async function ensureDatasheet(client, identity, request) {
 async function ensureWorkflow(client, identity, request) {
   const existing = await client.query('SELECT id FROM workflow_runs WHERE organization_id = $1 AND test_request_id = $2', [identity.organization_id, request.id]);
   if (existing.rowCount) return existing.rows[0].id;
-  const run = await startWorkflow(client, identity, { type: 'test_request', id: request.id }, request.sample_category_id, { workflowId: request.job_workflow_id });
+  if (request.using_dynamic_workflow === false) return null;
+  const run = await startWorkflow(client, identity, { type: 'test_request', id: request.id }, request.sample_category_id,
+    { workflowId: request.job_workflow_id, dynamic: request.using_dynamic_workflow === true });
   return run?.id ?? null;
 }
 

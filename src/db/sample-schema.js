@@ -132,6 +132,8 @@ export const analyticalSpecificationLimits = pgTable('analytical_specification_l
 export const testRequests = pgTable('test_requests', {
   ...identity(), requestNumber: text('request_number').notNull(), sampleTestId: uuid('sample_test_id'), specificationId: uuid('specification_id'),
   isJob: boolean('is_job').notNull().default(false), isAutoCreated: boolean('is_auto_created').notNull().default(false), jobSampleProductId: uuid('job_sample_product_id'),
+  // NULL preserves pre-migration native behavior; false is imported source legacy.
+  usingDynamicWorkflow: boolean('using_dynamic_workflow').default(true),
   parentTestRequestId: uuid('parent_test_request_id'), jobMemberPosition: integer('job_member_position'), jobLinkedBy: uuid('job_linked_by'), jobLinkedAt: time('job_linked_at'),
   attemptNumber: integer('attempt_number').notNull().default(1),
   status: text('status').notNull().default('created'), priority: text('priority').notNull().default('normal'), dueAt: time('due_at'), startedAt: time('started_at'), completedAt: time('completed_at'),

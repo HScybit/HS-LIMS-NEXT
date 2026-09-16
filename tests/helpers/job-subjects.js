@@ -67,7 +67,7 @@ export async function prepareSubjectJob(owner, creator, analyst, { manualParent 
   if (prepareTemplate) await work((client, identity) => prepareTemplate(client, identity, template, source));
   const settings = await work(loadLaboratorySettings);
   await work((client, identity) => saveLaboratorySettings(client, identity, { revision: settings.settings.revision,
-    autoCreateJobs: false, resultSummaryTemplateId: template.templateId, jobWorkflowId }));
+    autoCreateJobs: false, resultSummaryTemplateId: template.templateId, jobWorkflowId: jobWorkflowId ?? settings.settings.jobWorkflowId }));
   const sample = await work((client, identity) => registerSample(client, identity, source.registration));
   const generated = await work((client, identity) => generateTestRequests(client, identity, sample.id));
   const result = await work((client, identity) => createTestRequestJobs(client, identity, { requestIds: generated.items.map((item) => item.id), analystUserId: analyst.userId }));

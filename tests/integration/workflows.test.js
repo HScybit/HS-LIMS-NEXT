@@ -257,9 +257,10 @@ test('automatic test generation uses the actual approving actor and rolls the wh
 
 test('a generating approval can initialize automatic job children without granting its responder allocation permission', async () => {
   const fixture = await registeredWorkflow({ mode: 'all', targetFlags: { generateTestRequests: true } });
-  await owner.query(`INSERT INTO organization_laboratory_settings(organization_id,auto_create_jobs,result_summary_template_id,updated_by)
-    VALUES($1,true,$2,$3) ON CONFLICT(organization_id) DO UPDATE SET auto_create_jobs=true,result_summary_template_id=$2,
-      revision=organization_laboratory_settings.revision+1,updated_by=$3,updated_at=now()`, [manager.organizationId, fixture.laboratory.template.templateId, manager.userId]);
+  const childWorkflow = await createLaboratoryFixture(owner, manager, { repeated: false, configureSampleWorkflows: false });
+  await owner.query(`INSERT INTO organization_laboratory_settings(organization_id,auto_create_jobs,result_summary_template_id,updated_by,test_request_workflow_id)
+    VALUES($1,true,$2,$3,$4) ON CONFLICT(organization_id) DO UPDATE SET auto_create_jobs=true,result_summary_template_id=$2,test_request_workflow_id=$4,
+      revision=organization_laboratory_settings.revision+1,updated_by=$3,updated_at=now()`, [manager.organizationId, fixture.laboratory.template.templateId, manager.userId, childWorkflow.workflowRecords[1].workflow.id]);
   await command(fixture, await commandInput(fixture));
   assert.equal((await approve(fixture, first)).status, 'approval_pending');
   const failChildCapture = (client) => ({ query(...args) {

@@ -163,7 +163,7 @@ test('unchanged unavailable selections survive unrelated saves but cannot be sel
     { id: sampleId, label: fixture.workflowRecords[0].workflow.name, available: false });
   await assert.rejects(register(user, fixture), { code: 'sample_workflow_not_configured' });
   await assert.rejects(save(user, { ...retained.sampleWorkflows, iqc: sampleId }), { code: 'invalid_sample_workflow' });
-  await save(user, empty(), { resultSummaryTemplateId: null, jobWorkflowId: null });
+  await save(user, empty(), { resultSummaryTemplateId: null, jobWorkflowId: null, testRequestWorkflowId: null });
   await assert.rejects(save(user, { ...empty(), base: sampleId }), { code: 'invalid_sample_workflow' });
   await assert.rejects(save(user, undefined, { resultSummaryTemplateId: fixture.template.templateId }), { code: 'invalid_job_template' });
   await assert.rejects(save(user, undefined, { jobWorkflowId: jobId }), { code: 'invalid_job_workflow' });

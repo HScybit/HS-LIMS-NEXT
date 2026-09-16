@@ -46,7 +46,7 @@ export async function prepareParameterDetailJob(owner, user, { parameters = 1 } 
   });
   const current = await work(loadLaboratorySettings);
   await work((client, identity) => saveLaboratorySettings(client, identity, { revision: current.settings.revision,
-    autoCreateJobs: false, resultSummaryTemplateId: source.template.templateId, jobWorkflowId: null }));
+    autoCreateJobs: false, resultSummaryTemplateId: source.template.templateId, jobWorkflowId: current.settings.jobWorkflowId }));
   const sample = await work((client, identity) => registerSample(client, identity, source.registration));
   const requests = await work((client, identity) => generateTestRequests(client, identity, sample.id));
   return { source, fields, sample, requests: requests.items };

@@ -28,7 +28,7 @@ async function setTemplate(user, source, templateId) {
 async function configure(user, templateId, automatic = false) {
   const { settings } = await work(user, loadLaboratorySettings);
   return work(user, (client, identity) => saveLaboratorySettings(client, identity, { revision: settings.revision,
-    autoCreateJobs: automatic, resultSummaryTemplateId: templateId, jobWorkflowId: null }));
+    autoCreateJobs: automatic, resultSummaryTemplateId: templateId, jobWorkflowId: settings.jobWorkflowId }));
 }
 async function setup({ lines = 2, automatic = false, historical = false } = {}) {
   const user = await account({ permissions: ['masters.manage', 'templates.manage', 'samples.create', 'samples.manage', 'test_requests.allocate', 'datasheets.execute', 'settings.manage'] });
@@ -41,7 +41,7 @@ async function setup({ lines = 2, automatic = false, historical = false } = {}) 
   return { user, sources, registration, historical };
 }
 // Restore a typed synthetic pre-configuration sample, with all database guards enabled.
-// Historical jobs must remain usable even when no organization settings row exists.
+// New requests on this historical sample still require organization workflow configuration.
 async function historicalSample(flow) {
   const client = await owner.connect(); const source = flow.sources[0]; const organizationId = flow.user.organizationId;
   try {
@@ -81,9 +81,13 @@ const jobs = async (flow) => (await owner.query(`SELECT request.id,request.datas
   FROM test_requests request JOIN laboratory_test_request_context context ON context.organization_id=request.organization_id AND context.test_request_id=request.id
   WHERE request.organization_id=$1 AND context.sample_id=$2 AND request.is_job ORDER BY context.product_id`, [flow.user.organizationId, flow.sample.id])).rows;
 
-test('historical manual jobs use each Product template with no organization settings and keep existing captures after Product edits', async () => {
+test('new jobs on historical samples require workflows and then use each Product template without an organization summary', async () => {
   const flow = await generate(await setup({ historical: true }));
   assert.equal((await owner.query('SELECT 1 FROM organization_laboratory_settings WHERE organization_id=$1', [flow.user.organizationId])).rowCount, 0);
+  await assert.rejects(create(flow), { code: 'test_request_workflow_not_configured' });
+  const workflowId = flow.sources[0].workflowRecords[1].workflow.id;
+  await work(flow.user, (client, identity) => saveLaboratorySettings(client, identity, { revision: 0, autoCreateJobs: false,
+    resultSummaryTemplateId: null, jobWorkflowId: workflowId, testRequestWorkflowId: workflowId }));
   const created = await create(flow); assert.equal(created.items.length, 2);
   const selected = await jobs(flow);
   for (const job of selected) assert.equal(job.datasheet_template_id, flow.sources.find((source) => source.product.id === job.product_id).template.templateId);
@@ -170,7 +174,7 @@ test('concurrent Product and organization edits wait for job selection and canno
   });
   const settingsChange = work(flow.user, async (client, identity) => {
     settingsPid = (await client.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
-    return saveLaboratorySettings(client, identity, { revision: settings.revision, autoCreateJobs: false, resultSummaryTemplateId: replacement.template.templateId, jobWorkflowId: null });
+    return saveLaboratorySettings(client, identity, { revision: settings.revision, autoCreateJobs: false, resultSummaryTemplateId: replacement.template.templateId, jobWorkflowId: settings.jobWorkflowId });
   });
   // Observe real PostgreSQL blockers rather than assuming timing proves a lock.
   const changes = Promise.allSettled([productChange, settingsChange]);
@@ -204,7 +208,9 @@ test('a first organization-settings insertion after Product resolution cannot co
     client.query = async (...args) => {
       const result = await query.apply(client, args);
       if (!changed && typeof args[0] === 'string' && args[0].includes('laboratory_product_job_templates')) {
-        changed = true; await configure(flow.user, replacement.template.templateId);
+        changed = true; const workflowId = flow.sources[0].workflowRecords[1].workflow.id;
+        await work(flow.user, (settingsClient, settingsIdentity) => saveLaboratorySettings(settingsClient, settingsIdentity, { revision: 0, autoCreateJobs: false,
+          resultSummaryTemplateId: replacement.template.templateId, jobWorkflowId: workflowId, testRequestWorkflowId: workflowId }));
       }
       return result;
     };
