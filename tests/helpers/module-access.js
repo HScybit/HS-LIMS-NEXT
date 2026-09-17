@@ -2,7 +2,7 @@ import { createAccount } from './database.js';
 import { signIn, withSession } from '../../src/auth/service.js';
 import { loadLaboratorySettings, saveLaboratorySettings } from '../../src/organization-settings/service.js';
 
-export const emptyModuleAccess = () => ['customer', 'vendor', 'instrument'].map(moduleKey => ({ moduleKey, enabled: false, roleIds: [], userIds: [] }));
+export const emptyModuleAccess = () => ['customer', 'vendor', 'instrument', 'service_agreements'].map(moduleKey => ({ moduleKey, enabled: false, roleIds: [], userIds: [] }));
 export const moduleAccessValues = modules => modules.map(({ moduleKey, enabled, roleIds, userIds }) => ({ moduleKey, enabled, roleIds, userIds }));
 
 export async function saveModuleAccessSettings(actor, modules, changes = {}) {

@@ -60,10 +60,10 @@ test('Vendor list loads captured fields in batches and supports typed numeric an
 
 test('public session module flags and Vendor lists follow actual configured access and current permissions', async () => {
   const actor = await account(); const id = await work(actor, publicIdentity, true);
-  assert.deepEqual(id.masterModules, { customer: false, vendor: true });
+  assert.deepEqual(id.masterModules, { customer: false, vendor: true, instrument: false, service_agreements: false });
   const denied = await createAccount(owner, { organizationId: actor.organizationId, permissions: ['masters.read'] });
   Object.assign(denied, await signIn({ identifier: denied.username, password: denied.password }));
-  assert.deepEqual((await work(denied, publicIdentity, true)).masterModules, { customer: false, vendor: false });
+  assert.deepEqual((await work(denied, publicIdentity, true)).masterModules, { customer: false, vendor: false, instrument: false, service_agreements: false });
   await assert.rejects(list(denied), { code: 'vendor_module_access_required' });
   await saveModuleAccessSettings(actor, emptyModuleAccess());
   assert.equal((await work(actor, publicIdentity, true)).masterModules.vendor, false);

@@ -35,6 +35,10 @@ import { saveInstrumentCore, loadInstrumentCore, retireInstrumentCore } from '..
 import { listInstruments } from '../src/instruments/list.js';
 import { generateInstrumentCustomFields } from '../src/instruments/custom-field-generation.js';
 import { uploadInstrumentFieldAttachment, readInstrumentFieldAttachment } from '../src/instruments/custom-field-attachments.js';
+import { serviceAgreementFixture, serviceAgreementCommand, agreementWork } from '../tests/helpers/service-agreements.js';
+import { saveServiceAgreement, loadServiceAgreement, retireServiceAgreement } from '../src/masters/service-agreements.js';
+import { uploadServiceAgreementFile, readServiceAgreementFile } from '../src/masters/service-agreement-files.js';
+import { listServiceAgreements } from '../src/masters/service-agreement-list.js';
 import { registerSample } from '../src/samples/register.js';
 import { loadSample } from '../src/samples/load.js';
 import { generateTestRequests } from '../src/test-requests/generate.js';
@@ -154,6 +158,25 @@ try {
   assert.equal((await instrumentWork((client, identity) => listInstruments(client, identity), true)).totalCount, 0);
   assert.deepEqual((await instrumentWork((client, identity) => loadInstrumentCore(client, identity, freshInstrument.id, { atRevision: 2 }), true)).customFields, freshInstrument.customFields);
   console.log('Fresh Instrument native authoring, configured access, calendar values, fields, attachment, generation, exact retry, history and retirement passed.');
+  const agreementFixture = await serviceAgreementFixture(owner); const agreementActor = agreementFixture.actor;
+  const agreementBytes = Buffer.from('Fresh Service Agreement attachment');
+  const agreementUpload = { requestId: randomUUID(), originalName: 'fresh-agreement.txt', mediaType: 'text/plain', content: agreementBytes };
+  const agreementFile = await agreementWork(agreementActor, (client, identity) => uploadServiceAgreementFile(client, identity, agreementUpload));
+  assert.equal((await agreementWork(agreementActor, (client, identity) => uploadServiceAgreementFile(client, identity, agreementUpload))).replayed, true);
+  const agreementCommand = serviceAgreementCommand(agreementFixture, { includedServices: ['calibration', 'breakdown'], attachmentFileId: agreementFile.id });
+  const freshAgreement = await agreementWork(agreementActor, (client, identity) => saveServiceAgreement(client, identity, agreementCommand));
+  assert.deepEqual(await agreementWork(agreementActor, (client, identity) => saveServiceAgreement(client, identity, agreementCommand)), freshAgreement);
+  assert.equal(freshAgreement.cost, '0.00'); assert.equal(freshAgreement.noOfServices, 0); assert.equal(freshAgreement.inEffect, false);
+  assert.deepEqual((await agreementWork(agreementActor, (client, identity) => readServiceAgreementFile(client, identity, agreementFile.id), true)).content, agreementBytes);
+  await assert.rejects(agreementWork(agreementActor, (client, identity) => retireVendor(client, identity,
+    { id: agreementFixture.vendor.id, revision: 1, requestId: randomUUID() })), { code: 'vendor_in_use' });
+  await assert.rejects(agreementWork(agreementActor, (client, identity) => retireInstrumentCore(client, identity,
+    { id: agreementFixture.instruments[0].id, revision: 1, requestId: randomUUID() })), { code: 'instrument_in_use' });
+  await agreementWork(agreementActor, (client, identity) => retireServiceAgreement(client, identity, { id: freshAgreement.id, revision: 1, requestId: randomUUID() }));
+  assert.equal((await agreementWork(agreementActor, (client, identity) => listServiceAgreements(client, identity), true)).totalCount, 0);
+  assert.deepEqual(await agreementWork(agreementActor, (client, identity) => loadServiceAgreement(client, identity, freshAgreement.id, { atRevision: 1 }), true), freshAgreement);
+  await agreementWork(agreementActor, (client, identity) => retireVendor(client, identity, { id: agreementFixture.vendor.id, revision: 1, requestId: randomUUID() }));
+  console.log('Fresh Service Agreement configured access, inactive references, native retries, files, frozen history, reference guards and retirement passed.');
   const bulkAccount = await createAccount(owner, { permissions: ['masters.manage'] });
   const bulkSession = await signIn({ identifier: bulkAccount.username, password: bulkAccount.password });
   const bulkSource = 'name,key\nFresh bulk product,FRESH-BULK'; const bulkId = randomUUID();
@@ -286,7 +309,7 @@ try {
     assert.equal(settings.updatedBy, account.userId);
     assert.deepEqual(settings.instrumentServiceTypes, instrumentServiceTypes);
     assert.deepEqual(moduleAccessValues(settings.moduleAccess), moduleAccess);
-    assert.equal((await loadModuleAccess(client, identity)).moduleCount, 3);
+    assert.equal((await loadModuleAccess(client, identity)).moduleCount, 4);
     await client.query('SAVEPOINT instrument_module_access');
     assert.equal((await client.query("SELECT organization_has_module_access('instrument') AS allowed")).rows[0].allowed, false);
     const instrumentModules = moduleAccess.map(module => module.moduleKey === 'instrument' ? { ...module, enabled: true, userIds: [account.userId] } : module);
@@ -297,6 +320,18 @@ try {
     await saveLaboratorySettings(client, identity, { revision: settings.revision + 2, autoCreateJobs: false, moduleAccess });
     assert.equal((await client.query("SELECT organization_has_module_access('instrument') AS allowed")).rows[0].allowed, false);
     await client.query('ROLLBACK TO SAVEPOINT instrument_module_access'); await client.query('RELEASE SAVEPOINT instrument_module_access');
+    await client.query('SAVEPOINT service_agreement_module_access');
+    assert.equal((await client.query("SELECT organization_has_module_access('service_agreements') AS allowed")).rows[0].allowed, false);
+    const agreementModules = moduleAccess.map(module => module.moduleKey === 'service_agreements' ? { ...module, enabled: true, userIds: [account.userId] } : module);
+    await saveLaboratorySettings(client, identity, { revision: settings.revision, autoCreateJobs: false, moduleAccess: agreementModules });
+    assert.equal((await client.query("SELECT organization_has_module_access('service_agreements') AS allowed")).rows[0].allowed, true);
+    for (const [offset, count] of [[1, 3], [2, 2]]) {
+      await saveLaboratorySettings(client, identity, { revision: settings.revision + offset, autoCreateJobs: false, moduleAccess: moduleAccess.slice(0, count) });
+      assert.deepEqual(moduleAccessValues((await loadModuleAccess(client, identity)).modules), agreementModules);
+    }
+    await saveLaboratorySettings(client, identity, { revision: settings.revision + 3, autoCreateJobs: false, moduleAccess });
+    assert.equal((await client.query("SELECT organization_has_module_access('service_agreements') AS allowed")).rows[0].allowed, false);
+    await client.query('ROLLBACK TO SAVEPOINT service_agreement_module_access'); await client.query('RELEASE SAVEPOINT service_agreement_module_access');
     assert.equal((await client.query("SELECT organization_has_module_access('customer') AS customer,organization_has_module_access('vendor') AS vendor")).rows[0].customer, true);
     await client.query('SAVEPOINT customer_write_allowed');
     const customer = await saveCustomer(client, identity, customerWrite);

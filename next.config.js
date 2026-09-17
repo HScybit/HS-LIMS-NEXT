@@ -125,6 +125,7 @@ const nextConfig = {
     '/api/masters/{products,test-parameters,methods,customers,vendors}/custom-field-users': userOptionRuntimeFiles,
     '/api/organization-settings/module-access/options': userOptionRuntimeFiles,
     '/api/instruments/{options,custom-field-users}': userOptionRuntimeFiles,
+    '/api/masters/service-agreements/options': userOptionRuntimeFiles,
     '/api/instruments/custom-field-generation': ['./package.json', './src/custom-fields/*.js', './src/masters/custom-field-config.js', './src/auth/errors.js',
       './node_modules/moment/**', './node_modules/moment-timezone/**'],
     '/api/masters/{products,test-parameters,methods,customers,vendors}/custom-field-generation': ['./package.json', './src/custom-fields/*.js', './src/masters/custom-field-config.js', './src/auth/errors.js',

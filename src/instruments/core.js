@@ -22,6 +22,7 @@ export function instrumentError(error) {
   if (error.code === '42501') return new HttpError(403, 'forbidden', 'Your Instrument management access changed. Reload before continuing.');
   const messages = {
     instrument_not_found: [404, 'instrument_not_found', 'Instrument was not found.'],
+    instrument_in_use: [409, 'instrument_in_use', 'This Instrument is in use and cannot be deleted.'],
     instrument_stale_revision: [409, 'stale_instrument', 'The Instrument changed. Reload before saving.'],
     instrument_request_reused: [409, 'save_request_reused', 'This request was already used for another Instrument change.'],
     instrument_save_request_key: [409, 'save_request_reused', 'This request was already used for another Instrument change.'],

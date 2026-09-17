@@ -48,11 +48,12 @@ export async function loadModuleAccess(client, identity, { atRevision, currentRe
     FROM selected entry ${currentNames ? 'LEFT JOIN names current ON current.id=entry.user_id' : ''}
     ORDER BY entry.module_key,entry.position`, args)).rows;
   const incomplete = () => new HttpError(409, 'incomplete_module_access', 'Module access settings are incomplete. Reload before continuing.');
-  if (![2, 3].includes(version.moduleCount) || headers.length !== version.moduleCount
-    || headers.some(header => !moduleAccessDefinitions.some(module => module.key === header.moduleKey))) throw incomplete();
+  const expectedModules = moduleAccessDefinitions.slice(0, version.moduleCount).map(module => module.key);
+  if (![2, 3, 4].includes(version.moduleCount) || headers.length !== version.moduleCount
+    || headers.some(header => !expectedModules.includes(header.moduleKey))) throw incomplete();
   for (const access of modules) {
     const header = headers.find(row => row.moduleKey === access.moduleKey);
-    if (!header && version.moduleCount === 2 && access.moduleKey === 'instrument') continue;
+    if (!header && !expectedModules.includes(access.moduleKey)) continue;
     if (!header) throw incomplete();
     access.enabled = header.enabled;
     for (const [kind, rows] of [['role', roles], ['user', users]]) {

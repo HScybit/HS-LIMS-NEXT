@@ -37,6 +37,34 @@ async function save(page) {
 const customerInput = () => ({ name: `Module browser ${randomUUID()}`, legalName: 'Synthetic legal name', contactPersonName: 'Synthetic contact',
   contactPersonEmail: 'synthetic@example.invalid', contactPersonPhone: '0000', billToAddress: 'Synthetic billing', shipToAddress: 'Synthetic shipping' });
 
+test('Service Agreements has configured access controls and survives both older settings formats', async ({ page }, info) => {
+  const actor = await createAccount(owner, { permissions: ['settings.manage'] }); await login(page, actor); await open(page);
+  const agreement = page.getByRole('group', { name: 'Service Agreements', exact: true });
+  expect(moduleAccessValues((await settings(page)).moduleAccess)[3]).toEqual(emptyModuleAccess()[3]);
+  await choose(page, agreement, 'Users', actor.userId, 'Synthetic Analyst');
+  await choose(page, agreement, 'Roles', actor.roleId, `Reader ${actor.roleId}`);
+  await choose(page, page, 'Modules', 'Service', 'Service Agreements');
+  expect((await save(page)).status()).toBe(200);
+  const intended = { moduleKey: 'service_agreements', enabled: true, roleIds: [actor.roleId], userIds: [actor.userId] };
+  expect(moduleAccessValues((await settings(page)).moduleAccess)[3]).toEqual(intended);
+  for (const count of [3, 2]) {
+    const saved = await settings(page);
+    expect((await update(page, { moduleAccess: moduleAccessValues(saved.moduleAccess.slice(0, count)) })).status()).toBe(200);
+    expect(moduleAccessValues((await settings(page)).moduleAccess)[3]).toEqual(intended);
+  }
+  await open(page); await expect(agreement).toContainText('2 assigned'); await agreement.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('service-agreement-access-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); await agreement.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: info.outputPath('service-agreement-access-mobile.png'), fullPage: true });
+  const disabled = moduleAccessValues((await settings(page)).moduleAccess); disabled[3].enabled = false;
+  expect((await update(page, { moduleAccess: disabled })).status()).toBe(200);
+  await open(page); await expect(agreement).toContainText('2 assigned');
+  const reader = await createAccount(owner, { organizationId: actor.organizationId, permissions: ['settings.read'] });
+  await login(page, reader); await open(page); await expect(page.locator('#user-access-service_agreements')).toBeDisabled();
+  expect((await update(page, { moduleAccess: emptyModuleAccess() })).status()).toBe(403);
+});
+
 test('Instrument Management has explicit source-style access controls and survives older settings requests', async ({ page }, info) => {
   const actor = await createAccount(owner, { permissions: ['settings.manage'] }); await login(page, actor); await open(page);
   const instrument = page.getByRole('group', { name: 'Instrument Management', exact: true });
@@ -83,6 +111,7 @@ test('source Access Control grants explicit users, preserves disabled assignment
     { moduleKey: 'customer', enabled: true, roleIds: [actor.roleId], userIds: [actor.userId] },
     { moduleKey: 'vendor', enabled: false, roleIds: [], userIds: [actor.userId] },
     { moduleKey: 'instrument', enabled: false, roleIds: [], userIds: [] },
+    { moduleKey: 'service_agreements', enabled: false, roleIds: [], userIds: [] },
   ]);
   await open(page); await expect(customer).toContainText('2 assigned'); await expect(vendor).toContainText('1 assigned');
   await page.screenshot({ path: testInfo.outputPath('module-access-desktop.png'), fullPage: true, animations: 'disabled' });

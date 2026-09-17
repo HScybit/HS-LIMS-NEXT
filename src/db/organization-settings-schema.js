@@ -66,7 +66,7 @@ export const organizationInstrumentServiceEntries = pgTable('organization_instru
 
 export const organizationModuleAccessVersions = pgTable('organization_module_access_versions', {
   organizationId: uuid('organization_id').notNull(), revision: integer('revision').notNull(), savedBy: uuid('saved_by').notNull(),
-  moduleCount: integer('module_count').notNull().default(3),
+  moduleCount: integer('module_count').notNull().default(4),
   savedAt: timestamp('saved_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
 }, t => [
@@ -74,7 +74,7 @@ export const organizationModuleAccessVersions = pgTable('organization_module_acc
   foreignKey({ name: 'module_access_settings_fk', columns: [t.organizationId], foreignColumns: [organizationLaboratorySettings.organizationId] }),
   foreignKey({ name: 'module_access_actor_fk', columns: [t.organizationId, t.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
   check('module_access_revision', sql`${t.revision}>0`),
-  check('module_access_count', sql`${t.moduleCount} in (2,3)`),
+  check('module_access_count', sql`${t.moduleCount} in (2,3,4)`),
 ]);
 
 export const organizationModuleAccessModules = pgTable('organization_module_access_modules', {
@@ -84,7 +84,7 @@ export const organizationModuleAccessModules = pgTable('organization_module_acce
   primaryKey({ name: 'module_access_module_pk', columns: [t.organizationId, t.revision, t.moduleKey] }),
   foreignKey({ name: 'module_access_module_version_fk', columns: [t.organizationId, t.revision],
     foreignColumns: [organizationModuleAccessVersions.organizationId, organizationModuleAccessVersions.revision] }),
-  check('module_access_module_fields', sql`${t.moduleKey} in ('customer','vendor','instrument') and ${t.roleCount} between 0 and 500 and ${t.userCount} between 0 and 500`),
+  check('module_access_module_fields', sql`${t.moduleKey} in ('customer','vendor','instrument','service_agreements') and ${t.roleCount} between 0 and 500 and ${t.userCount} between 0 and 500`),
 ]);
 
 export const organizationModuleAccessRoles = pgTable('organization_module_access_roles', {

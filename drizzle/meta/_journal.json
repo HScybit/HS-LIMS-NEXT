@@ -1366,6 +1366,20 @@
       "when": 1789654490049,
       "tag": "0194_instrument_read_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "7",
+      "when": 1789657057424,
+      "tag": "0195_service_agreement_module_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1789658622411,
+      "tag": "0196_service_agreement_core",
+      "breakpoints": true
     }
   ]
 }

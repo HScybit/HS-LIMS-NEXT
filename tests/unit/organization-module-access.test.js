@@ -3,6 +3,30 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { moduleAccessSettingsInput } from '../../src/organization-settings/module-access-input.js';
 
+test('Service Agreement settings require the complete supported prefix and preserve older caller shapes', () => {
+  const modules = ['customer', 'vendor', 'instrument', 'service_agreements'].map(moduleKey => ({ moduleKey, enabled: false, roleIds: [], userIds: [] }));
+  for (const count of [2, 3, 4]) {
+    const input = { moduleAccess: modules.slice(0, count).reverse() }; const before = structuredClone(input);
+    assert.deepEqual(moduleAccessSettingsInput(input), modules.slice(0, count)); assert.deepEqual(input, before);
+  }
+  for (const rows of [[modules[0], modules[1], modules[3]], [modules[0], modules[2], modules[3]],
+    [modules[0], modules[1], modules[3], modules[3]], [...modules, modules[3]]]) {
+    assert.throws(() => moduleAccessSettingsInput({ moduleAccess: rows }), { code: 'invalid_module_access' });
+  }
+});
+
+test('Service Agreement assignments retain disabled selections and enforce distinct bounded IDs', () => {
+  const ids = Array.from({ length: 501 }, () => randomUUID());
+  const modules = ['customer', 'vendor', 'instrument', 'service_agreements'].map(moduleKey => ({ moduleKey, enabled: false, roleIds: ids.slice(0, 500), userIds: ids.slice(0, 500) }));
+  assert.equal(moduleAccessSettingsInput({ moduleAccess: modules })[3].userIds.length, 500);
+  for (const key of ['roleIds', 'userIds']) {
+    for (const value of [ids, [ids[0], ids[0].toUpperCase()], null, [undefined]]) {
+      const input = structuredClone(modules); input[3][key] = value;
+      assert.throws(() => moduleAccessSettingsInput({ moduleAccess: input }));
+    }
+  }
+});
+
 const settings = () => ({ moduleAccess: [
   { moduleKey: 'customer', enabled: false, roleIds: [], userIds: [] },
   { moduleKey: 'vendor', enabled: false, roleIds: [], userIds: [] },

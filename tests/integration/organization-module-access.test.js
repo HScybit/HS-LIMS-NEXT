@@ -19,6 +19,7 @@ const work = (actor, action, readOnly = false) => withSession(actor.token, actio
 const read = actor => work(actor, loadLaboratorySettings, true);
 const access = actor => work(actor, async client => (await client.query("SELECT organization_has_module_access('customer') AS customer,organization_has_module_access('vendor') AS vendor")).rows[0], true);
 const instrumentAccess = actor => work(actor, async client => (await client.query("SELECT organization_has_module_access('instrument') AS allowed")).rows[0].allowed, true);
+const agreementAccess = actor => work(actor, async client => (await client.query("SELECT organization_has_module_access('service_agreements') AS allowed")).rows[0].allowed, true);
 const customerInput = () => ({ name: `Module access ${randomUUID()}`, legalName: 'Synthetic legal name', contactPersonName: 'Synthetic contact',
   contactPersonEmail: 'synthetic@example.invalid', contactPersonPhone: '0000', billToAddress: 'Billing\nSecond line', shipToAddress: 'Receiving\nSecond line' });
 const createCustomer = actor => work(actor, (client, identity) => quickCreateCustomer(client, identity, customerInput()));
@@ -75,10 +76,10 @@ test('older two-module clients preserve Instrument grants; explicit clears retai
   const modules = emptyModuleAccess(); modules[2] = { moduleKey: 'instrument', enabled: true, roleIds: [other.roleId, actor.roleId], userIds: [other.userId, actor.userId] };
   await saveModuleAccessSettings(actor, modules);
   const historical = await work(actor, (client, identity) => loadModuleAccess(client, identity, { atRevision: 1 }), true);
-  assert.equal(historical.moduleCount, 3); assert.equal(await instrumentAccess(actor), true);
+  assert.equal(historical.moduleCount, 4); assert.equal(await instrumentAccess(actor), true);
   const legacy = modules.slice(0, 2); legacy[0] = { ...legacy[0], enabled: true, userIds: [actor.userId] };
   await saveModuleAccessSettings(actor, legacy);
-  assert.deepEqual(moduleAccessValues((await read(actor)).settings.moduleAccess), [...legacy, modules[2]]);
+  assert.deepEqual(moduleAccessValues((await read(actor)).settings.moduleAccess), [...legacy, ...modules.slice(2)]);
   assert.equal(await instrumentAccess(actor), true);
   await work(actor, (client, identity) => saveLaboratorySettings(client, identity, { revision: 2, autoCreateJobs: false, dateFormat: 'YYYY-MM-DD' }));
   assert.equal((await read(actor)).settings.moduleAccessRevision, 2);
@@ -86,16 +87,61 @@ test('older two-module clients preserve Instrument grants; explicit clears retai
   await saveModuleAccessSettings(actor, legacy); assert.equal(await instrumentAccess(actor), false);
   assert.deepEqual(await work(actor, (client, identity) => loadModuleAccess(client, identity, { atRevision: 1 }), true), historical);
   const history = (await owner.query('SELECT revision,module_count FROM organization_module_access_versions WHERE organization_id=$1 ORDER BY revision', [actor.organizationId])).rows;
-  assert.deepEqual(history, [1, 2, 4, 5].map(revision => ({ revision, module_count: 3 })));
+  assert.deepEqual(history, [1, 2, 4, 5].map(revision => ({ revision, module_count: 4 })));
 });
 
 test('an older two-module initial save creates a disabled unassigned Instrument row', async () => {
   const actor = await account(); await saveModuleAccessSettings(actor, emptyModuleAccess().slice(0, 2));
   const saved = await work(actor, (client, identity) => loadModuleAccess(client, identity), true);
-  assert.equal(saved.moduleCount, 3); assert.deepEqual(moduleAccessValues(saved.modules), emptyModuleAccess());
+  assert.equal(saved.moduleCount, 4); assert.deepEqual(moduleAccessValues(saved.modules), emptyModuleAccess());
   assert.equal(await instrumentAccess(actor), false);
   const reader = await account({ organizationId: actor.organizationId, permissions: ['settings.read'] });
   await assert.rejects(saveModuleAccessSettings(reader, emptyModuleAccess()), { status: 403 });
+});
+
+test('Service Agreement access uses explicit users or the actual active Default Role without cross-module grants', async () => {
+  const manager = await account(); const person = await account({ organizationId: manager.organizationId }); const foreign = await account();
+  const modules = emptyModuleAccess(); const agreement = modules[3];
+  assert.equal(await agreementAccess(person), false);
+  agreement.enabled = true; await saveModuleAccessSettings(manager, modules); assert.equal(await agreementAccess(person), false);
+  agreement.roleIds = [person.roleId]; await saveModuleAccessSettings(manager, modules); assert.equal(await agreementAccess(person), false);
+  await recordProfile(manager, person); assert.equal(await agreementAccess(person), true);
+  assert.equal(await instrumentAccess(person), false); assert.deepEqual(await access(person), { customer: false, vendor: false });
+  await work(manager, (client, identity) => updateUserProfile(client, identity, person.userId,
+    { requestId: randomUUID(), revision: 1, roleIds: [person.roleId, manager.roleId] }));
+  agreement.roleIds = [manager.roleId]; await saveModuleAccessSettings(manager, modules); assert.equal(await agreementAccess(person), false);
+  agreement.roleIds = [person.roleId]; await saveModuleAccessSettings(manager, modules);
+  await owner.query('UPDATE roles SET active=false WHERE organization_id=$1 AND id=$2', [person.organizationId, person.roleId]);
+  assert.equal(await agreementAccess(person), false);
+  agreement.userIds = [person.userId]; await saveModuleAccessSettings(manager, modules); assert.equal(await agreementAccess(person), true);
+  agreement.enabled = false; await saveModuleAccessSettings(manager, modules); assert.equal(await agreementAccess(person), false);
+  agreement.enabled = true; agreement.userIds = [foreign.userId];
+  await assert.rejects(saveModuleAccessSettings(manager, modules), { code: 'invalid_module_access_reference' });
+  await work(manager, async client => {
+    await client.query("SELECT set_config('app.user_id',$1,true)", [person.userId]);
+    assert.equal((await client.query("SELECT organization_has_module_access('service_agreements') AS allowed")).rows[0].allowed, false);
+  });
+  assert.equal(await agreementAccess(foreign), false);
+});
+
+test('two- and three-module callers preserve Service Agreement assignments; explicit clears remain cleared', async () => {
+  const actor = await account(); const other = await account({ organizationId: actor.organizationId });
+  const modules = emptyModuleAccess();
+  for (const entry of modules.slice(2)) Object.assign(entry, { enabled: true, roleIds: [other.roleId, actor.roleId], userIds: [other.userId, actor.userId] });
+  await saveModuleAccessSettings(actor, modules);
+  const original = await work(actor, (client, identity) => loadModuleAccess(client, identity, { atRevision: 1 }), true);
+  for (const count of [3, 2]) {
+    const legacy = structuredClone(modules.slice(0, count)); legacy[0].enabled = true; legacy[0].userIds = [actor.userId];
+    await saveModuleAccessSettings(actor, legacy);
+    assert.deepEqual(moduleAccessValues((await read(actor)).settings.moduleAccess), [...legacy, ...modules.slice(count)]);
+    assert.equal(await agreementAccess(actor), true); assert.equal(await instrumentAccess(actor), true);
+  }
+  const cleared = structuredClone(modules); cleared[3] = emptyModuleAccess()[3];
+  await saveModuleAccessSettings(actor, cleared); assert.equal(await agreementAccess(actor), false);
+  await saveModuleAccessSettings(actor, modules.slice(0, 3)); assert.equal(await agreementAccess(actor), false);
+  assert.deepEqual(await work(actor, (client, identity) => loadModuleAccess(client, identity, { atRevision: 1 }), true), original);
+  const fresh = await account(); await saveModuleAccessSettings(fresh, modules.slice(0, 2));
+  assert.deepEqual(moduleAccessValues((await read(fresh)).settings.moduleAccess).slice(2), emptyModuleAccess().slice(2));
 });
 
 test('absent, disabled and empty configuration denies authoring without creating inferred grants', async () => {
@@ -227,13 +273,15 @@ test('deferred checks reject missing, extra and gapped selections while permitti
   const cases = [{ headers: 0 }, { headers: 1 }, { headers: 2, count: 1 }, { headers: 2, count: 0, position: 0 },
     { headers: 2, count: 1, position: 1 }, { headers: 2, count: 0, valid: true }, { headers: 2, count: 1, position: 0, valid: true },
     { headers: 2, moduleCount: 3 }, { headers: 3, moduleCount: 2 }, { headers: 3, moduleCount: 3, valid: true },
-    { headers: 3, moduleCount: 3, count: 1, position: 0, valid: true }];
+    { headers: 3, moduleCount: 3, count: 1, position: 0, valid: true }, { headers: 3, moduleCount: 4 },
+    { headers: 4, moduleCount: 3 }, { headers: 4, moduleCount: 4, valid: true },
+    { headers: 4, moduleCount: 4, count: 1, position: 0, valid: true }];
   for (const item of cases) {
     const client = await owner.connect();
     try {
       await client.query('BEGIN');
       await client.query('INSERT INTO organization_module_access_versions(organization_id,revision,saved_by,module_count) VALUES($1,999,$2,$3)', [actor.organizationId, actor.userId, item.moduleCount ?? 2]);
-      for (const key of ['customer', 'vendor', 'instrument'].slice(0, item.headers)) {
+      for (const key of ['customer', 'vendor', 'instrument', 'service_agreements'].slice(0, item.headers)) {
         await client.query('INSERT INTO organization_module_access_modules(organization_id,revision,module_key,enabled,role_count,user_count) VALUES($1,999,$2,true,$3,0)', [actor.organizationId, key, key === 'customer' ? item.count ?? 0 : 0]);
       }
       if (item.position !== undefined) await client.query("INSERT INTO organization_module_access_roles(organization_id,revision,module_key,role_id,position,role_name,role_active) VALUES($1,999,'customer',$2,$3,'Synthetic',true)", [actor.organizationId, actor.roleId, item.position]);
