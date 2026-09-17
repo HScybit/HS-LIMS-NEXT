@@ -79,9 +79,9 @@ export default function WorkflowPanel({ workflow, runtime, activity = [], curren
     });
   }
   function respond(action, comment, checklistItemIds) {
-    if (action !== 'approve' || !approval?.assignmentId) return;
+    if (!['approve', 'reject'].includes(action) || !approval?.assignmentId) return;
     void perform(async () => {
-      await apiRequest(`/api/approval-assignments/${approval.assignmentId}/approve`, { method: 'POST', body: { comment, checklistItemIds } });
+      await apiRequest(`/api/approval-assignments/${approval.assignmentId}/${action}`, { method: 'POST', body: { comment, checklistItemIds } });
       setDetailsOpen(false);
     });
   }
@@ -102,7 +102,7 @@ export default function WorkflowPanel({ workflow, runtime, activity = [], curren
         onToggle={(id, checked) => setChecks((previous) => ({ ...previous, [id]: checked }))} />
       {error ? <div className="alert alert-danger mb-0" role="alert">{error}</div> : null}
     </WorkflowTransitionRequestModal>
-    {detailsOpen && approval ? <RequestDetailsModal key={`${approval.id}:${approval.assignmentId}`} request={approval} canRespond={approval.canRespond}
+    {detailsOpen && approval ? <RequestDetailsModal key={`${approval.id}:${approval.assignmentId}`} request={approval} canRespond={approval.canRespond} canReject={approval.canRespond}
       submitting={busy} error={error} onClose={() => { if (!busy) setDetailsOpen(false); }} onSubmit={respond} /> : null}
   </>;
 }

@@ -22,7 +22,8 @@ export async function sampleTestRequests(client, identity, sampleId) {
     LEFT JOIN analytical_specifications specification ON specification.organization_id=request.organization_id AND specification.id=request.specification_id
     LEFT JOIN workflow_runs run ON run.organization_id=request.organization_id AND run.test_request_id=request.id
     LEFT JOIN workflow_states state ON state.organization_id=run.organization_id AND state.id=run.current_state_id
-    LEFT JOIN LATERAL (SELECT target_state_name FROM laboratory_job_workflow_effects WHERE organization_id=request.organization_id
+    LEFT JOIN LATERAL (SELECT CASE WHEN action='rejected' THEN NULL ELSE target_state_name END AS target_state_name
+      FROM laboratory_job_workflow_effects WHERE organization_id=request.organization_id
       AND test_request_id=request.id AND is_current ORDER BY parent_run_revision DESC LIMIT 1) inherited ON true
     WHERE request.organization_id=$1 AND product.sample_id=$2 ORDER BY request.created_at, request.request_number, request.id`, [identity.organization_id, sampleId]);
   const canAllocate = identity.permission_codes.includes('test_requests.allocate') && access.allowedActions.allocate;

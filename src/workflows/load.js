@@ -107,7 +107,8 @@ export async function loadWorkflowRun(client, identity, runId) {
   const source = await workflowConditionSource(client, identity, run); const roles = await currentWorkflowRoles(client, identity);
   const approvalRequest = await readApprovalCase(client, identity, { runId });
   const jobEffects = await loadJobWorkflowEffects(client, identity, run.test_request_id);
-  const jobState = jobEffects.find((effect) => effect.isCurrent) ?? null;
+  const currentJobEffect = jobEffects.find((effect) => effect.isCurrent);
+  const jobState = currentJobEffect?.action === 'rejected' ? null : currentJobEffect ?? null;
   const history = (await client.query(`SELECT history.id, history.action, history.actor_user_id AS "actorUserId", history.comment, history.occurred_at AS "occurredAt",
     target.name AS "toStateName", source.name AS "fromStateName", history.transition_id AS "transitionId"
     FROM workflow_run_history history JOIN workflow_states target ON target.organization_id=history.organization_id AND target.id=history.to_state_id

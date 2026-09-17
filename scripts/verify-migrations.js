@@ -48,6 +48,7 @@ import { prepareParameterTitleRegistration } from '../tests/helpers/parameter-ti
 import { addProductWidgets } from '../tests/helpers/product-context.js';
 import { addSampleLineWidgets } from '../tests/helpers/sample-lines.js';
 import { prepareSubjectJob } from '../tests/helpers/job-subjects.js';
+import { prepareSampleRejection } from '../tests/helpers/workflow-rejections.js';
 import { createReportTemplate } from '../tests/helpers/reports.js';
 import { createReportAssets } from '../tests/helpers/report-assets.js';
 import { deleteReportDocument, saveReportDocument } from '../src/report-assets/documents.js';
@@ -77,7 +78,7 @@ import { loadWorkflowDefinition } from '../src/workflows/definition.js';
 import { executeWorkflowEditorCommand } from '../src/workflows/commands.js';
 import { loadWorkflowMaster, updateWorkflowMaster, retireWorkflowMaster } from '../src/workflows/metadata.js';
 import { cloneWorkflowMaster } from '../src/workflows/master-clone.js';
-import { submitDatasheetTransition } from '../src/workflows/requests.js';
+import { submitDatasheetTransition, rejectWorkflowAssignment } from '../src/workflows/requests.js';
 import { generateReports, loadReport } from '../src/reports/service.js';
 import { enqueueReportPdf, reportPdfFile } from '../src/reports/jobs.js';
 import { loadReportRenderer } from '../src/reports/renderer.js';
@@ -861,9 +862,23 @@ try {
   assert.deepEqual(await processNextReportJob({ pool: worker, renderer: await loadReportRenderer(), workerId: randomUUID() }), { jobId: jobPrint.job.id, status: 'succeeded' });
   const jobPdf = await work((client, identity) => reportPdfFile(client, identity, jobReportId), { readOnly: true });
   assert.equal(jobPdf.content.subarray(0, 5).toString(), '%PDF-'); assert.ok(jobPdf.byteLength > 5000);
+  const rejector = await createAccount(owner, { organizationId: account.organizationId, permissions: ['approvals.respond'] });
+  const laterReviewer = await createAccount(owner, { organizationId: account.organizationId, permissions: ['approvals.respond'] });
+  Object.assign(rejector, await signIn({ identifier: rejector.username, password: rejector.password }));
+  const rejection = await prepareSampleRejection(owner, signedAccount, [rejector, laterReviewer], { mode: 'sequential', stages: [
+    { stageNumber: 1, roleIds: [rejector.roleId] }, { stageNumber: 3, roleIds: [laterReviewer.roleId] },
+  ] });
+  const rejectedAssignment = rejection.assignments.find((item) => item.assigned_user_id === rejector.userId).id;
+  const rejectCommand = (client, identity) => rejectWorkflowAssignment(client, identity, rejectedAssignment, { comment: 'Fresh first rejection', checklistItemIds: [] });
+  const rejected = await withSession(rejector.token, rejectCommand, { csrfToken: rejector.csrfToken });
+  assert.equal(rejected.status, 'rejected'); assert.equal(rejected.revision, rejection.request.revision + 1);
+  assert.deepEqual(await withSession(rejector.token, rejectCommand, { csrfToken: rejector.csrfToken }), rejected);
+  const rejectedRun = await work((client, identity) => loadWorkflowRun(client, identity, rejection.run.id), { readOnly: true });
+  assert.equal(rejectedRun.approvalRequest.status, 'rejected'); assert.equal(rejectedRun.approvalRequest.approvalRows[1].status, 'cancelled');
+  assert.equal(rejectedRun.approvalRequest.approvalRows[1].respondedAt, null); assert.equal(rejectedRun.approvalRequest.approvalRows[0].checklistItems[0].isChecked, false);
   await mkdir('.local', { recursive: true, mode: 0o700 });
   await writeFile('.local/migration-verification.json', JSON.stringify({ databaseName, migrations: count, status: 'passed', verifiedAt: new Date().toISOString() }, null, 2), { mode: 0o600 });
-  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, role history/settings, workflow layout/ports/metadata and master/draft cloning, template capture, typed parameter uncertainty, method/user and Product/tag history/retry/retirement, Product job fallback, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
+  console.log(`Fresh install and repeat application passed for ${count} migrations; authentication, role history/settings, workflow layout/ports/metadata, master/draft cloning and first rejection closure/retry, template capture, typed parameter uncertainty, method/user and Product/tag history/retry/retirement, Product job fallback, unchanged long legacy master text, registration, allocation, frozen lexical defaults and explicit entry, typed numeric/qualitative grouped results/workflow, report finalisation/retry, watermark and stylesheet history, captured CSS images and two frozen PDF jobs passed with restricted application/worker roles. Synthetic database retained: ${databaseName}`);
 } finally {
   await worker?.end();
   await closePool();

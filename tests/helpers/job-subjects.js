@@ -9,7 +9,7 @@ import { registerSample } from '../../src/samples/register.js';
 import { generateTestRequests } from '../../src/test-requests/generate.js';
 import { createTestRequestJobs } from '../../src/test-requests/jobs.js';
 
-export async function prepareSubjectJob(owner, creator, analyst, { manualParent = false, resultWidget = false, resultValueType = 'numeric', resultDefaultValue, finalSection = false, jobWorkflowId = null, prepareTemplate } = {}) {
+export async function prepareSubjectJob(owner, creator, analyst, { manualParent = false, resultWidget = false, resultValueType = 'numeric', resultDefaultValue, finalSection = false, jobWorkflowId = null, prepareTemplate, legacyChildren = false, reviewerUserId } = {}) {
   const source = await createLaboratoryFixture(owner, creator, { repeated: false });
   const client = await owner.connect();
   let template;
@@ -70,6 +70,13 @@ export async function prepareSubjectJob(owner, creator, analyst, { manualParent 
     autoCreateJobs: false, resultSummaryTemplateId: template.templateId, jobWorkflowId: jobWorkflowId ?? settings.settings.jobWorkflowId }));
   const sample = await work((client, identity) => registerSample(client, identity, source.registration));
   const generated = await work((client, identity) => generateTestRequests(client, identity, sample.id));
-  const result = await work((client, identity) => createTestRequestJobs(client, identity, { requestIds: generated.items.map((item) => item.id), analystUserId: analyst.userId }));
+  if (legacyChildren) for (const item of generated.items) {
+    const id = randomUUID();
+    await owner.query(`INSERT INTO test_requests(organization_id,id,request_number,sample_test_id,specification_id,attempt_number,datasheet_template_id,created_by,using_dynamic_workflow)
+      SELECT organization_id,$3,request_number||'-historical',sample_test_id,specification_id,2,datasheet_template_id,created_by,false
+      FROM test_requests WHERE organization_id=$1 AND id=$2`, [creator.organizationId, item.id, id]);
+    item.id = id;
+  }
+  const result = await work((client, identity) => createTestRequestJobs(client, identity, { requestIds: generated.items.map((item) => item.id), analystUserId: analyst.userId, ...(reviewerUserId ? { reviewerUserId } : {}) }));
   return { source, template, sample, requests: generated.items, job: result.items[0] };
 }

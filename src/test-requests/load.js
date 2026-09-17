@@ -20,7 +20,8 @@ export async function loadTestRequest(client, identity, requestId, sampleId) {
     LEFT JOIN analytical_specifications specification ON specification.organization_id = request.organization_id AND specification.id = request.specification_id
     LEFT JOIN workflow_runs run ON run.organization_id = request.organization_id AND run.test_request_id = request.id
     LEFT JOIN workflow_states state ON state.organization_id = run.organization_id AND state.id = run.current_state_id
-    LEFT JOIN LATERAL (SELECT target_state_name FROM laboratory_job_workflow_effects WHERE organization_id=request.organization_id
+    LEFT JOIN LATERAL (SELECT CASE WHEN action='rejected' THEN NULL ELSE target_state_name END AS target_state_name
+      FROM laboratory_job_workflow_effects WHERE organization_id=request.organization_id
       AND test_request_id=request.id AND is_current ORDER BY parent_run_revision DESC LIMIT 1) inherited ON true
     WHERE request.organization_id = $1 AND request.id = $2 AND ($3::uuid IS NULL OR sample.id = $3)`, [identity.organization_id, requestId, sampleId ?? null]);
   if (!result.rowCount) throw new HttpError(404, 'test_request_not_found', 'Test request was not found.');

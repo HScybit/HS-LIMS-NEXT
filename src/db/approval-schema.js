@@ -16,12 +16,15 @@ const actor = (t, column) => foreignKey({ columns: [t.organizationId, column], f
 export const approvalCases = pgTable('approval_cases', {
   ...identity(), workflowRunId: uuid('workflow_run_id').notNull(), workflowVersionId: uuid('workflow_version_id').notNull(),
   transitionId: uuid('transition_id').notNull(), requestHistoryId: uuid('request_history_id').notNull(), runRevision: integer('run_revision').notNull(),
-  status: text('status').notNull().default('pending'), resolvedAt: time('resolved_at'),
+  status: text('status').notNull().default('pending'), resolvedAt: time('resolved_at'), rejectionHistoryId: uuid('rejection_history_id'),
 }, (t) => [key(t),
   foreignKey({ name: 'approval_case_run_fk', columns: [t.organizationId, t.workflowRunId, t.workflowVersionId], foreignColumns: [workflowRuns.organizationId, workflowRuns.id, workflowRuns.workflowVersionId] }),
   foreignKey({ name: 'approval_case_transition_fk', columns: [t.organizationId, t.workflowVersionId, t.transitionId], foreignColumns: [workflowTransitions.organizationId, workflowTransitions.workflowVersionId, workflowTransitions.id] }),
   foreignKey({ name: 'approval_case_request_fk', columns: [t.organizationId, t.requestHistoryId, t.transitionId], foreignColumns: [workflowRunHistory.organizationId, workflowRunHistory.id, workflowRunHistory.transitionId] }),
   unique('approval_case_request_key').on(t.organizationId, t.requestHistoryId),
+  foreignKey({ name: 'approval_case_rejection_fk', columns: [t.organizationId, t.rejectionHistoryId, t.transitionId], foreignColumns: [workflowRunHistory.organizationId, workflowRunHistory.id, workflowRunHistory.transitionId] }),
+  unique('approval_case_rejection_key').on(t.organizationId, t.rejectionHistoryId),
+  check('approval_case_rejection_state', sql`${t.rejectionHistoryId} is null or ${t.status} = 'rejected'`),
   uniqueIndex('approval_one_pending_run_key').on(t.organizationId, t.workflowRunId).where(sql`${t.status} = 'pending'`),
   check('approval_case_state', sql`${t.runRevision} > 0 and ((${t.status} = 'pending' and ${t.resolvedAt} is null) or (${t.status} in ('approved', 'rejected', 'cancelled') and ${t.resolvedAt} is not null))`)]);
 

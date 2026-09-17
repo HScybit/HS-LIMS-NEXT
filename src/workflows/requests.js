@@ -153,6 +153,25 @@ export async function approveWorkflowAssignment(client, identity, assignmentId, 
   return applyWorkflowTransition(client, identity, run, transition, target, input.comment);
 }
 
+export async function rejectWorkflowAssignment(client, identity, assignmentId, rawInput) {
+  requirePermission(identity, 'approvals.respond'); uuid(assignmentId, 'Assignment'); fieldsOnly(rawInput, ['comment', 'checklistItemIds']);
+  const input = approvalDecisionInput({ ...rawInput, decision: 'reject' });
+  try {
+    const result = (await client.query('SELECT * FROM workflow_reject_approval($1,$2,$3::uuid[])', [assignmentId, input.comment, input.checklistItemIds])).rows[0];
+    return { id: result.workflow_run_id, revision: result.revision, status: 'rejected', stateId: result.state_id, historyId: result.history_id, approvalCaseId: result.approval_case_id };
+  } catch (error) {
+    if (error.constraint === 'workflow_response_session') throw new HttpError(403, 'forbidden', 'Your approval access changed. Sign in again before responding.');
+    if (error.constraint === 'workflow_response_assignee') throw new HttpError(403, 'approval_assignee_required', 'Only the assigned approver may respond.');
+    if (error.constraint === 'workflow_response_not_found') throw new HttpError(404, 'approval_not_found', 'Approval assignment was not found.');
+    if (error.constraint === 'workflow_response_input') throw new HttpError(422, 'invalid_approval_response', 'Add a comment and select valid checklist items.');
+    if (error.constraint === 'workflow_response_checklist') throw new HttpError(422, 'invalid_workflow_checklist', 'A selected checklist item does not belong to this transition.');
+    if (error.constraint === 'workflow_response_result') throw new HttpError(409, 'approval_result_changed', 'The submitted result differs from this approval request.');
+    if (['workflow_response_not_pending', 'workflow_response_conflict'].includes(error.constraint)) throw new HttpError(409, 'approval_not_pending', 'This approval changed or already has a different response.');
+    if (error.constraint === 'workflow_parent_job_controls') throw new HttpError(409, 'job_workflow_controls', 'Continue this review from the parent job.');
+    throw error;
+  }
+}
+
 export async function submitDatasheetTransition(client, identity, runId, input) {
   requirePermission(identity, 'datasheets.execute'); uuid(runId, 'Workflow run');
   fieldsOnly(input, ['datasheetId', 'datasheet', 'transition']);

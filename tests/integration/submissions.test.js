@@ -12,7 +12,7 @@ import { editTemplate } from '../../src/templates/authoring.js';
 import { loadCapture, loadDefinition } from '../../src/templates/loader.js';
 import { saveCapture } from '../../src/templates/capture.js';
 import { submitDatasheet } from '../../src/datasheets/submit.js';
-import { requestWorkflowTransition, submitDatasheetTransition, approveWorkflowAssignment } from '../../src/workflows/requests.js';
+import { requestWorkflowTransition, submitDatasheetTransition, approveWorkflowAssignment, rejectWorkflowAssignment } from '../../src/workflows/requests.js';
 import { loadWorkflowRun } from '../../src/workflows/load.js';
 import { cloneWorkflowDraft, saveWorkflowTransition, publishWorkflow } from '../../src/workflows/authoring.js';
 import { loadWorkflowDefinition } from '../../src/workflows/definition.js';
@@ -198,4 +198,26 @@ test('an assigned approver with no datasheet or sample write permission approves
   assert.equal(result.submitted_by, analyst.userId); assert.equal(result.number_value, '0');
   const closed = await work(reader, (client, identity) => loadWorkflowRun(client, identity, run.id), { readOnly: true });
   assert.equal(closed.approvalRequest.approvalRows[0].checklistItems[0].isChecked, true);
+});
+
+test('rejection retains the exact frozen submitted result even after the analyst allocation ends', async () => {
+  const fixture = await prepare({ approval: true });
+  const run = await work(analyst, (client, identity) => loadWorkflowRun(client, identity, fixture.workflowRunId), { readOnly: true });
+  const edge = run.transitions[0];
+  const requested = await work(analyst, (client, identity) => submitDatasheetTransition(client, identity, run.id, {
+    datasheetId: fixture.sheet.id, datasheet: { revision: 1, captureRevision: fixture.captureRevision },
+    transition: { revision: run.revision, transitionId: edge.id, comment: 'Synthetic review request', checklistItemIds: edge.checklistItems.map((item) => item.id) },
+  }));
+  const pending = await work(approver, (client, identity) => loadWorkflowRun(client, identity, run.id), { readOnly: true });
+  const original = (await owner.query('SELECT * FROM datasheet_submissions WHERE organization_id=$1 AND id=$2', [author.organizationId, requested.submissionId])).rows[0];
+  const capture = (await owner.query('SELECT * FROM template_instances WHERE organization_id=$1 AND id=$2', [author.organizationId, fixture.sheet.template_instance_id])).rows[0];
+  await owner.query("UPDATE test_request_assignments SET unassigned_at=now() WHERE organization_id=$1 AND test_request_id=$2 AND assignment_type='analyst' AND unassigned_at IS NULL", [author.organizationId, fixture.requestId]);
+  const input = { comment: 'Synthetic failed review with unchecked positive assertions', checklistItemIds: [] };
+  const rejected = await work(approver, (client, identity) => rejectWorkflowAssignment(client, identity, pending.approvalRequest.assignmentId, input));
+  const after = await status(fixture); assert.equal(after.status, 'rejected'); assert.equal(after.request_status, 'rejected'); assert.equal(after.capture_status, 'frozen'); assert.equal(after.submissions, 1);
+  assert.deepEqual((await owner.query('SELECT * FROM datasheet_submissions WHERE organization_id=$1 AND id=$2', [author.organizationId, original.id])).rows[0], original);
+  assert.deepEqual((await owner.query('SELECT * FROM template_instances WHERE organization_id=$1 AND id=$2', [author.organizationId, capture.id])).rows[0], capture);
+  const history = (await owner.query('SELECT * FROM workflow_run_history WHERE organization_id=$1 AND id=$2', [author.organizationId, rejected.historyId])).rows[0];
+  assert.equal(history.datasheet_submission_id, original.id); assert.equal(history.actor_user_id, approver.userId); assert.equal(history.action, 'rejected');
+  assert.deepEqual(await work(approver, (client, identity) => rejectWorkflowAssignment(client, identity, pending.approvalRequest.assignmentId, input)), rejected);
 });
