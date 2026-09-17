@@ -98,7 +98,7 @@ async function priorSave(client, identity, parameterId, revision, requestId, ope
   return loadTestParameter(client, identity, parameterId, { atRevision: prior.revision });
 }
 
-export async function saveTestParameter(client, identity, value) {
+export async function saveTestParameter(client, identity, value, { bulkUpdate = false } = {}) {
   requirePermission(identity, 'masters.manage'); const input = testParameterInput(value);
   await lockMasterCustomFieldCapture(client);
   const prior = await priorSave(client, identity, input.id, input.revision, input.requestId, input.revision ? 'update' : 'create');
@@ -107,7 +107,7 @@ export async function saveTestParameter(client, identity, value) {
     return prior;
   }
   const current = (await client.query('SELECT revision,active,custom_field_count FROM test_parameters WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
-  if (input.revision && !current?.active) throw new HttpError(404, 'parameter_not_found', 'Test parameter was not found.');
+  if (input.revision && (!current || !current.active && !bulkUpdate)) throw new HttpError(404, 'parameter_not_found', 'Test parameter was not found.');
   if ((current?.revision ?? 0) !== input.revision) throw new HttpError(409, 'stale_parameter', 'The test parameter changed. Reload before saving.');
   const definitions = await parameterCustomFields(client, identity);
   const previousFields = current ? await loadParameterCustomFieldValues(client, identity, input.id, current.revision, current.custom_field_count) : [];
@@ -140,7 +140,7 @@ export async function saveTestParameter(client, identity, value) {
     if (error.code === '23505') throw new HttpError(409, 'duplicate_parameter', 'The parameter key or scheme abbreviation is already in use.');
     throw error;
   }
-  return loadTestParameter(client, identity, input.id);
+  return loadTestParameter(client, identity, input.id, current?.active === false ? { atRevision: input.revision + 1 } : undefined);
 }
 
 export async function retireTestParameter(client, identity, input) {

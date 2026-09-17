@@ -9,6 +9,7 @@ import Modal from '../ui/Modal.jsx';
 import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import PageHeader from '../layout/PageHeader.jsx';
+import MasterBulkButton from './BulkUpload.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import { customFieldColumnKey, customFieldListDisplay } from '../../custom-fields/listing-values.js';
 
@@ -65,7 +66,7 @@ export default function MethodList({ canManage }) {
   return <>
     <PageHeader><div className="page-header"><div className="container-fluid h-100"><div className="row h-100 align-items-center justify-content-between page-header__row">
       <div className="col page-header__start"><h1 className="page-title mb-0">Method of Analysis</h1></div>
-      <div className="col-auto page-header__actions">{canManage ? <PrimaryButton leftIcon="plus" onClick={() => router.push(`/method_of_analysis/new?from=${encodeURIComponent(returnPath)}`)}>New Method of Analysis</PrimaryButton> : null}</div>
+      <div className="col-auto page-header__actions d-flex gap-2">{canManage ? <><MasterBulkButton resource="methods" /><PrimaryButton leftIcon="plus" onClick={() => router.push(`/method_of_analysis/new?from=${encodeURIComponent(returnPath)}`)}>New Method of Analysis</PrimaryButton></> : null}</div>
     </div></div></div></PageHeader>
     {customFieldError ? <div className="alert alert-danger m-4" role="alert">{customFieldError}<button type="button" className="btn btn-link"
       onClick={() => setReload(value => value + 1)}>Retry loading fields</button></div> : null}

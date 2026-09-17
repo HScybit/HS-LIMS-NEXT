@@ -76,7 +76,7 @@ async function appendUsers(client, organizationId, methodId, revision, userIds) 
     SELECT $1,$2,$3,user_id,position-1 FROM unnest($4::uuid[]) WITH ORDINALITY AS users(user_id,position)`, [organizationId, methodId, revision, userIds]);
 }
 
-export async function saveMethod(client, identity, value) {
+export async function saveMethod(client, identity, value, { bulkUpdate = false } = {}) {
   requirePermission(identity, 'masters.manage'); const input = methodInput(value);
   await lockMethodCustomFieldCapture(client);
   const prior = await priorSave(client, identity, input.id, input.revision, input.requestId, input.revision ? 'update' : 'create');
@@ -85,7 +85,7 @@ export async function saveMethod(client, identity, value) {
     return prior;
   }
   const current = (await client.query('SELECT revision,active,custom_field_count FROM methods_of_analysis WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
-  if (input.revision && !current?.active) throw new HttpError(404, 'method_not_found', 'Method of Analysis was not found.');
+  if (input.revision && (!current || !current.active && !bulkUpdate)) throw new HttpError(404, 'method_not_found', 'Method of Analysis was not found.');
   if ((current?.revision ?? 0) !== input.revision) throw new HttpError(409, 'stale_method', 'The method changed. Reload before saving.');
   const definitions = await methodCustomFields(client, identity);
   const previousFields = current ? await loadMethodCustomFieldValues(client, identity, input.id, current.revision, current.custom_field_count) : [];
@@ -117,7 +117,7 @@ export async function saveMethod(client, identity, value) {
     if (error.constraint === 'method_active_user') throw new HttpError(400, 'invalid_method_users', 'Select active users in this organization.');
     throw error;
   }
-  return loadMethod(client, identity, input.id);
+  return loadMethod(client, identity, input.id, current?.active === false ? { atRevision: input.revision + 1 } : undefined);
 }
 
 export async function retireMethod(client, identity, input) {

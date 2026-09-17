@@ -85,7 +85,7 @@ async function appendTags(client, organizationId, productId, revision, tagIds) {
     SELECT $1,$2,$3,tag_id,position-1 FROM unnest($4::uuid[]) WITH ORDINALITY AS tags(tag_id,position)`, [organizationId, productId, revision, tagIds]);
 }
 
-export async function saveProduct(client, identity, value) {
+export async function saveProduct(client, identity, value, { bulkUpdate = false } = {}) {
   requirePermission(identity, 'masters.manage'); const input = productInput(value);
   await lockMasterCustomFieldCapture(client);
   const prior = await priorSave(client, identity, input.id, input.revision, input.requestId, input.revision ? 'update' : 'create');
@@ -94,7 +94,7 @@ export async function saveProduct(client, identity, value) {
     return prior;
   }
   const current = (await client.query('SELECT revision,active,custom_field_count FROM products WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, input.id])).rows[0];
-  if (input.revision && !current?.active) throw new HttpError(404, 'product_not_found', 'Product was not found.');
+  if (input.revision && (!current || !current.active && !bulkUpdate)) throw new HttpError(404, 'product_not_found', 'Product was not found.');
   if ((current?.revision ?? 0) !== input.revision) throw new HttpError(409, 'stale_product', 'The product changed. Reload before saving.');
   const definitions = await productCustomFields(client, identity);
   const previousFields = current ? await loadProductCustomFieldValues(client, identity, input.id, current.revision, current.custom_field_count) : [];
@@ -113,7 +113,7 @@ export async function saveProduct(client, identity, value) {
     if (!input.revision) await client.query(`INSERT INTO products(organization_id,id,name,code,description,abbreviation,job_template_id,tag_count,save_request_id,custom_field_count,custom_fields_provided)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, args);
     else await client.query(`UPDATE products SET name=$3,code=$4,description=$5,abbreviation=$6,job_template_id=$7,tag_count=$8,save_request_id=$9,custom_field_count=$10,custom_fields_provided=$11,
-      revision=revision+1,updated_at=transaction_timestamp() WHERE organization_id=$1 AND id=$2`, args);
+      active=true,revision=revision+1,updated_at=transaction_timestamp() WHERE organization_id=$1 AND id=$2`, args);
     await appendProductCustomFieldValues(client, identity, input.id, input.revision + 1, capture);
     await appendTags(client, identity.organization_id, input.id, input.revision + 1, input.tagIds);
     if (input.revision) await client.query('DELETE FROM product_tags WHERE organization_id=$1 AND product_id=$2', [identity.organization_id, input.id]);

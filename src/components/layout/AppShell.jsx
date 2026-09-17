@@ -29,6 +29,7 @@ export default function AppShell({ identity, children }) {
         : pathname.startsWith('/materials') ? 'Materials'
         : pathname.startsWith('/products') ? 'Products'
         : pathname.startsWith('/project_fields') ? 'Custom Fields'
+        : pathname.startsWith('/bulk_uploads') ? 'Bulk Uploads'
         : pathname.startsWith('/checklists') ? 'Checklists'
         : pathname.startsWith('/workflow_management') ? 'Workflow Master'
         : isRoleManagement ? 'Role Master'

@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createAccount } from '../tests/helpers/database.js';
 import { signIn, withSession } from '../src/auth/service.js';
+import { parseMasterBulkCsv } from '../src/masters/bulk-csv.js';
+import { stageMasterBulk, loadMasterBulkPreview } from '../src/masters/bulk-store.js';
+import { reviewMasterBulk, processMasterBulk } from '../src/masters/bulk-service.js';
 import { startMfaSetup, verifyMfaSetup, disableMfa, loadMfaStatus } from '../src/auth/mfa.js';
 import { totpAt } from '../src/auth/totp.js';
 import { closePool, getPool } from '../src/db/pool.js';
@@ -110,6 +113,19 @@ try {
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
   const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage', 'roles.manage', 'workflows.manage', 'checklists.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
+  const bulkAccount = await createAccount(owner, { permissions: ['masters.manage'] });
+  const bulkSession = await signIn({ identifier: bulkAccount.username, password: bulkAccount.password });
+  const bulkSource = 'name,key\nFresh bulk product,FRESH-BULK'; const bulkId = randomUUID();
+  await withSession(bulkSession.token, (client, identity) => stageMasterBulk(client, identity, {
+    id: bulkId, resource: 'products', fileName: 'Fresh bulk.csv', format: 'csv', timeZone: 'UTC', sourceSha256: createHash('sha256').update(bulkSource).digest('hex'),
+  }, parseMasterBulkCsv(bulkSource)));
+  const bulkPreview = await withSession(bulkSession.token, (client, identity) => loadMasterBulkPreview(client, identity, bulkId), { readOnly: true });
+  const bulkRow = bulkPreview.rows[0]; const bulkReviewId = randomUUID();
+  await withSession(bulkSession.token, (client, identity) => reviewMasterBulk(client, identity, bulkId, { rows: [{ id: bulkRow.id, revision: 1, requestId: bulkReviewId }] }));
+  const bulkCommand = { rows: [{ id: bulkRow.id, revision: 1, reviewId: bulkReviewId, requestId: randomUUID() }] };
+  const bulkResult = await withSession(bulkSession.token, (client, identity) => processMasterBulk(client, identity, bulkId, bulkCommand));
+  assert.equal(bulkResult.committed, 1);
+  assert.deepEqual(await withSession(bulkSession.token, (client, identity) => processMasterBulk(client, identity, bulkId, bulkCommand)), bulkResult);
   await withSession(session.token, async (client, identity) => {
     const input = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh checklist', isActive: false,
       items: [{ id: randomUUID(), prompt: '0' }, { id: randomUUID(), prompt: 'Verify results' }] };
