@@ -3,7 +3,7 @@ import { HttpError } from '../auth/errors.js';
 import { fieldsOnly, uuid, revision } from '../templates/input.js';
 
 export const workflowCommandMaxBytes = 4 * 1024 * 1024;
-export const workflowEditorOperations = Object.freeze(['create_state', 'patch_state', 'delete_state', 'create_transition', 'patch_transition', 'delete_transition', 'publish']);
+export const workflowEditorOperations = Object.freeze(['create_state', 'patch_state', 'delete_state', 'create_transition', 'patch_transition', 'delete_transition', 'publish', 'save_flow']);
 
 const invalid = () => new HttpError(400, 'invalid_workflow_command', 'The workflow command is invalid.');
 

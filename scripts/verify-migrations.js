@@ -74,6 +74,7 @@ import { loadDatasheet } from '../src/datasheets/service.js';
 import { loadWorkflowRun } from '../src/workflows/load.js';
 import { createWorkflow, saveWorkflowState, saveWorkflowTransition, publishWorkflow, cloneWorkflowDraft } from '../src/workflows/authoring.js';
 import { loadWorkflowDefinition } from '../src/workflows/definition.js';
+import { executeWorkflowEditorCommand } from '../src/workflows/commands.js';
 import { loadWorkflowMaster, updateWorkflowMaster, retireWorkflowMaster } from '../src/workflows/metadata.js';
 import { cloneWorkflowMaster } from '../src/workflows/master-clone.js';
 import { submitDatasheetTransition } from '../src/workflows/requests.js';
@@ -249,8 +250,14 @@ try {
     assert.equal(cloned.transitions[0].sourcePort, 8); assert.equal(cloned.transitions[0].targetPort, 8);
     assert.equal(cloned.transitions[0].checklistMasterRevision, 1); assert.equal(cloned.transitions[0].checklist[0].prompt, checklist.items[0].prompt);
     assert.equal(cloned.transitions[0].autoMoveMode, 'all_trs_approved'); assert.equal(cloned.transitions[0].autoExecute, false);
-    await saveWorkflowState(client, identity, copy.versionId, 1, { ...initialInput, outputCount: 1 }, first.id);
+    const disconnected = await saveWorkflowState(client, identity, copy.versionId, 1, { ...initialInput, outputCount: 1 }, first.id);
     assert.equal((await loadWorkflowDefinition(client, identity, copy.versionId)).transitions.length, 0);
+    assert.deepEqual(await loadWorkflowDefinition(client, identity, workflow.versionId), original);
+    const draftCommand = { requestId: randomUUID(), versionId: copy.versionId, revision: disconnected.revision,
+      operation: 'save_flow', input: { changeSummary: 'Fresh incomplete draft' } };
+    const savedDraft = await executeWorkflowEditorCommand(client, identity, workflow.workflowId, draftCommand);
+    assert.equal(savedDraft.status, 'draft'); assert.equal(savedDraft.revision, disconnected.revision + 1);
+    assert.deepEqual(await executeWorkflowEditorCommand(client, identity, workflow.workflowId, draftCommand), savedDraft);
     assert.deepEqual(await loadWorkflowDefinition(client, identity, workflow.versionId), original);
     const cloneInput = { id: randomUUID(), requestId: randomUUID(), sourceVersionId: workflow.versionId };
     const masterCopy = await cloneWorkflowMaster(client, identity, workflow.workflowId, cloneInput);
@@ -272,6 +279,7 @@ try {
     await retireWorkflowMaster(client, identity, { id: workflow.workflowId, requestId: randomUUID(), metadataRevision: changed.metadataRevision });
     await assert.rejects(loadWorkflowMaster(client, identity, workflow.workflowId), { code: 'workflow_not_found' });
     assert.deepEqual(await cloneWorkflowMaster(client, identity, workflow.workflowId, cloneInput), masterCopy);
+    assert.deepEqual(await executeWorkflowEditorCommand(client, identity, workflow.workflowId, draftCommand), savedDraft);
   }, { csrfToken: session.csrfToken });
   await withSession(session.token, async (client, identity) => {
     const command = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh role history', description: '0',

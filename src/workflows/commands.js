@@ -2,7 +2,7 @@ import { HttpError } from '../auth/errors.js';
 import { fieldsOnly, requirePermission, text, uuid } from '../templates/input.js';
 import { workflowEditorCommandInput } from './command-input.js';
 import { requireWorkflowAuthor, cloneWorkflowDraft, saveWorkflowState, patchWorkflowState, saveWorkflowTransition,
-  patchWorkflowTransition, deleteWorkflowElement, publishWorkflow } from './authoring.js';
+  patchWorkflowTransition, deleteWorkflowElement, publishWorkflow, saveWorkflowFlow } from './authoring.js';
 
 const stale = () => new HttpError(409, 'stale_workflow_definition', 'This workflow changed or was published. Reload before saving.');
 const reused = () => new HttpError(409, 'save_request_reused', 'This request was already used for a different workflow change.');
@@ -45,7 +45,7 @@ export async function executeWorkflowEditorCommand(client, identity, workflowId,
     if (!source) throw new HttpError(404, 'workflow_version_not_found', 'This workflow version was not found.');
     await requireWorkflowAuthor(client, identity);
     if (source.revision !== command.revision || !['draft', 'published'].includes(source.status)) throw stale();
-    if (command.operation === 'publish' && source.status !== 'draft') throw stale();
+    if (['publish', 'save_flow'].includes(command.operation) && source.status !== 'draft') throw stale();
     let versionId = source.id; let expected = source.revision; let elementId = command.elementId;
     let value = command.input;
     if (source.status === 'published') {
@@ -71,12 +71,18 @@ export async function executeWorkflowEditorCommand(client, identity, workflowId,
       case 'publish':
         fieldsOnly(value, ['changeSummary']);
         saved = await publishWorkflow(client, identity, versionId, expected, text(value.changeSummary, 'Change summary', 2000)); break;
+      case 'save_flow':
+        fieldsOnly(value, ['changeSummary']);
+        saved = await saveWorkflowFlow(client, identity, versionId, expected, text(value.changeSummary, 'Change summary', 2000)); break;
     }
+    // The fingerprint retains the requested command. The typed receipt records
+    // its actual publication or inactive-draft outcome for exact later retries.
+    const operation = command.operation === 'save_flow' ? saved.status === 'published' ? 'publish' : 'save_draft' : command.operation;
     const resultElementId = saved.id ?? elementId ?? null;
     const result = (await client.query(`INSERT INTO workflow_editor_commands(organization_id,request_id,workflow_id,source_version_id,source_revision,
       workflow_version_id,revision,operation,source_element_id,element_id,fingerprint,saved_by)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING workflow_id,workflow_version_id,revision,operation,element_id`,
-    [org, command.requestId, command.workflowId, command.versionId, command.revision, versionId, saved.revision, command.operation,
+    [org, command.requestId, command.workflowId, command.versionId, command.revision, versionId, saved.revision, operation,
       command.elementId ?? null, resultElementId, command.fingerprint, identity.user_id])).rows[0];
     return commandResult(result);
   } catch (error) {

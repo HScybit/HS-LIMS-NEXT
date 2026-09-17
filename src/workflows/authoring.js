@@ -11,6 +11,7 @@ import { createWorkflowMaster } from './metadata.js';
 import { transitionChecklist } from './checklists.js';
 import { selectWorkflowTemplate } from './references.js';
 import { workflowStatePatchInput, workflowTransitionPatchInput } from './patch-input.js';
+import { workflowPublicationProblem } from './publication.js';
 import * as w from '../db/workflow-schema.js';
 
 const scope = (table, org, id) => and(eq(table.organizationId, org), eq(table.id, id));
@@ -259,21 +260,30 @@ export async function deleteWorkflowElement(client, identity, versionId, expecte
   });
 }
 
-export async function publishWorkflow(client, identity, versionId, expected, changeSummary) {
+async function saveWorkflowVersion(client, identity, versionId, expected, changeSummary, allowDraft) {
   const summary = text(changeSummary, 'Change summary', 2000);
   return mutation(async () => {
     const version = await lockDraft(client, identity, versionId, expected);
     await client.query('SELECT id FROM workflows WHERE organization_id=$1 AND id=$2 FOR UPDATE', [identity.organization_id, version.workflow_id]);
     const definition = await loadWorkflowDefinition(client, identity, versionId);
-    if (definition.states.filter((state) => state.stateType === 'initial').length !== 1 || definition.states.filter((state) => state.stateType === 'final').length !== 1
-      || definition.states.some((state) => ['initial', 'normal'].includes(state.stateType) && !definition.transitions.some((transition) => transition.sourceStateId === state.id))) {
-      throw new HttpError(422, 'workflow_validation_failed', 'Add exactly one initial and final state, and connect every initial or normal state.');
+    const problem = workflowPublicationProblem(definition);
+    if (problem) {
+      if (!allowDraft) throw new HttpError(422, 'workflow_validation_failed', problem);
+      const result = await client.query('UPDATE workflow_versions SET revision=revision+1,change_summary=$3 WHERE organization_id=$1 AND id=$2 RETURNING revision',
+        [identity.organization_id, versionId, summary]);
+      return { versionId, revision: result.rows[0].revision, status: 'draft' };
     }
     await client.query("UPDATE workflow_versions SET status='retired', retired_at=now(), revision=revision+1 WHERE organization_id=$1 AND workflow_id=$2 AND status='published'", [identity.organization_id, version.workflow_id]);
     const result = await client.query("UPDATE workflow_versions SET status='published', revision=revision+1, published_by=$3, published_at=now(), change_summary=$4 WHERE organization_id=$1 AND id=$2 RETURNING revision", [identity.organization_id, versionId, identity.user_id, summary]);
     return { versionId, revision: result.rows[0].revision, status: 'published' };
   });
 }
+
+export const publishWorkflow = (client, identity, versionId, expected, changeSummary) =>
+  saveWorkflowVersion(client, identity, versionId, expected, changeSummary, false);
+
+export const saveWorkflowFlow = (client, identity, versionId, expected, changeSummary) =>
+  saveWorkflowVersion(client, identity, versionId, expected, changeSummary, true);
 
 export async function cloneWorkflowDraft(client, identity, versionId) {
   requirePermission(identity, 'workflows.manage'); uuid(versionId, 'Workflow version');

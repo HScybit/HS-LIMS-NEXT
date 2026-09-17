@@ -82,7 +82,9 @@ export default function WorkflowPage({ workflowId, canManage }) {
       command.current.saved ??= await apiRequest(`/api/workflows/${workflowId}/commands`, { method: 'POST', body: command.current.body });
       const current = await apiRequest(definitionPath(workflowId, command.current.saved.versionId));
       showDefinition(current, command.current.saved.versionId);
-      command.current = null; dirty.current = false; setForm(null); setAction(idle);
+      const message = command.current.body.operation === 'save_flow'
+        ? command.current.saved.status === 'draft' ? 'Draft saved. Complete the workflow before activation.' : 'Workflow saved and activated.' : null;
+      command.current = null; dirty.current = false; setForm(null); setAction({ ...idle, message });
       return 'saved';
     } catch (failure) {
       const saved = Boolean(command.current?.saved); const uncertain = saved || !failure.status || failure.status >= 500;
@@ -129,9 +131,10 @@ export default function WorkflowPage({ workflowId, canManage }) {
         <span className="workflow-pill">{data.states.length} nodes</span><span className="workflow-pill">{data.transitions.length} connections</span>
         <span className={`workflow-pill ${data.version.status === 'draft' ? 'workflow-pill--warning' : 'workflow-pill--success'}`}>{data.version.status === 'draft' ? 'Draft' : data.version.status === 'published' ? 'Published' : 'Retired'}</span>
         {editable ? <><SecondaryButton size="medium" leftIcon="plus" disabled={disabled || moving} onClick={() => editNode(null)}>Add Node</SecondaryButton>
-          <PrimaryButton size="medium" leftIcon="save" disabled={disabled || moving || data.version.status !== 'draft'} onClick={() => execute('publish', { changeSummary: 'Workflow flow saved' })}>Save Flow</PrimaryButton></> : null}
+          <PrimaryButton size="medium" leftIcon="save" disabled={disabled || moving || data.version.status !== 'draft'} onClick={() => execute('save_flow', { changeSummary: 'Workflow flow saved' })}>Save Flow</PrimaryButton></> : null}
       </div></div> : null}
     </div></div></div></PageHeader>
+    {!form && action.message ? <div className="alert alert-success m-4" role="status">{action.message}</div> : null}
     {!form && action.error ? <div className="alert alert-danger m-4" role="alert">{action.error.message}
       {action.uncertain ? <button type="button" className="btn btn-link" disabled={action.busy} onClick={() => execute()}>{action.saved ? 'Retry Reload' : 'Retry Save'}</button> : null}
       {action.stale ? <button type="button" className="btn btn-link" disabled={action.busy} onClick={reloadWorkflow}>Reload workflow</button> : null}

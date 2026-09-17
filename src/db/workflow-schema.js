@@ -103,15 +103,15 @@ export const workflowEditorCommands = pgTable('workflow_editor_commands', {
 }, (t) => [primaryKey({ name: 'workflow_editor_command_pk', columns: [t.organizationId, t.requestId] }),
   unique('workflow_editor_command_revision_key').on(t.organizationId, t.workflowVersionId, t.revision),
   link(t, t.workflowId, workflows), link(t, t.sourceVersionId, workflowVersions), link(t, t.workflowVersionId, workflowVersions), actor(t, t.savedBy),
-  check('workflow_editor_command_operation', sql`${t.operation} in ('create_state','patch_state','delete_state','create_transition','patch_transition','delete_transition','publish')`),
+  check('workflow_editor_command_operation', sql`${t.operation} in ('create_state','patch_state','delete_state','create_transition','patch_transition','delete_transition','publish','save_draft')`),
   check('workflow_editor_command_revision', sql`${t.sourceRevision}>0 and ${t.revision}>1 and (
     (${t.sourceVersionId}=${t.workflowVersionId} and ${t.revision}=${t.sourceRevision}+1)
-    or (${t.sourceVersionId}<>${t.workflowVersionId} and ${t.revision}=2 and ${t.operation}<>'publish'))`),
+    or (${t.sourceVersionId}<>${t.workflowVersionId} and ${t.revision}=2 and ${t.operation} not in ('publish','save_draft')))`),
   check('workflow_editor_command_elements', sql`(
     (${t.operation} in ('patch_state','delete_state','patch_transition','delete_transition') and ${t.sourceElementId} is not null and ${t.elementId} is not null
       and (${t.sourceVersionId}<>${t.workflowVersionId} or ${t.sourceElementId}=${t.elementId}))
     or (${t.operation} in ('create_state','create_transition') and ${t.sourceElementId} is null and ${t.elementId} is not null)
-    or (${t.operation}='publish' and ${t.sourceElementId} is null and ${t.elementId} is null))`),
+    or (${t.operation} in ('publish','save_draft') and ${t.sourceElementId} is null and ${t.elementId} is null))`),
   check('workflow_editor_command_fingerprint', sql`octet_length(${t.fingerprint})=32`),
 ]);
 
