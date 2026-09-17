@@ -37,8 +37,9 @@ try {
   report.generationRuntimeFiles = generationRuntime.fileList.size;
   const generationFiles = [...generationRuntime.fileList].map(file => path.resolve(root, file));
   report.generationRoutes = [];
-  for (const resource of ['products', 'test-parameters', 'methods']) {
-    const file = `.next/server/app/api/masters/${resource}/custom-field-generation/route.js.nft.json`;
+  const generationRoutes = [...['products', 'test-parameters', 'methods'].map(resource => `.next/server/app/api/masters/${resource}/custom-field-generation/route.js.nft.json`),
+    '.next/server/app/api/users/custom-fields/generate/route.js.nft.json'];
+  for (const file of generationRoutes) {
     const trace = JSON.parse(await readFile(file, 'utf8')); const included = new Set(trace.files.map(entry => path.resolve(path.dirname(file), entry)));
     report.generationRoutes.push({ path: file, missing: generationFiles.filter(entry => !included.has(entry)).map(entry => path.relative(root, entry)) });
   }

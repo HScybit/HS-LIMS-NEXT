@@ -14,6 +14,8 @@ const nextConfig = {
     '/api/organization-settings/module-access/options': userOptionRuntimeFiles,
     '/api/masters/{products,test-parameters,methods}/custom-field-generation': ['./package.json', './src/custom-fields/*.js', './src/masters/custom-field-config.js', './src/auth/errors.js',
       './node_modules/moment/**', './node_modules/moment-timezone/**'],
+    '/api/users/custom-fields/generate': ['./package.json', './src/custom-fields/*.js', './src/masters/custom-field-config.js', './src/auth/errors.js',
+      './node_modules/moment/**', './node_modules/moment-timezone/**'],
   },
   async headers() {
     // Next 16.3.4 appends Route Handler Content-Type as an array, which its

@@ -1254,6 +1254,13 @@
       "when": 1789582564593,
       "tag": "0178_method_field_attachment_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "7",
+      "when": 1789602291575,
+      "tag": "0179_user_custom_field_generation",
+      "breakpoints": true
     }
   ]
 }

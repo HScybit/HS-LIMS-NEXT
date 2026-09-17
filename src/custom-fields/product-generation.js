@@ -112,3 +112,4 @@ async function generateMasterScheme({ field, doc, settings = {}, clock, counts, 
 export const generateProductScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.products } }, 'product');
 export const generateParameterScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.parameters } }, 'parameter');
 export const generateMethodScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.methods } }, 'method');
+export const generateUserScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.users } }, 'user');

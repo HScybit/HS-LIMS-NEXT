@@ -1,4 +1,4 @@
-import { customFieldInitialValue, customFieldSubmittedValue, customFieldValidationError, customFieldNeedsGeneration } from '../custom-fields/form-values.js';
+import { customFieldInitialValue, customFieldSubmittedValue, customFieldValidationError } from '../custom-fields/form-values.js';
 import { userFieldUserOption } from './custom-field-options.js';
 
 export const userCustomFieldName = field => `pf_${field.key}`;
@@ -18,12 +18,28 @@ export function userCustomFieldPayload(fields, values, { revision, timeZone } = 
     ...(fields.some(field => ['date', 'date_time'].includes(field.fieldType)) ? { customFieldTimeZone: timeZone } : {}) };
 }
 
-export function userCustomFieldErrors(fields, values, mode) {
+export function userCustomFieldGenerationPayload(fields, values, draft, { userId, fieldId, timeZone } = {}) {
+  const keys = ['displayName', 'email', 'username', 'phone', 'designation', 'canManagePeople', 'businessUnitId', 'defaultRoleId', 'laboratoryId',
+    ...(userId ? ['reportingManagerId'] : [])];
+  return { user: Object.fromEntries(keys.map(key => [key, draft[key]])), customFields: [],
+    ...userCustomFieldPayload(fields, values, { timeZone }), ...(userId ? { userId } : {}), ...(fieldId ? { fieldId } : {}) };
+}
+
+export function userCustomFieldGeneratedValues(fields, values, generated) {
+  const byId = new Map(fields.map(field => [field.id, userCustomFieldName(field)]));
+  const next = { ...values };
+  for (const item of generated) {
+    if (!byId.has(item.fieldId) || typeof item.value !== 'string') throw new Error('The generated fields changed. Reload before generating.');
+    next[byId.get(item.fieldId)] = item.value;
+  }
+  return next;
+}
+
+export function userCustomFieldErrors(fields, values) {
   const errors = {};
   for (const field of fields) {
     const name = userCustomFieldName(field); const value = values[name];
-    const error = customFieldNeedsGeneration(field, mode, value)
-      ? 'Enter a value while automatic generation is unavailable.' : customFieldValidationError(field, value);
+    const error = customFieldValidationError(field, value);
     if (error) errors[name] = error;
   }
   return errors;

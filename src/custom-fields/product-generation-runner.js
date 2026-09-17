@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { HttpError } from '../auth/errors.js';
 
 // This is a command deadline, not a fallback counter. A timeout never produces an unverified number.
-export async function runMasterGeneration(data, readPage, { timeoutMs = 10_000 } = {}) {
+export async function runMasterGeneration(data, readPage, { timeoutMs = 10_000, readLookup } = {}) {
   const worker = new Worker(resolve(process.cwd(), 'src/custom-fields/product-generation-worker.js'), {
     workerData: data, execArgv: [], env: {}, resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 16 },
   });
@@ -18,11 +18,11 @@ export async function runMasterGeneration(data, readPage, { timeoutMs = 10_000 }
         if (finished) return;
         if (message.type === 'result') { finished = true; resolve(message.values); }
         else if (message.type === 'error') fail(new HttpError(422, 'invalid_scheme', message.message));
-        else if (message.type === 'page') {
+        else if (message.type === 'page' || message.type === 'lookup') {
           activeRead = activeRead.then(async () => {
             if (finished) return;
             try {
-              const rows = await readPage(message.fieldId, message.cursor);
+              const rows = message.type === 'lookup' ? await readLookup(message.fieldId, message.value) : await readPage(message.fieldId, message.cursor);
               if (!finished) worker.postMessage({ id: message.id, rows });
             } catch (error) { fail(error); }
           });

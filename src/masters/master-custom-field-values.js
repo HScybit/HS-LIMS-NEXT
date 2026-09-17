@@ -94,7 +94,7 @@ function postgresDate(value, includeTime = false) {
   return day + (includeTime ? value.format(' HH:mm:ss.SSS') + '+00' : '') + era;
 }
 
-async function currentLookupSelections(kind, client, identity, definitions, entries) {
+export async function currentLookupSelections(kind, client, identity, definitions, entries) {
   const bySource = new Map();
   for (const entry of entries) {
     const field = definitions.get(entry.fieldId);

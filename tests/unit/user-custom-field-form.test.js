@@ -39,11 +39,11 @@ test('user payloads preserve omission, exact field order/revisions, raw types an
   assert.equal(Object.hasOwn(creation, 'customFieldRevision'), false); assert.equal(Object.hasOwn(creation, 'customFieldTimeZone'), false);
 });
 
-test('manual validation covers required/repeated/numeric entries and does not bypass unavailable automatic generation', () => {
+test('validation after generation covers required/repeated/numeric entries without requiring optional schemes', () => {
   const fields = [field('required', { isRequired: true }), field('number', { fieldType: 'number' }), field('repeat', { allowsMultiple: true, isRequired: true }),
     field('auto', { scheme: '{{total_counter}}', generatedAt: 'on_init' }), field('demand', { scheme: '{{total_counter}}', generatedAt: 'on_demand' })];
   const values = { pf_required: '', pf_number: 'bad', pf_repeat: [false, ''], pf_auto: '', pf_demand: '' };
-  assert.deepEqual(Object.keys(userCustomFieldErrors(fields, values, 'create')), ['pf_required', 'pf_number', 'pf_repeat', 'pf_auto']);
+  assert.deepEqual(Object.keys(userCustomFieldErrors(fields, values, 'create')), ['pf_required', 'pf_number', 'pf_repeat']);
   assert.equal(Object.hasOwn(userCustomFieldErrors(fields, values, 'edit'), 'pf_auto'), false);
   assert.deepEqual(userCustomFieldErrors(fields, { pf_required: 'yes', pf_number: 0, pf_repeat: [0], pf_auto: 'Manual value', pf_demand: '' }, 'create'), {});
 });

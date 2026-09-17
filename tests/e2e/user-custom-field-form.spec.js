@@ -194,13 +194,101 @@ test('zero active fields omit capture writes and permission refresh retains addi
   expect((await record(page, f.person.userId)).fieldCapture.revision).toBe(1);
 });
 
-test('unavailable automatic generation cannot be silently bypassed while manually supplied values remain usable', async ({ page }) => {
+test('manual User generation is available and manually supplied values remain usable', async ({ page }, info) => {
   const f = await fixture(page); await f.define('automatic', 'text', { label: 'Automatic code', scheme: '{{total_counter}}', generatedAt: 'on_submit' }); await edit(page, f);
-  await expect(page.getByRole('button', { name: 'Generate Automatic code value from scheme', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Update', exact: true }).click(); await expect(page.getByText('Enter a value while automatic generation is unavailable.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Generate Automatic code value from scheme', exact: true }).click();
+  await expect(page.getByLabel('Automatic code', { exact: true })).toHaveValue('4');
   expect((await record(page, f.person.userId)).fieldCapture.revision).toBe(0);
+  await page.setViewportSize({ width: 390, height: 844 }); await page.getByLabel('Automatic code', { exact: true }).scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.getByRole('button', { name: 'Generate Automatic code value from scheme', exact: true }).click();
+  await expect(page.getByLabel('Automatic code', { exact: true })).toBeEnabled();
+  await page.screenshot({ path: info.outputPath('user-generation-mobile.png'), fullPage: true, animations: 'disabled' });
   await page.getByLabel('Automatic code', { exact: true }).fill('Manually supplied code'); await page.getByRole('button', { name: 'Update', exact: true }).click(); await expect(page).toHaveURL(/\/user_management(?:\?|$)/);
   expect((await record(page, f.person.userId)).fieldCapture.customFields[0].value).toBe('Manually supplied code');
+});
+
+test('submit generation feeds later fields, omits passwords, and an unknown save retries the original generated values', async ({ page }, info) => {
+  const f = await fixture(page);
+  const serial = await f.define('serial', 'text', { label: 'Serial', scheme: 'U/{{scheme_counter}}', generatedAt: 'on_submit', displayOrder: 0 });
+  await f.define('copy', 'text', { label: 'Copy', scheme: '{{serial}}/{{entity.contact_number}}', generatedAt: 'on_submit', displayOrder: 1 });
+  await edit(page, f); await page.getByLabel('Contact Number', { exact: true }).fill('123');
+  await page.getByLabel('Password', { exact: true }).fill('Synthetic-generation-secret!');
+  const generations = []; const saves = [];
+  await page.route('**/api/users/custom-fields/generate', route => { generations.push(route.request().postDataJSON()); return route.continue(); });
+  await page.route(`**/api/users/${f.person.userId}`, async route => {
+    if (route.request().method() !== 'PATCH') return route.continue();
+    saves.push(route.request().postDataJSON());
+    if (saves.length === 1) {
+      const response = await route.fetch(); expect(response.status()).toBe(200);
+      return route.fulfill({ status: 503, json: { error: { message: 'Synthetic lost generated save response.' } } });
+    }
+    return route.continue();
+  });
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Retry save', exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Serial', { exact: true })).toHaveValue('U/1'); await expect(page.getByLabel('Copy', { exact: true })).toHaveValue('U/1/123');
+  await expect(page.getByRole('button', { name: 'Generate Serial value from scheme', exact: true })).toBeDisabled();
+  expect(generations).toHaveLength(1); expect(generations[0].user).not.toHaveProperty('password');
+  expect(JSON.stringify(generations[0])).not.toContain('Synthetic-generation-secret!');
+  await page.getByLabel('Password', { exact: true }).evaluate(input => { input.value = ''; });
+  await page.screenshot({ path: info.outputPath('user-generated-values-retry.png'), fullPage: true, animations: 'disabled' });
+  await f.change((client, identity) => retireCustomField(client, identity, { id: serial.id, revision: 1, requestId: randomUUID() }));
+  await page.getByRole('button', { name: 'Retry save', exact: true }).click(); await expect(page).toHaveURL(/\/user_management(?:\?|$)/);
+  expect(generations).toHaveLength(1); expect(saves).toHaveLength(2); expect(saves[1]).toEqual(saves[0]);
+  const saved = await record(page, f.person.userId); expect(saved.fieldCapture.revision).toBe(1);
+  expect(saved.fieldCapture.customFields.map(field => field.value)).toEqual(['U/1', 'U/1/123']);
+});
+
+test('failed generation retains the draft and a manual replacement can be saved without another generation request', async ({ page }) => {
+  const f = await fixture(page); await f.define('broken', 'text', { label: 'Broken scheme', scheme: '[{{scheme_counter}}', generatedAt: 'on_submit' });
+  await edit(page, f); await page.getByLabel('Designation', { exact: true }).fill('Retained designation');
+  let generations = 0; await page.route('**/api/users/custom-fields/generate', route => { generations++; return route.continue(); });
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  await expect(page.locator('form').getByRole('alert')).toContainText('The scheme pattern is invalid.');
+  await expect(page.getByLabel('Designation', { exact: true })).toHaveValue('Retained designation');
+  await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeEnabled();
+  expect((await record(page, f.person.userId)).fieldCapture.revision).toBe(0);
+  await page.getByLabel('Broken scheme', { exact: true }).fill('Manual replacement');
+  await page.getByRole('button', { name: 'Update', exact: true }).click(); await expect(page).toHaveURL(/\/user_management(?:\?|$)/);
+  expect(generations).toBe(1); expect((await record(page, f.person.userId)).fieldCapture.customFields[0].value).toBe('Manual replacement');
+});
+
+test('new users generate on-init values at submit while an edited blank on-init field remains blank', async ({ page }) => {
+  const f = await fixture(page); await f.define('created_code', 'text', { label: 'Created code', scheme: '{{entity.name}}/{{total_counter}}', generatedAt: 'on_init' });
+  await page.goto('/user_management/new'); const username = `generated-user-${randomUUID()}`;
+  await page.getByLabel('Name', { exact: true }).fill('Generated user'); await page.getByLabel('Email', { exact: true }).fill(`${username}@example.invalid`);
+  await page.getByLabel('Username/Employee ID', { exact: true }).fill(username); await page.getByLabel('Password', { exact: true }).fill('Synthetic creation password');
+  await select(page, 'Default Role', 'Control role'); await select(page, 'Lab', 'Control laboratory');
+  await expect(page.getByLabel('Created code', { exact: true })).toHaveValue('');
+  await page.getByRole('button', { name: 'Create', exact: true }).click(); await expect(page).toHaveURL(/\/user_management(?:\?|$)/);
+  const person = (await owner.query('SELECT id FROM users WHERE username=$1', [username])).rows[0];
+  expect((await record(page, person.id)).fieldCapture.customFields[0].value).toBe('Generated user/4');
+  await page.goto(`/user_management/${person.id}/edit`); await page.getByLabel('Created code', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Update', exact: true }).click(); await expect(page).toHaveURL(/\/user_management(?:\?|$)/);
+  expect((await record(page, person.id)).fieldCapture.customFields[0].value).toBe('');
+});
+
+test('generation refresh conflicts retain entries and HTTP requires CSRF and User management authority', async ({ page }) => {
+  const f = await fixture(page); const field = await f.define('code', 'text', { label: 'Code', scheme: 'Original', generatedAt: 'on_demand' });
+  await edit(page, f); await page.getByLabel('Code', { exact: true }).fill('Unsaved value');
+  const input = { userId: f.person.userId, user: {}, fieldId: field.id, customFields: [{ fieldId: field.id, fieldRevision: 1, value: '' }] };
+  const origin = new URL(page.url()).origin;
+  expect((await page.request.post('/api/users/custom-fields/generate', { data: input, headers: { Origin: origin } })).status()).toBe(403);
+  const csrf = (await page.context().cookies()).find(cookie => cookie.name === 'sampleify_csrf').value;
+  expect((await page.request.post('/api/users/custom-fields/generate', { data: { ...input, user: { password: 'Disallowed' } }, headers: { Origin: origin, 'X-CSRF-Token': csrf } })).status()).toBe(400);
+  await page.route('**/api/users/custom-fields', route => route.fulfill({ json: { fields: [{ ...field, options: [] }] } }));
+  await f.define('code', 'text', { id: field.id, revision: 1, label: 'Updated code', scheme: 'Changed', generatedAt: 'on_demand' });
+  await page.getByRole('button', { name: 'Generate Code value from scheme', exact: true }).click();
+  await expect(page.locator('form').getByRole('alert')).toContainText('Custom Fields changed.');
+  await expect(page.getByLabel('Code', { exact: true })).toHaveValue('Unsaved value');
+  await page.unroute('**/api/users/custom-fields'); await page.getByRole('button', { name: 'Reload additional fields', exact: true }).click();
+  await expect(page.getByLabel('Updated code', { exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Generate Updated code value from scheme', exact: true }).click();
+  await expect(page.getByLabel('Updated code', { exact: true })).toHaveValue('Changed');
+  const viewer = await createAccount(owner, { organizationId: f.author.organizationId, permissions: ['users.read'] }); await login(page, viewer);
+  const viewerCsrf = (await page.context().cookies()).find(cookie => cookie.name === 'sampleify_csrf').value;
+  expect((await page.request.post('/api/users/custom-fields/generate', { data: input, headers: { Origin: origin, 'X-CSRF-Token': viewerCsrf } })).status()).toBe(403);
 });
 
 test('a late account error rolls back additional fields and an unknown edit replays the complete original request', async ({ page }) => {
