@@ -10,7 +10,7 @@ export default function MasterCustomFieldFile({ kind, field, value, stored, disa
   const id = `${kind}-custom-field-${field.id}`; const fileId = String(value ?? '').trim().toLowerCase();
   const file = uploaded?.id === fileId ? uploaded : stored?.items.find((item) => item.attachmentId === fileId)?.attachment;
   const name = file?.originalName || fileId;
-  const url = fileId ? `${kind === 'user' ? '/api/users/custom-fields/attachments' : '/api/custom-fields/attachments'}/${encodeURIComponent(fileId)}` : '';
+  const url = fileId ? `${kind === 'instrument' ? '/api/instruments/custom-fields/attachments' : kind === 'user' ? '/api/users/custom-fields/attachments' : '/api/custom-fields/attachments'}/${encodeURIComponent(fileId)}` : '';
   useEffect(() => () => { controller.current?.abort(); }, []);
 
   async function upload(file) {
@@ -19,7 +19,7 @@ export default function MasterCustomFieldFile({ kind, field, value, stored, disa
     const pending = request.current; const abort = new AbortController(); controller.current = abort;
     setUploading(true); setFailure(''); onBusy(field.id, true);
     try {
-      const result = await uploadCustomFieldFile(pending.field, file, pending.id, abort.signal, { userFields: kind === 'user' });
+      const result = await uploadCustomFieldFile(pending.field, file, pending.id, abort.signal, { userFields: kind === 'user', instrumentFields: kind === 'instrument' });
       if (!abort.signal.aborted) { setUploaded(result); onChange(result.id); request.current = null; }
     } catch (failure) {
       if (!abort.signal.aborted) setFailure(failure.message);

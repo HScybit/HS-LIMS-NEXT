@@ -4,7 +4,7 @@ import { customFieldFormDisplayValue, customFieldNeedsGeneration } from '../cust
 import { customFieldTimeZone, customFieldDateDisplayInZone } from '../custom-fields/server-dates.js';
 import { schemeTokens } from '../custom-fields/product-generation.js';
 import { runMasterGeneration } from '../custom-fields/product-generation-runner.js';
-import { productCustomFields, parameterCustomFields, methodCustomFields, customerCustomFields, vendorCustomFields } from './custom-fields.js';
+import { productCustomFields, parameterCustomFields, methodCustomFields, customerCustomFields, vendorCustomFields, instrumentCustomFields } from './custom-fields.js';
 import { currentLookupSelections, lookupOptionsForValue } from './master-custom-field-values.js';
 
 const stores = Object.freeze({
@@ -18,12 +18,15 @@ const stores = Object.freeze({
     context: 'masters_customer_scheme_context', definitions: customerCustomFields, countKey: 'customers', countColumn: 'customerCount', retirement: true }),
   vendor: Object.freeze({ label: 'Vendor', collection: 'VendorMaster', table: 'vendors', fieldTable: 'vendor_version_custom_fields', idColumn: 'vendor_id',
     context: 'masters_vendor_scheme_context', definitions: vendorCustomFields, countKey: 'vendors', countColumn: 'vendorCount', retirement: true }),
+  instrument: Object.freeze({ label: 'Instrument', collection: 'Equipment', table: 'instruments', fieldTable: 'instrument_version_custom_fields', idColumn: 'instrument_id',
+    context: 'instruments_scheme_context', definitions: instrumentCustomFields, countKey: 'instruments', countColumn: 'instrumentCount', retirement: true,
+    permission: 'instruments.manage', counterDefinitionTable: 'instrument_custom_field_versions' }),
 });
 
 export async function generateMasterCustomFields(kind, client, identity, command) {
-  requirePermission(identity, 'masters.manage');
   if (!Object.hasOwn(stores, kind)) throw new TypeError('Unsupported Custom Field master.');
   const store = stores[kind];
+  requirePermission(identity, store.permission ?? 'masters.manage');
   const fields = await store.definitions(client, identity);
   const byId = new Map(fields.map((field) => [field.id, field]));
   if (fields.length !== command.customFields.length || command.customFields.some((item) => byId.get(item.fieldId)?.revision !== item.fieldRevision)) {
@@ -64,7 +67,9 @@ export async function generateMasterCustomFields(kind, client, identity, command
       SELECT product.id,product.created_at,product.updated_at,field.display_text
       FROM ${store.table} product JOIN ${store.fieldTable} field
         ON field.organization_id=product.organization_id AND field.${store.idColumn}=product.id AND field.revision=product.revision
-      WHERE product.organization_id=$1 AND field.field_id=$2 AND ${store.retirement ? 'NOT product.retired' : 'product.active'} AND field.display_kind='text'
+      ${store.counterDefinitionTable ? `JOIN ${store.counterDefinitionTable} definition
+        ON definition.organization_id=field.organization_id AND definition.field_id=field.field_id AND definition.revision=field.field_revision` : ''}
+      WHERE product.organization_id=$1 AND ${store.counterDefinitionTable ? 'definition.key' : 'field.field_id'}=$2 AND ${store.retirement ? 'NOT product.retired' : 'product.active'} AND field.display_kind='text'
         AND ($3::uuid IS NULL OR product.id<>$3) AND ($4::timestamptz IS NULL OR (product.created_at,product.updated_at,product.id)<($4::timestamptz,$5::timestamptz,$6::uuid))
       ORDER BY product.created_at DESC,product.updated_at DESC,product.id DESC LIMIT 500
     ), budget AS (
@@ -72,7 +77,7 @@ export async function generateMasterCustomFields(kind, client, identity, command
         row_number() OVER (ORDER BY created_at DESC,updated_at DESC,id DESC) AS position FROM candidates
     ) SELECT id AS "productId",created_at::text AS "createdAt",updated_at::text AS "updatedAt",display_text AS value
       FROM budget WHERE bytes<=8388608 OR position=1 ORDER BY created_at DESC,updated_at DESC,id DESC`,
-    [identity.organization_id, fieldId, command.id, cursor?.createdAt ?? null, cursor?.updatedAt ?? null, cursor?.productId ?? null])).rows;
+    [identity.organization_id, store.counterDefinitionTable ? byId.get(fieldId).key : fieldId, command.id, cursor?.createdAt ?? null, cursor?.updatedAt ?? null, cursor?.productId ?? null])).rows;
   };
   const readLookup = async (fieldId, value) => {
     const selections = await currentLookupSelections(kind, client, identity, byId, [{ fieldId, value }]);

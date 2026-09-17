@@ -1345,6 +1345,27 @@
       "when": 1789637694259,
       "tag": "0191_instrument_module_access",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1789644069358,
+      "tag": "0192_instrument_master_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1789646100511,
+      "tag": "0193_instrument_custom_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1789654490049,
+      "tag": "0194_instrument_read_scope",
+      "breakpoints": true
     }
   ]
 }

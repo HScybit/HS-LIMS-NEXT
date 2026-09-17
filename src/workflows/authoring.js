@@ -152,7 +152,7 @@ export async function patchWorkflowTransition(client, identity, versionId, expec
 
 export async function createWorkflow(client, identity, input) {
   requirePermission(identity, 'workflows.manage'); fieldsOnly(input, ['code', 'name', 'description', 'appliesTo', 'active']);
-  if (!['sample', 'test_request'].includes(input.appliesTo)) throw new HttpError(400, 'invalid_workflow_type', 'Select a supported workflow type.');
+  if (!['sample', 'test_request', 'instrument_service'].includes(input.appliesTo)) throw new HttpError(400, 'invalid_workflow_type', 'Select a supported workflow type.');
   return mutation(async () => {
     const saved = await createWorkflowMaster(client, identity, { ...input, id: randomUUID(), requestId: randomUUID(), metadataRevision: 0,
       code: text(input.code, 'Code', 64), active: bool(input.active ?? true, 'Active') });

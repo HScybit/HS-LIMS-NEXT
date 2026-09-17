@@ -115,3 +115,4 @@ export const generateMethodScheme = (input) => generateMasterScheme({ ...input, 
 export const generateUserScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.users } }, 'user');
 export const generateCustomerScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.customers } }, 'customer');
 export const generateVendorScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.vendors } }, 'vendor');
+export const generateInstrumentScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.instruments } }, 'instrument');

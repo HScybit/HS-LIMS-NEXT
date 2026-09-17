@@ -1,0 +1,386 @@
+.smplfy-instruments-page {
+  --smplfy-instruments-card-border: var(--border-card);
+  --smplfy-instruments-card-radius: 8px;
+  --smplfy-instruments-card-height: 344px;
+  --smplfy-instruments-card-header-height: 56px;
+  --smplfy-instruments-chart-height: 188px;
+}
+
+.smplfy-instruments-page .smplfy-instruments-dashboard-cards .smplfy-card.card {
+  --bs-card-border-color: var(--smplfy-instruments-card-border);
+  --bs-card-border-radius: var(--smplfy-instruments-card-radius);
+  height: var(--smplfy-instruments-card-height);
+  min-height: var(--smplfy-instruments-card-height);
+  max-height: var(--smplfy-instruments-card-height);
+  overflow: hidden;
+}
+
+.smplfy-instruments-page .smplfy-instruments-dashboard-cards .smplfy-card.card > .card-header {
+  height: var(--smplfy-instruments-card-header-height);
+  min-height: var(--smplfy-instruments-card-header-height);
+  flex: 0 0 var(--smplfy-instruments-card-header-height);
+  border-color: var(--smplfy-instruments-card-border);
+  padding: 8px 16px;
+}
+
+.smplfy-instruments-page .smplfy-instruments-dashboard-cards .smplfy-card.card > .card-header h2 {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: #1c2126 !important;
+}
+
+.smplfy-instruments-page .smplfy-instruments-dashboard-cards .smplfy-card.card > .card-header .smplfy-btn.btn span {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
+  letter-spacing: 0;
+  color: #4d5561;
+}
+
+.smplfy-instruments-page .smplfy-instruments-dashboard-cards .smplfy-card.card > .card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 32px 16px;
+}
+
+.smplfy-instruments-page .smplfy-instruments-dashboard-cards .smplfy-card.card > .card-body.overflow-auto {
+  max-height: calc(var(--smplfy-instruments-card-height) - var(--smplfy-instruments-card-header-height));
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+
+.smplfy-instruments-page .smplfy-instruments-dashboard-cards .smplfy-card.card > .card-body > .badge {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0;
+  color: #3f9443 !important;
+}
+
+.smplfy-instruments-health-pill.badge {
+  background-color: var(--smplfy-status-pill-green-subtle-bg, #e9f6ea) !important;
+  border-color: var(--smplfy-status-pill-green-subtle-border, #a9dca9) !important;
+  color: var(--smplfy-status-pill-green-subtle-text, #3f9443) !important;
+}
+
+.smplfy-instruments-health-meter {
+  width: min(360px, 100%);
+  height: var(--smplfy-instruments-chart-height);
+}
+
+.smplfy-instruments-health-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.smplfy-instruments-health-copy {
+  top: 63%;
+}
+
+.smplfy-instruments-health-value {
+  font-family: 'Inter', sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: #4daf51;
+}
+
+.smplfy-instruments-health-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  color: #b2b2b2;
+}
+
+.smplfy-instruments-page .list-group-item {
+  min-height: 64px;
+  border-color: var(--smplfy-instruments-card-border);
+}
+
+.smplfy-instruments-page .list-group-item .badge {
+  font-family: 'Inter', sans-serif;
+  min-width: 104px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.smplfy-instruments-alert-pill.badge {
+  border-style: solid !important;
+}
+
+.smplfy-instruments-alert-pill.is-calibration {
+  background-color: var(--smplfy-status-pill-blue-subtle-bg, #f1f8fe) !important;
+  border-color: var(--smplfy-status-pill-blue-subtle-border, #94ccf9) !important;
+  color: var(--smplfy-status-pill-blue-subtle-text, #0e5fbb) !important;
+}
+
+.smplfy-instruments-alert-pill.is-preventive-maintenance {
+  background-color: var(--smplfy-status-pill-orange-subtle-bg, #fefcf5) !important;
+  border-color: var(--smplfy-status-pill-orange-subtle-border, #f5dfad) !important;
+  color: var(--smplfy-status-pill-orange-subtle-text, #c37538) !important;
+}
+
+.smplfy-instruments-alert-pill.is-breakdown {
+  background-color: var(--smplfy-status-pill-red-subtle-bg, #fff1f1) !important;
+  border-color: var(--smplfy-status-pill-red-subtle-border, #f2a7a7) !important;
+  color: var(--smplfy-status-pill-red-subtle-text, #c62828) !important;
+}
+
+.smplfy-instruments-alert-pill.is-secondary {
+  background-color: var(--smplfy-status-pill-gray-subtle-bg, #f5f6f7) !important;
+  border-color: var(--smplfy-status-pill-gray-subtle-border, #e6e8eb) !important;
+  color: var(--smplfy-status-pill-gray-subtle-text, #6d737e) !important;
+}
+
+.smplfy-instruments-page .list-group-item .flex-grow-1 {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: #1c2126;
+}
+
+.smplfy-instruments-page .list-group-item time {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #4d5561;
+}
+
+.smplfy-instrument-status-pill {
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 24px;
+  gap: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  line-height: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.smplfy-instrument-status-pill.is-working {
+  min-width: 80px;
+  height: 27px;
+  padding: 6px 12px;
+  border-color: #9adea4;
+  background: #e6f7e9;
+  color: #009636;
+}
+
+.smplfy-instrument-status-pill.is-breakdown {
+  min-width: 113px;
+  padding: 6px 16px 6px 12px;
+  border-color: #ffa49e;
+  background: #ec1d1d;
+  color: #fff;
+}
+
+.smplfy-instrument-status-pill.is-breakdown svg {
+  flex: 0 0 16px;
+  color: #fff;
+}
+
+.smplfy-instrument-status-dot {
+  width: 4px;
+  height: 4px;
+  flex: 0 0 4px;
+  border-radius: 9px;
+  background: #009636;
+}
+
+.modal-dialog.smplfy-report-breakdown-modal .modal-body {
+  color: var(--smplfy-primitive-neutral-900);
+  line-height: 160%;
+}
+
+.modal-dialog.smplfy-report-breakdown-modal .modal-footer {
+  border-top: var(--bs-border-width) solid var(--smplfy-primitive-neutral-300);
+}
+
+.smplfy-instruments-page ~ .offcanvas-backdrop.offcanvas-backdrop {
+  background: rgba(2, 21, 39, 0.38);
+  opacity: 1;
+  z-index: 1040;
+}
+
+.smplfy-instruments-page ~ .smplfy-all-samples-offcanvas.offcanvas {
+  --bs-offcanvas-width: 376px;
+  --bs-offcanvas-bg: var(--smplfy-primitive-neutral-100);
+
+  padding: 24px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+  visibility: visible;
+  z-index: 1045;
+}
+
+.smplfy-instruments-page ~ .smplfy-all-samples-offcanvas.offcanvas .offcanvas-header {
+  min-height: 40px;
+  padding: 0 0 20px;
+}
+
+.smplfy-instruments-page ~ .smplfy-all-samples-offcanvas.offcanvas .offcanvas-title {
+  color: var(--smplfy-primitive-neutral-800);
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.smplfy-instruments-page ~ .smplfy-all-samples-offcanvas.offcanvas .offcanvas-body {
+  padding: 24px 0;
+}
+
+.smplfy-instruments-page ~ .smplfy-all-samples-offcanvas.offcanvas > .d-flex:last-child {
+  padding-top: 24px;
+}
+
+@media (max-width: 767.98px) {
+  .smplfy-instruments-page {
+    --smplfy-instruments-card-height: 344px;
+  }
+
+  .smplfy-instruments-page .row {
+    margin-inline: 0;
+  }
+
+  .smplfy-instruments-page .list-group-item {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .smplfy-instruments-page .list-group-item .flex-grow-1 {
+    flex-basis: calc(100% - 140px);
+  }
+}
+
+/* Instrument Health: gauge plus calibration breakdown donut.
+   Ported from the design system app (LIMS-Redesign src/pages/instruments-page.scss). */
+.smplfy-instruments-health-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 24px;
+  padding-block: 20px !important;
+}
+.smplfy-instruments-health-summary {
+  min-width: 0;
+}
+.smplfy-calibration-breakdown {
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--smplfy-instruments-card-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.smplfy-calibration-breakdown-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.smplfy-calibration-breakdown-graphic {
+  position: relative;
+  width: 208px;
+  height: 208px;
+}
+.smplfy-calibration-breakdown-chart {
+  width: 100%;
+  height: 100%;
+}
+.smplfy-calibration-breakdown-center {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  pointer-events: none;
+}
+.smplfy-calibration-breakdown-center strong {
+  color: #00b242;
+  font-family: 'Inter', sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.05;
+}
+.smplfy-calibration-breakdown-center span {
+  color: #99a0a7;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.smplfy-calibration-breakdown-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Four segments rather than the design system's three, so allow wrapping. */
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.smplfy-calibration-breakdown-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  color: #1b2127;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  line-height: 15px;
+  letter-spacing: -0.02em;
+  min-width: 0;
+}
+.smplfy-calibration-breakdown-swatch {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border-radius: 4px;
+}
+.smplfy-calibration-breakdown-legend-label {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+  .smplfy-instruments-health-overview {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .smplfy-calibration-breakdown {
+    padding-top: 20px;
+    padding-left: 0;
+    border-top: 1px solid var(--smplfy-instruments-card-border);
+    border-left: 0;
+  }
+  .smplfy-calibration-breakdown-content {
+    gap: 12px;
+  }
+  // The stacked mobile charts need their content height; the desktop card's
+  // fixed height otherwise clips the entire calibration breakdown.
+  .smplfy-instruments-page .smplfy-instruments-dashboard-cards .smplfy-instruments-health-card.card {
+    height: auto;
+    max-height: none;
+  }
+}

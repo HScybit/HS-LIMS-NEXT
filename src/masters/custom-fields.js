@@ -21,11 +21,15 @@ function requireRead(identity) {
 
 async function masterCustomFields(association, client, identity, { forListing = false } = {}) {
   const userFields = association === 'users';
+  const instrumentFields = association === 'instrument';
   if (userFields) {
     if (!identity.permission_codes?.some(permission => ['users.read', 'users.manage'].includes(permission))) throw new HttpError(403, 'forbidden', 'You cannot view user custom fields.');
+  } else if (instrumentFields) {
+    if (!identity.permission_codes?.some(permission => ['instruments.read', 'instruments.manage'].includes(permission))) throw new HttpError(403, 'forbidden', 'You cannot view Instrument Custom Fields.');
+    if (!(await client.query('SELECT instruments_can_read(NULL) AS allowed')).rows[0]?.allowed) throw new HttpError(403, 'instrument_module_access_required', 'Instrument module access is required.');
   } else requireRead(identity);
-  // Only fixed internal association readers select these tables; user reads use separately scoped views.
-  const prefix = userFields ? 'user_' : '';
+  // Only fixed internal association readers select these tables and scoped views.
+  const prefix = userFields ? 'user_' : instrumentFields ? 'instrument_' : '';
   const fields = (await client.query(`SELECT definition.id,definition.revision,field.field_id AS "versionId",
     field.option_count AS "optionCount",${Object.entries(columns).map(([key, column]) => `field.${column} AS "${key}"`).join(',')}
     FROM (SELECT id,revision,organization_id FROM ${prefix}custom_field_definitions
@@ -65,6 +69,7 @@ export const productCustomFields = (...args) => masterCustomFields('product', ..
 export const parameterCustomFields = (...args) => masterCustomFields('parameter', ...args);
 export const methodCustomFields = (...args) => masterCustomFields('method_of_analysis', ...args);
 export const userCustomFields = (...args) => masterCustomFields('users', ...args);
+export const instrumentCustomFields = (...args) => masterCustomFields('instrument', ...args);
 export async function customerCustomFields(client, identity, options) {
   requireRead(identity);
   if (!(await client.query("SELECT masters_can_read_party('customer') AS allowed")).rows[0]?.allowed) {

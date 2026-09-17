@@ -31,6 +31,10 @@ import { uploadNablFile, readNablFile } from '../src/compliance/nabl-files.js';
 import { quickCreateCustomer } from '../src/samples/customer.js';
 import { saveCustomer, loadCustomer, retireCustomer } from '../src/masters/customers.js';
 import { saveVendor, loadVendor, retireVendor } from '../src/masters/vendors.js';
+import { saveInstrumentCore, loadInstrumentCore, retireInstrumentCore } from '../src/instruments/core.js';
+import { listInstruments } from '../src/instruments/list.js';
+import { generateInstrumentCustomFields } from '../src/instruments/custom-field-generation.js';
+import { uploadInstrumentFieldAttachment, readInstrumentFieldAttachment } from '../src/instruments/custom-field-attachments.js';
 import { registerSample } from '../src/samples/register.js';
 import { loadSample } from '../src/samples/load.js';
 import { generateTestRequests } from '../src/test-requests/generate.js';
@@ -75,7 +79,7 @@ import { loadReportRenderer } from '../src/reports/renderer.js';
 import { createReportWorkerPool, verifyReportWorkerRole, processNextReportJob } from '../src/reports/worker.js';
 import { createRole, updateRole, retireRole, loadRole, listRoles, loadRoleSettings } from '../src/roles/service.js';
 import { loadLaboratorySettings, saveLaboratorySettings } from '../src/organization-settings/service.js';
-import { emptyModuleAccess, moduleAccessValues } from '../tests/helpers/module-access.js';
+import { emptyModuleAccess, moduleAccessValues, saveModuleAccessSettings } from '../tests/helpers/module-access.js';
 import { loadModuleAccess } from '../src/organization-settings/module-access.js';
 import { createChecklist, updateChecklist, retireChecklist, loadChecklist, listChecklists } from '../src/checklists/service.js';
 
@@ -119,6 +123,37 @@ try {
   assert.equal((await getPool().query('SELECT * FROM templates')).rowCount, 0);
   const account = await createAccount(owner, { permissions: ['templates.read', 'templates.manage', 'datasheets.execute', 'samples.read', 'samples.create', 'samples.manage', 'test_requests.allocate', 'settings.manage', 'report_settings.manage', 'masters.manage', 'roles.manage', 'workflows.manage', 'checklists.manage'] });
   const session = await signIn({ identifier: account.username, password: account.password });
+  const instrumentAccount = await createAccount(owner, { permissions: ['instruments.manage', 'settings.manage', 'masters.manage'] });
+  const instrumentActor = { ...instrumentAccount, ...await signIn({ identifier: instrumentAccount.username, password: instrumentAccount.password }) };
+  const instrumentWork = (action, readOnly = false) => withSession(instrumentActor.token, action, { readOnly });
+  const instrumentModules = emptyModuleAccess(); instrumentModules[2] = { ...instrumentModules[2], enabled: true, userIds: [instrumentAccount.userId] };
+  await saveModuleAccessSettings(instrumentActor, instrumentModules, { instrumentServiceTypes: [{ id: randomUUID(), serviceCode: 'calibration', displayLabel: 'Calibration', isActive: true }] });
+  const instrumentLab = randomUUID();
+  await owner.query("INSERT INTO laboratories(organization_id,id,code,name) VALUES($1,$2,'FRESH-INSTRUMENT','Fresh Instrument lab')", [instrumentAccount.organizationId, instrumentLab]);
+  const instrumentFields = [];
+  for (const [fieldType, key, extra] of [['text', 'reference', { scheme: '{{entity.uniqueKey}}/{{scheme_counter}}', splitter: '/' }], ['attachment', 'file', {}]]) {
+    instrumentFields.push(await instrumentWork((client, identity) => saveCustomField(client, identity,
+      { id: randomUUID(), revision: 0, requestId: randomUUID(), label: key, key, fieldType, associatedWith: 'instrument', displayOrder: instrumentFields.length, ...extra })));
+  }
+  const instrumentBytes = Buffer.from('Fresh Instrument attachment');
+  const instrumentFile = await instrumentWork((client, identity) => uploadInstrumentFieldAttachment(client, identity, { requestId: randomUUID(), fieldId: instrumentFields[1].id,
+    fieldRevision: 1, originalName: 'fresh-instrument.txt', mediaType: 'text/plain', content: instrumentBytes }));
+  const instrumentValues = instrumentFields.map((field, index) => ({ fieldId: field.id, fieldRevision: 1, value: index ? instrumentFile.id : '' }));
+  const instrumentGenerated = await instrumentWork((client, identity) => generateInstrumentCustomFields(client, identity, { instrument: { code: 'FRESH-INSTRUMENT' }, customFields: instrumentValues }), true);
+  assert.equal(instrumentGenerated.values[0].value, 'FRESH-INSTRUMENT/1'); instrumentValues[0].value = instrumentGenerated.values[0].value;
+  const instrumentCommand = { id: randomUUID(), revision: 0, requestId: randomUUID(), name: 'Fresh Instrument', code: 'FRESH-INSTRUMENT', laboratoryId: instrumentLab,
+    dateOfInstallation: '0001-01-01', allowedUserIds: [instrumentAccount.userId], active: false, calibrated: false, costOfEquipment: '0', customFields: instrumentValues,
+    serviceConfigurations: [{ id: randomUUID(), serviceCode: 'calibration', reminderBeforeDays: 0, lastPerformedOn: '2026-01-01', frequencyDays: 30 }] };
+  const freshInstrument = await instrumentWork((client, identity) => saveInstrumentCore(client, identity, instrumentCommand));
+  assert.deepEqual(await instrumentWork((client, identity) => saveInstrumentCore(client, identity, instrumentCommand)), freshInstrument);
+  assert.equal(freshInstrument.costOfEquipment, '0.00'); assert.equal(freshInstrument.calibrated, false); assert.equal(freshInstrument.retired, false);
+  assert.equal((await instrumentWork((client, identity) => listInstruments(client, identity), true)).totalCount, 1);
+  assert.deepEqual((await instrumentWork((client, identity) => readInstrumentFieldAttachment(client, identity, instrumentFile.id), true)).content, instrumentBytes);
+  await assert.rejects(instrumentWork(client => client.query('UPDATE instruments SET name=$1 WHERE id=$2', ['Raw write', freshInstrument.id])), { code: '42501' });
+  await instrumentWork((client, identity) => retireInstrumentCore(client, identity, { id: freshInstrument.id, revision: 1, requestId: randomUUID() }));
+  assert.equal((await instrumentWork((client, identity) => listInstruments(client, identity), true)).totalCount, 0);
+  assert.deepEqual((await instrumentWork((client, identity) => loadInstrumentCore(client, identity, freshInstrument.id, { atRevision: 2 }), true)).customFields, freshInstrument.customFields);
+  console.log('Fresh Instrument native authoring, configured access, calendar values, fields, attachment, generation, exact retry, history and retirement passed.');
   const bulkAccount = await createAccount(owner, { permissions: ['masters.manage'] });
   const bulkSession = await signIn({ identifier: bulkAccount.username, password: bulkAccount.password });
   const bulkSource = 'name,key\nFresh bulk product,FRESH-BULK'; const bulkId = randomUUID();

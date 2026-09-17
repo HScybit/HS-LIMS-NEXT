@@ -40,7 +40,7 @@ export const workflows = pgTable('workflows', {
   metadataRevision: integer('metadata_revision').notNull().default(0), createdBy: uuid('created_by'), updatedBy: uuid('updated_by'), updatedAt: time('updated_at'),
 }, (t) => [key(t), actor(t, t.createdBy), actor(t, t.updatedBy), uniqueIndex('workflow_code_key').on(t.organizationId, sql`lower(${t.code})`), unique('workflow_entity_type_key').on(t.organizationId, t.id, t.appliesTo),
   index('workflow_active_name').on(t.organizationId, t.name).where(sql`${t.active}`), check('workflow_metadata_revision', sql`${t.metadataRevision}>=0`),
-  check('workflow_metadata', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 200 and ${t.appliesTo} in ('sample', 'test_request')`)]);
+  check('workflow_metadata', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 200 and ${t.appliesTo} in ('sample', 'test_request', 'instrument_service')`)]);
 
 export const workflowVersions = pgTable('workflow_versions', {
   ...identity(), workflowId: uuid('workflow_id').notNull(), number: integer('number').notNull(), revision: integer('revision').notNull().default(1),
@@ -66,7 +66,7 @@ export const workflowMetadataVersions = pgTable('workflow_metadata_versions', {
   check('workflow_metadata_history_revision', sql`(${t.operation}='create' and ${t.previousRevision} is null and ${t.revision}=1 and ${t.initialVersionId} is not null)
     or (${t.operation} in ('update','retire') and ${t.previousRevision} is not null and ${t.previousRevision}>=0 and ${t.revision}=${t.previousRevision}+1 and ${t.initialVersionId} is null)`),
   check('workflow_metadata_history_fields', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 200
-    and ${t.appliesTo} in ('sample','test_request') and (${t.requestedAppliesTo} is null or ${t.requestedAppliesTo} in ('sample','test_request'))
+    and ${t.appliesTo} in ('sample','test_request','instrument_service') and (${t.requestedAppliesTo} is null or ${t.requestedAppliesTo} in ('sample','test_request','instrument_service'))
     and (not ${t.generatedCode} or (${t.operation}='create' and ${t.requestedCode} is not null))
     and (${t.operation}<>'retire' or (not ${t.active} and not ${t.descriptionProvided} and not ${t.generatedCode}
       and num_nonnulls(${t.requestedCode},${t.requestedAppliesTo},${t.requestedActive})=0))`),

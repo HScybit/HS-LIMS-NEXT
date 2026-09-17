@@ -44,7 +44,7 @@ export async function signIn(input) {
 }
 
 export async function publicIdentity(client, identity) {
-  const masterModules = (await client.query("SELECT masters_can_read_party('customer') AS customer,masters_can_read_party('vendor') AS vendor")).rows[0];
+  const masterModules = (await client.query("SELECT masters_can_read_party('customer') AS customer,masters_can_read_party('vendor') AS vendor,instruments_can_read(NULL) AS instrument")).rows[0];
   return {
     userId: identity.user_id,
     organizationId: identity.organization_id,

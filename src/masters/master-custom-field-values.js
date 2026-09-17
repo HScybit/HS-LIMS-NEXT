@@ -10,6 +10,9 @@ const stores = Object.freeze({
   method: Object.freeze({ label: 'Method', fieldTable: 'method_version_custom_fields', valueTable: 'method_version_custom_field_values', idColumn: 'method_id', lookupValues: true }),
   customer: Object.freeze({ label: 'Customer', fieldTable: 'customer_version_custom_fields', valueTable: 'customer_version_custom_field_values', idColumn: 'customer_id', lookupValues: true }),
   vendor: Object.freeze({ label: 'Vendor', fieldTable: 'vendor_version_custom_fields', valueTable: 'vendor_version_custom_field_values', idColumn: 'vendor_id', lookupValues: true }),
+  instrument: Object.freeze({ label: 'Instrument', fieldTable: 'instrument_version_custom_fields', valueTable: 'instrument_version_custom_field_values', idColumn: 'instrument_id',
+    definitionTable: 'instrument_custom_field_versions', optionTable: 'instrument_custom_field_version_options', attachmentTable: 'instrument_custom_field_attachments',
+    userTable: 'instrument_access_user_labels', lookupValues: true, attachmentPath: '/api/instruments/custom-fields/attachments' }),
   user: Object.freeze({ label: 'User', fieldTable: 'user_version_custom_fields', valueTable: 'user_version_custom_field_values', idColumn: 'subject_user_id',
     definitionTable: 'user_custom_field_versions', optionTable: 'user_custom_field_version_options', attachmentTable: 'user_custom_field_attachments',
     userTable: 'user_directory', userIdColumn: 'id', frozenUsers: true, lookupValues: true, attachmentPath: '/api/users/custom-fields/attachments' }),
@@ -65,7 +68,7 @@ export async function loadMasterCustomFieldValues(kind, client, identity, master
     FROM ${store.valueTable} item
     LEFT JOIN ${store.optionTable ?? 'custom_field_version_options'} choice ON choice.organization_id=item.organization_id AND choice.field_id=item.field_id
       AND choice.revision=item.option_revision AND choice.id=item.option_id
-    ${store.frozenUsers ? '' : 'LEFT JOIN method_access_user_labels person ON person.organization_id=item.organization_id AND person.user_id=item.user_id'}
+    ${store.frozenUsers ? '' : `LEFT JOIN ${store.userTable ?? 'method_access_user_labels'} person ON person.organization_id=item.organization_id AND person.user_id=item.user_id`}
     LEFT JOIN ${store.attachmentTable ?? 'custom_field_attachments'} file ON file.organization_id=item.organization_id AND file.id=item.attachment_id
     WHERE item.organization_id=$1 AND item.${store.idColumn}=$2 AND item.revision=$3 ORDER BY item.field_id,item.position LIMIT 5001`,
   [identity.organization_id, masterId, revision])).rows;
@@ -102,6 +105,7 @@ export function lookupOptionsForValue(selections, sourceId, value) {
 }
 
 export async function currentLookupSelections(kind, client, identity, definitions, entries) {
+  const scopedLookup = kind === 'user' || kind === 'instrument';
   const bySource = new Map();
   for (const entry of entries) {
     const field = definitions.get(entry.fieldId);
@@ -115,9 +119,9 @@ export async function currentLookupSelections(kind, client, identity, definition
   const rows = (await client.query(`SELECT line.source_id AS "sourceId",line.revision,line.original_line_id AS "lineId",
     line.label_kind AS "labelKind",line.label_text AS "labelText",line.label_number AS "labelNumber",line.label_boolean AS "labelBoolean"
     FROM unnest($2::uuid[],$3::text[]) AS requested(source_id,line_id)
-    JOIN ${kind === 'user' ? 'user_custom_field_lookup_lines' : 'custom_field_lookup_lines'} line
+    JOIN ${scopedLookup ? `${kind}_custom_field_lookup_lines` : 'custom_field_lookup_lines'} line
       ON line.organization_id=$1 AND line.source_id=requested.source_id AND line.original_line_id=requested.line_id
-    ${kind === 'user' ? '' : `JOIN custom_field_lookup_sources source
+    ${scopedLookup ? '' : `JOIN custom_field_lookup_sources source
       ON source.organization_id=line.organization_id AND source.id=line.source_id AND source.revision=line.revision`}`,
   [identity.organization_id, pairs.map(([id]) => id), pairs.map(([, value]) => value)])).rows;
   for (const row of rows) {

@@ -18,7 +18,7 @@ export function workflowMetadataInput(input, { create = false } = {}) {
   const name = workflowText(input.name, 'Name', 200);
   const metadataRevision = integer(input.metadataRevision, 'Metadata revision', 0, 2_147_483_646);
   if (create && metadataRevision !== 0) throw new HttpError(400, 'invalid_workflow_revision', 'New workflows start at metadata revision zero.');
-  if (input.appliesTo !== undefined && !['sample', 'test_request'].includes(input.appliesTo)) throw new HttpError(400, 'invalid_workflow_type', 'Select a supported workflow type.');
+  if (input.appliesTo !== undefined && !['sample', 'test_request', 'instrument_service'].includes(input.appliesTo)) throw new HttpError(400, 'invalid_workflow_type', 'Select a supported workflow type.');
   return { id: uuid(input.id, 'Workflow').toLowerCase(), requestId: uuid(input.requestId, 'Save request').toLowerCase(), metadataRevision, name,
     description: input.description === undefined ? undefined : workflowText(input.description, 'Description', 10000, true),
     code: input.code === undefined ? (create ? workflowCodeBase(name) : undefined) : workflowText(input.code, 'Code', 64),

@@ -26,7 +26,8 @@ try {
   const routes = [...await routeTraces('.next/server/app/api/users'),
     ...['review', 'process'].map(action => `.next/server/app/api/master-bulk/[batchId]/${action}/route.js.nft.json`),
     ...['products', 'test-parameters', 'methods', 'customers', 'vendors'].map(resource => `.next/server/app/api/masters/${resource}/custom-field-users/route.js.nft.json`),
-    '.next/server/app/api/organization-settings/module-access/options/route.js.nft.json'];
+    '.next/server/app/api/organization-settings/module-access/options/route.js.nft.json',
+    '.next/server/app/api/instruments/options/route.js.nft.json', '.next/server/app/api/instruments/custom-field-users/route.js.nft.json'];
   for (const file of routes) {
     const trace = JSON.parse(await readFile(file, 'utf8')); const included = new Set(trace.files.map(entry => path.resolve(path.dirname(file), entry)));
     report.routes.push({ path: file, missing: required.filter(entry => !included.has(entry)).map(entry => path.relative(root, entry)) });
@@ -39,7 +40,7 @@ try {
   const generationFiles = [...generationRuntime.fileList].map(file => path.resolve(root, file));
   report.generationRoutes = [];
   const generationRoutes = [...['products', 'test-parameters', 'methods', 'customers', 'vendors'].map(resource => `.next/server/app/api/masters/${resource}/custom-field-generation/route.js.nft.json`),
-    '.next/server/app/api/users/custom-fields/generate/route.js.nft.json'];
+    '.next/server/app/api/users/custom-fields/generate/route.js.nft.json', '.next/server/app/api/instruments/custom-field-generation/route.js.nft.json'];
   for (const file of generationRoutes) {
     const trace = JSON.parse(await readFile(file, 'utf8')); const included = new Set(trace.files.map(entry => path.resolve(path.dirname(file), entry)));
     report.generationRoutes.push({ path: file, missing: generationFiles.filter(entry => !included.has(entry)).map(entry => path.relative(root, entry)) });

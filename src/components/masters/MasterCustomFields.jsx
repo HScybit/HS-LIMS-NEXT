@@ -50,7 +50,7 @@ export function CustomFieldControl({ kind, field, value, stored, disabled, error
     type = 'searchable-select';
     inputProps = { id, name: id, disabled, value: Array.isArray(value) ? value : [], multiple: true, clearable: !control.required,
       options: userOptions, defaultOptions: defaultUserOptions ?? userOptions, loadOptions: loadUsers, cacheOptions: false, caseInsensitiveValues: true,
-      ...(kind === 'user' ? { bulkActionScope: 'visible' } : {}),
+      ...(['user', 'instrument'].includes(kind) ? { bulkActionScope: 'visible' } : {}),
       placeholder: `Select ${field.label}`, invalid: Boolean(error), onChange };
   } else if (control.type === 'textarea') { type = 'textarea'; inputProps.rows = 3; }
   else {
@@ -61,8 +61,9 @@ export function CustomFieldControl({ kind, field, value, stored, disabled, error
   return <div className="mb-3"><FormElement type={type} label={field.label} mandatory={control.required} message={error} messageTone="error" inputProps={inputProps} /></div>;
 }
 
-export default function MasterCustomFields({ kind, fields, loading, loadError, values, storedFields = [], lookupSources, errors, disabled, generatingId, onChange, onBusy, onGenerate, onReload }) {
+export default function MasterCustomFields({ kind, fields, loading, loadError, values, storedFields = [], lookupSources, errors, disabled, generatingId, onChange, onBusy, onGenerate, onReload, showTitle = true }) {
   const resource = kind === 'vendor' ? 'vendors' : kind === 'customer' ? 'customers' : kind === 'method' ? 'methods' : kind === 'parameter' ? 'test-parameters' : 'products';
+  const userEndpoint = kind === 'instrument' ? '/api/instruments/custom-field-users' : `/api/masters/${resource}/custom-field-users`;
   const requests = useRef(new Map()); const controllers = useRef(new Set());
   const [users, setUsers] = useState([]); const [userError, setUserError] = useState(''); const [moreUsers, setMoreUsers] = useState(false);
   const storedByKey = useMemo(() => new Map(storedFields.map((field) => [field.key, field])), [storedFields]);
@@ -72,7 +73,7 @@ export default function MasterCustomFields({ kind, fields, loading, loadError, v
   const loadUsers = useCallback((search) => {
     if (requests.current.has(search)) return requests.current.get(search);
     const abort = new AbortController(); controllers.current.add(abort);
-    const pending = apiRequest(`/api/masters/${resource}/custom-field-users?search=${encodeURIComponent(search)}`, { signal: abort.signal })
+    const pending = apiRequest(`${userEndpoint}?search=${encodeURIComponent(search)}`, { signal: abort.signal })
       .then((result) => {
         if (abort.signal.aborted) return [];
         const options = result.rows.map((row) => userOption(row.id, row.name));
@@ -81,7 +82,7 @@ export default function MasterCustomFields({ kind, fields, loading, loadError, v
       }).catch((failure) => { if (!abort.signal.aborted) setUserError(failure.message); return []; })
       .finally(() => { controllers.current.delete(abort); requests.current.delete(search); });
     requests.current.set(search, pending); return pending;
-  }, [resource]);
+  }, [userEndpoint]);
   useEffect(() => {
     if (hasUsers) void loadUsers('');
     const active = controllers.current; const pending = requests.current;
@@ -91,7 +92,7 @@ export default function MasterCustomFields({ kind, fields, loading, loadError, v
   const failure = loadError ? <div className="alert alert-danger mt-4" role="alert">{loadError}<button type="button" className="btn btn-link" disabled={disabled} onClick={onReload}>Retry loading fields</button></div> : null;
   if (!fields.length) return failure;
   return <>{failure}<Profiler id={`${kind}-custom-fields`} onRender={(_id, phase, duration, _base, start) => performance.measure(`${kind}-fields:react-${phase}`, { start, duration })}>
-    <div className="mt-4 pt-3 border-top"><div className="text-muted small fw-semibold mb-3 text-uppercase">Additional Data Fields</div>
+    <div className={showTitle ? 'mt-4 pt-3 border-top' : ''}>{showTitle ? <div className="text-muted small fw-semibold mb-3 text-uppercase">Additional Data Fields</div> : null}
     {fields.map((field) => {
       const source = lookupSources?.get(field.lookupSourceId);
       const content = <CustomFieldControl kind={kind} field={field} value={values[field.id]} stored={storedByKey.get(field.key)} disabled={disabled} error={errors[field.id]}
