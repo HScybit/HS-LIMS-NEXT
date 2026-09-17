@@ -16,7 +16,7 @@ test('Access Control stays responsive with paged 10000-reference catalogs and 50
   test.setTimeout(240000); expect(process.env.SAMPLEIFY_TEST_DATABASE_NAME).toMatch(/^sampleify_verify_[a-f0-9]{32}$/);
   const owner = ownerPool(); const errors = []; page.on('pageerror', error => errors.push(error.message));
   const report = { status: 'running', startedAt: new Date().toISOString(), buildId: (await readFile('.next/BUILD_ID', 'utf8')).trim(), hashes: await hashes(),
-    measurement: 'Production Chrome, one warmup/five samples per condition. Navigation, settings transfer/parse, all four initial paged catalog transfers, rendered assignments and two frames included. Input fill through two frames; await debounced results outside input timing. Fixture setup and login excluded. Each catalog contains 100/10000 references; each module has 0/100 or 0/500 assignments of each kind, with 137-character ordinary labels. No first bulk import, cold-cache or concurrent throughput claim.', cases: [] };
+    measurement: 'Production Chrome, one warmup/five samples per condition. Navigation, settings transfer/parse, all six initial paged catalog transfers for three modules, rendered assignments and two frames included. Input fill through two frames; await debounced results outside input timing. Fixture setup and login excluded. Each catalog contains 100/10000 references; each module has 0/100 or 0/500 assignments of each kind, with 137-character ordinary labels. No first bulk import, cold-cache or concurrent throughput claim.', cases: [] };
   try {
     for (const count of [100, 10000]) {
       const fixture = await createModuleAccessPerformanceFixture(owner, count);
@@ -36,7 +36,7 @@ test('Access Control stays responsive with paged 10000-reference catalogs and 50
             const start = performance.now(); await page.goto('/organization_settings'); const body = await (await response).body(); responseBytes = body.length;
             expect(JSON.parse(body.toString()).settings.moduleAccess[0].roleIds).toHaveLength(selections);
             await page.getByRole('tab', { name: 'Access Control', exact: true }).click();
-            await expect.poll(() => choices.length).toBe(4); await Promise.all(choices.map(response => response.body()));
+            await expect.poll(() => choices.length).toBe(6); await Promise.all(choices.map(response => response.body()));
             const customer = page.getByRole('group', { name: 'Customer Master', exact: true });
             if (selections) await expect(customer).toContainText(`${selections * 2} assigned`);
             await frames(page); const loadMs = performance.now() - start;
@@ -51,7 +51,7 @@ test('Access Control stays responsive with paged 10000-reference catalogs and 50
         }
         const result = { choices: count, selectionsPerKindPerModule: selections, distinctSelectionsPerKind: selections * (count === 10000 ? 2 : 1), loadSamplesMs: loads, inputSamplesMs: inputs, loadP95Ms: p95(loads), inputP95Ms: p95(inputs),
           responseBytes, initialChoiceRequests: choiceRequests, loadBudgetMs: 2500, inputBudgetMs: 500 };
-        result.passed = result.loadP95Ms <= result.loadBudgetMs && result.inputP95Ms <= result.inputBudgetMs && choiceRequests.every(value => value === 4);
+        result.passed = result.loadP95Ms <= result.loadBudgetMs && result.inputP95Ms <= result.inputBudgetMs && choiceRequests.every(value => value === 6);
         report.cases.push(result); console.log(JSON.stringify(result));
       }
     }

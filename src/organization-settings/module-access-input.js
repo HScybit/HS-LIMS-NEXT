@@ -4,6 +4,7 @@ import { bool, fieldsOnly, uuid } from '../templates/input.js';
 export const moduleAccessDefinitions = Object.freeze([
   Object.freeze({ key: 'customer', label: 'Customer Master' }),
   Object.freeze({ key: 'vendor', label: 'Vendor Master' }),
+  Object.freeze({ key: 'instrument', label: 'Instrument Management' }),
 ]);
 export const moduleAccessSelectionLimit = 500;
 
@@ -12,7 +13,7 @@ export function moduleAccessSettingsInput(input) {
     throw new HttpError(400, 'invalid_module_access', 'Provide organization settings as an object.');
   }
   if (!Object.hasOwn(input, 'moduleAccess')) return null;
-  if (!Array.isArray(input.moduleAccess) || input.moduleAccess.length !== moduleAccessDefinitions.length) {
+  if (!Array.isArray(input.moduleAccess) || ![2, 3].includes(input.moduleAccess.length)) {
     throw new HttpError(400, 'invalid_module_access', 'Provide Customer and Vendor access settings together.');
   }
   const modules = new Map();
@@ -32,5 +33,10 @@ export function moduleAccessSettingsInput(input) {
     }
     modules.set(row.moduleKey, { moduleKey: row.moduleKey, enabled: bool(row.enabled, 'Module enabled'), ...selections });
   }
-  return moduleAccessDefinitions.map(module => modules.get(module.key));
+  if (!modules.has('customer') || !modules.has('vendor')) {
+    throw new HttpError(400, 'invalid_module_access', 'Provide Customer and Vendor access settings together.');
+  }
+  // Older clients omit Instruments. The native command preserves its last saved
+  // assignments while capturing the explicit Customer/Vendor change.
+  return moduleAccessDefinitions.filter(module => modules.has(module.key)).map(module => modules.get(module.key));
 }

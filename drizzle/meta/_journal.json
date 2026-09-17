@@ -1338,6 +1338,13 @@
       "when": 1789635024312,
       "tag": "0190_vendor_bulk",
       "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "7",
+      "when": 1789637694259,
+      "tag": "0191_instrument_module_access",
+      "breakpoints": true
     }
   ]
 }

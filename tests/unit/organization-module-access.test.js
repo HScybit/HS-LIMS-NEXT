@@ -75,3 +75,26 @@ test('malformed and sparse UUID selections cannot bypass validation', () => {
     invalid(() => moduleAccessSettingsInput(input));
   }
 });
+
+test('Instrument access is explicit and optional only for older two-module callers', () => {
+  const legacy = settings(); assert.deepEqual(moduleAccessSettingsInput(legacy), legacy.moduleAccess);
+  const instrument = { moduleKey: 'instrument', enabled: true, roleIds: [randomUUID()], userIds: [randomUUID()] };
+  const input = { moduleAccess: [instrument, ...legacy.moduleAccess] }; const before = structuredClone(input);
+  assert.deepEqual(moduleAccessSettingsInput(input), [...legacy.moduleAccess, instrument]);
+  assert.deepEqual(input, before);
+  invalid(() => moduleAccessSettingsInput({ moduleAccess: [legacy.moduleAccess[0], instrument] }));
+  invalid(() => moduleAccessSettingsInput({ moduleAccess: [...legacy.moduleAccess, instrument, instrument] }));
+  const sparse = [...legacy.moduleAccess, instrument]; delete sparse[2];
+  invalid(() => moduleAccessSettingsInput({ moduleAccess: sparse }));
+});
+
+test('Instrument selections preserve disabled access and enforce their own limits', () => {
+  const ids = Array.from({ length: 501 }, () => randomUUID());
+  const instrument = { moduleKey: 'instrument', enabled: false, roleIds: ids.slice(0, 500), userIds: ids.slice(0, 500) };
+  const input = { moduleAccess: [...settings().moduleAccess, instrument] };
+  assert.deepEqual(moduleAccessSettingsInput(input)[2], instrument);
+  for (const key of ['roleIds', 'userIds']) {
+    invalid(() => moduleAccessSettingsInput({ moduleAccess: [...settings().moduleAccess, { ...instrument, [key]: ids }] }));
+    invalid(() => moduleAccessSettingsInput({ moduleAccess: [...settings().moduleAccess, { ...instrument, [key]: [ids[0], ids[0].toUpperCase()] }] }));
+  }
+});

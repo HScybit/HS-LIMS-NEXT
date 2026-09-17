@@ -13,7 +13,7 @@ export async function loadModuleAccess(client, identity, { atRevision, currentRe
   requireSettingsRead(identity);
   if (atRevision !== undefined) integer(atRevision, 'Settings revision', 1, 2_147_483_647);
   if (currentRevision !== undefined) integer(currentRevision, 'Current settings revision', 0, 2_147_483_647);
-  const version = (await client.query(`SELECT revision,saved_by AS "savedBy",saved_at AS "savedAt"
+  const version = (await client.query(`SELECT revision,module_count AS "moduleCount",saved_by AS "savedBy",saved_at AS "savedAt"
     FROM organization_module_access_versions WHERE organization_id=$1 AND revision<=$2
     ORDER BY revision DESC LIMIT 1`, [identity.organization_id, atRevision ?? currentRevision ?? 2_147_483_647])).rows[0];
   const modules = moduleAccessDefinitions.map(module => ({ moduleKey: module.key, enabled: false, roleIds: [], userIds: [], roles: [], users: [] }));
@@ -48,9 +48,11 @@ export async function loadModuleAccess(client, identity, { atRevision, currentRe
     FROM selected entry ${currentNames ? 'LEFT JOIN names current ON current.id=entry.user_id' : ''}
     ORDER BY entry.module_key,entry.position`, args)).rows;
   const incomplete = () => new HttpError(409, 'incomplete_module_access', 'Module access settings are incomplete. Reload before continuing.');
-  if (headers.length !== modules.length) throw incomplete();
+  if (![2, 3].includes(version.moduleCount) || headers.length !== version.moduleCount
+    || headers.some(header => !moduleAccessDefinitions.some(module => module.key === header.moduleKey))) throw incomplete();
   for (const access of modules) {
     const header = headers.find(row => row.moduleKey === access.moduleKey);
+    if (!header && version.moduleCount === 2 && access.moduleKey === 'instrument') continue;
     if (!header) throw incomplete();
     access.enabled = header.enabled;
     for (const [kind, rows] of [['role', roles], ['user', users]]) {
@@ -88,18 +90,21 @@ export async function moduleAccessOptions(client, identity, input = {}) {
   const page = integer(input.page ?? 1, 'Page', 1, 1_000_000);
   const table = input.kind === 'role' ? 'organization_module_role_catalog' : 'organization_module_user_catalog';
   const { matchesModuleAccessOption } = await import('./module-access-filter.js');
+  // These scoped catalogs sort the tenant choices on each scan. Keep transport
+  // bounded while avoiding repeated scans for every 500 candidates.
+  const batchSize = 1000;
   const rows = []; let after = null; let matched = 0;
   while (true) {
     const batch = (await client.query(`SELECT id,label AS name,active${input.kind === 'user' ? ',username' : ''}
       FROM ${table} WHERE organization_id=$1 ${after ? 'AND (lower(label),id)>(lower($2),$3::uuid)' : ''}
-      ORDER BY lower(label),id LIMIT 501`, after ? [identity.organization_id, after.name, after.id] : [identity.organization_id])).rows;
-    for (const row of batch.slice(0, 500)) {
+      ORDER BY lower(label),id LIMIT ${batchSize + 1}`, after ? [identity.organization_id, after.name, after.id] : [identity.organization_id])).rows;
+    for (const row of batch.slice(0, batchSize)) {
       if (!matchesModuleAccessOption(row, search)) continue;
       if (matched++ < (page - 1) * 100) continue;
       rows.push(row);
       if (rows.length > 100) return { rows: rows.slice(0, 100), page, hasMore: true };
     }
-    if (batch.length <= 500) return { rows, page, hasMore: false };
-    after = batch[499];
+    if (batch.length <= batchSize) return { rows, page, hasMore: false };
+    after = batch[batchSize - 1];
   }
 }

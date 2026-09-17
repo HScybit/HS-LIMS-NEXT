@@ -18,6 +18,7 @@ after(async () => { await closePool(); await owner.end(); });
 const work = (actor, action, readOnly = false) => withSession(actor.token, action, { readOnly });
 const read = actor => work(actor, loadLaboratorySettings, true);
 const access = actor => work(actor, async client => (await client.query("SELECT organization_has_module_access('customer') AS customer,organization_has_module_access('vendor') AS vendor")).rows[0], true);
+const instrumentAccess = actor => work(actor, async client => (await client.query("SELECT organization_has_module_access('instrument') AS allowed")).rows[0].allowed, true);
 const customerInput = () => ({ name: `Module access ${randomUUID()}`, legalName: 'Synthetic legal name', contactPersonName: 'Synthetic contact',
   contactPersonEmail: 'synthetic@example.invalid', contactPersonPhone: '0000', billToAddress: 'Billing\nSecond line', shipToAddress: 'Receiving\nSecond line' });
 const createCustomer = actor => work(actor, (client, identity) => quickCreateCustomer(client, identity, customerInput()));
@@ -43,6 +44,59 @@ async function waitForLock(pid, failure) {
   }
   assert.fail('Expected module command to wait on a database lock');
 }
+
+test('Instrument access requires explicit enabled user or active actual Default Role assignments', async () => {
+  const manager = await account(); const person = await account({ organizationId: manager.organizationId }); const foreign = await account();
+  const modules = emptyModuleAccess(); const instrument = modules[2];
+  assert.equal(await instrumentAccess(person), false);
+  instrument.enabled = true; await saveModuleAccessSettings(manager, modules); assert.equal(await instrumentAccess(person), false);
+  instrument.roleIds = [person.roleId]; await saveModuleAccessSettings(manager, modules); assert.equal(await instrumentAccess(person), false);
+  await recordProfile(manager, person); assert.equal(await instrumentAccess(person), true);
+  await work(manager, (client, identity) => updateUserProfile(client, identity, person.userId,
+    { requestId: randomUUID(), revision: 1, roleIds: [person.roleId, manager.roleId] }));
+  instrument.roleIds = [manager.roleId]; await saveModuleAccessSettings(manager, modules); assert.equal(await instrumentAccess(person), false);
+  instrument.roleIds = [person.roleId]; await saveModuleAccessSettings(manager, modules);
+  // Imported inactive roles remain possible even though authoring cannot retire an assigned role.
+  await owner.query('UPDATE roles SET active=false WHERE organization_id=$1 AND id=$2', [person.organizationId, person.roleId]);
+  assert.equal(await instrumentAccess(person), false);
+  instrument.userIds = [person.userId]; await saveModuleAccessSettings(manager, modules); assert.equal(await instrumentAccess(person), true);
+  instrument.enabled = false; await saveModuleAccessSettings(manager, modules); assert.equal(await instrumentAccess(person), false);
+  instrument.enabled = true; instrument.userIds = [foreign.userId];
+  await assert.rejects(saveModuleAccessSettings(manager, modules), { code: 'invalid_module_access_reference' });
+  assert.equal(await instrumentAccess(foreign), false);
+  await work(manager, async client => {
+    await client.query("SELECT set_config('app.user_id',$1,true)", [person.userId]);
+    assert.equal((await client.query("SELECT organization_has_module_access('instrument') AS allowed")).rows[0].allowed, false);
+  });
+});
+
+test('older two-module clients preserve Instrument grants; explicit clears retain immutable history', async () => {
+  const actor = await account(); const other = await account({ organizationId: actor.organizationId });
+  const modules = emptyModuleAccess(); modules[2] = { moduleKey: 'instrument', enabled: true, roleIds: [other.roleId, actor.roleId], userIds: [other.userId, actor.userId] };
+  await saveModuleAccessSettings(actor, modules);
+  const historical = await work(actor, (client, identity) => loadModuleAccess(client, identity, { atRevision: 1 }), true);
+  assert.equal(historical.moduleCount, 3); assert.equal(await instrumentAccess(actor), true);
+  const legacy = modules.slice(0, 2); legacy[0] = { ...legacy[0], enabled: true, userIds: [actor.userId] };
+  await saveModuleAccessSettings(actor, legacy);
+  assert.deepEqual(moduleAccessValues((await read(actor)).settings.moduleAccess), [...legacy, modules[2]]);
+  assert.equal(await instrumentAccess(actor), true);
+  await work(actor, (client, identity) => saveLaboratorySettings(client, identity, { revision: 2, autoCreateJobs: false, dateFormat: 'YYYY-MM-DD' }));
+  assert.equal((await read(actor)).settings.moduleAccessRevision, 2);
+  await saveModuleAccessSettings(actor, emptyModuleAccess()); assert.equal(await instrumentAccess(actor), false);
+  await saveModuleAccessSettings(actor, legacy); assert.equal(await instrumentAccess(actor), false);
+  assert.deepEqual(await work(actor, (client, identity) => loadModuleAccess(client, identity, { atRevision: 1 }), true), historical);
+  const history = (await owner.query('SELECT revision,module_count FROM organization_module_access_versions WHERE organization_id=$1 ORDER BY revision', [actor.organizationId])).rows;
+  assert.deepEqual(history, [1, 2, 4, 5].map(revision => ({ revision, module_count: 3 })));
+});
+
+test('an older two-module initial save creates a disabled unassigned Instrument row', async () => {
+  const actor = await account(); await saveModuleAccessSettings(actor, emptyModuleAccess().slice(0, 2));
+  const saved = await work(actor, (client, identity) => loadModuleAccess(client, identity), true);
+  assert.equal(saved.moduleCount, 3); assert.deepEqual(moduleAccessValues(saved.modules), emptyModuleAccess());
+  assert.equal(await instrumentAccess(actor), false);
+  const reader = await account({ organizationId: actor.organizationId, permissions: ['settings.read'] });
+  await assert.rejects(saveModuleAccessSettings(reader, emptyModuleAccess()), { status: 403 });
+});
 
 test('absent, disabled and empty configuration denies authoring without creating inferred grants', async () => {
   const actor = await account(); const initial = await read(actor);
@@ -123,6 +177,17 @@ test('scoped catalogs paginate exact IDs and source accent searches, including r
   assert.equal((await work(denied, client => client.query('SELECT * FROM organization_module_user_catalog'), true)).rowCount, 0);
 });
 
+test('catalog searches retain the lookahead across a scan boundary and paginate late matches', async () => {
+  const actor = await account(); const ids = Array.from({ length: 1002 }, () => randomUUID());
+  await owner.query("INSERT INTO roles(organization_id,id,name) SELECT $1,id,'Catalog '||lpad(position::text,4,'0') FROM unnest($2::uuid[]) WITH ORDINALITY AS selected(id,position)", [actor.organizationId, ids]);
+  const options = input => work(actor, (client, identity) => moduleAccessOptions(client, identity, { kind: 'role', ...input }), true);
+  const penultimate = await options({ search: 'catalog', page: 10 }); const last = await options({ search: 'catalog', page: 11 });
+  assert.deepEqual(penultimate.rows.map(row => row.id), ids.slice(900, 1000)); assert.equal(penultimate.hasMore, true);
+  assert.deepEqual(last.rows.map(row => row.id), ids.slice(1000)); assert.equal(last.hasMore, false);
+  assert.deepEqual((await options({ search: ids[1000].toUpperCase() })).rows.map(row => row.id), [ids[1000]]);
+  assert.deepEqual((await options({ search: 'catalog', page: 12 })).rows, []);
+});
+
 test('history is immutable, tenant scoped and unavailable to direct application writes or the worker', async () => {
   const actor = await account(); const foreign = await account(); await configure(actor, { roleIds: [actor.roleId] });
   for (const table of ['organization_module_access_versions', 'organization_module_access_modules', 'organization_module_access_roles', 'organization_module_access_users']) {
@@ -160,13 +225,15 @@ test('raw module commands reject malformed arrays and require the same transacti
 test('deferred checks reject missing, extra and gapped selections while permitting complete empty sets', async () => {
   const actor = await account(); await configure(actor);
   const cases = [{ headers: 0 }, { headers: 1 }, { headers: 2, count: 1 }, { headers: 2, count: 0, position: 0 },
-    { headers: 2, count: 1, position: 1 }, { headers: 2, count: 0, valid: true }, { headers: 2, count: 1, position: 0, valid: true }];
+    { headers: 2, count: 1, position: 1 }, { headers: 2, count: 0, valid: true }, { headers: 2, count: 1, position: 0, valid: true },
+    { headers: 2, moduleCount: 3 }, { headers: 3, moduleCount: 2 }, { headers: 3, moduleCount: 3, valid: true },
+    { headers: 3, moduleCount: 3, count: 1, position: 0, valid: true }];
   for (const item of cases) {
     const client = await owner.connect();
     try {
       await client.query('BEGIN');
-      await client.query('INSERT INTO organization_module_access_versions(organization_id,revision,saved_by) VALUES($1,999,$2)', [actor.organizationId, actor.userId]);
-      for (const key of ['customer', 'vendor'].slice(0, item.headers)) {
+      await client.query('INSERT INTO organization_module_access_versions(organization_id,revision,saved_by,module_count) VALUES($1,999,$2,$3)', [actor.organizationId, actor.userId, item.moduleCount ?? 2]);
+      for (const key of ['customer', 'vendor', 'instrument'].slice(0, item.headers)) {
         await client.query('INSERT INTO organization_module_access_modules(organization_id,revision,module_key,enabled,role_count,user_count) VALUES($1,999,$2,true,$3,0)', [actor.organizationId, key, key === 'customer' ? item.count ?? 0 : 0]);
       }
       if (item.position !== undefined) await client.query("INSERT INTO organization_module_access_roles(organization_id,revision,module_key,role_id,position,role_name,role_active) VALUES($1,999,'customer',$2,$3,'Synthetic',true)", [actor.organizationId, actor.roleId, item.position]);

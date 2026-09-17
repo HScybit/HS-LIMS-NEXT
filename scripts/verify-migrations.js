@@ -251,6 +251,17 @@ try {
     assert.equal(settings.updatedBy, account.userId);
     assert.deepEqual(settings.instrumentServiceTypes, instrumentServiceTypes);
     assert.deepEqual(moduleAccessValues(settings.moduleAccess), moduleAccess);
+    assert.equal((await loadModuleAccess(client, identity)).moduleCount, 3);
+    await client.query('SAVEPOINT instrument_module_access');
+    assert.equal((await client.query("SELECT organization_has_module_access('instrument') AS allowed")).rows[0].allowed, false);
+    const instrumentModules = moduleAccess.map(module => module.moduleKey === 'instrument' ? { ...module, enabled: true, userIds: [account.userId] } : module);
+    await saveLaboratorySettings(client, identity, { revision: settings.revision, autoCreateJobs: false, moduleAccess: instrumentModules });
+    assert.equal((await client.query("SELECT organization_has_module_access('instrument') AS allowed")).rows[0].allowed, true);
+    await saveLaboratorySettings(client, identity, { revision: settings.revision + 1, autoCreateJobs: false, moduleAccess: moduleAccess.slice(0, 2) });
+    assert.deepEqual(moduleAccessValues((await loadModuleAccess(client, identity)).modules), instrumentModules);
+    await saveLaboratorySettings(client, identity, { revision: settings.revision + 2, autoCreateJobs: false, moduleAccess });
+    assert.equal((await client.query("SELECT organization_has_module_access('instrument') AS allowed")).rows[0].allowed, false);
+    await client.query('ROLLBACK TO SAVEPOINT instrument_module_access'); await client.query('RELEASE SAVEPOINT instrument_module_access');
     assert.equal((await client.query("SELECT organization_has_module_access('customer') AS customer,organization_has_module_access('vendor') AS vendor")).rows[0].customer, true);
     await client.query('SAVEPOINT customer_write_allowed');
     const customer = await saveCustomer(client, identity, customerWrite);

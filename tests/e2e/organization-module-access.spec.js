@@ -37,6 +37,33 @@ async function save(page) {
 const customerInput = () => ({ name: `Module browser ${randomUUID()}`, legalName: 'Synthetic legal name', contactPersonName: 'Synthetic contact',
   contactPersonEmail: 'synthetic@example.invalid', contactPersonPhone: '0000', billToAddress: 'Synthetic billing', shipToAddress: 'Synthetic shipping' });
 
+test('Instrument Management has explicit source-style access controls and survives older settings requests', async ({ page }, info) => {
+  const actor = await createAccount(owner, { permissions: ['settings.manage'] }); await login(page, actor); await open(page);
+  const instrument = page.getByRole('group', { name: 'Instrument Management', exact: true });
+  await expect(instrument.getByRole('combobox', { name: 'Users', exact: true })).toBeEnabled();
+  expect(moduleAccessValues((await settings(page)).moduleAccess)[2]).toEqual({ moduleKey: 'instrument', enabled: false, roleIds: [], userIds: [] });
+  await choose(page, instrument, 'Users', actor.userId, 'Synthetic Analyst');
+  await choose(page, instrument, 'Roles', actor.roleId, `Reader ${actor.roleId}`);
+  await choose(page, page, 'Modules', 'Instrument', 'Instrument Management');
+  expect((await save(page)).status()).toBe(200);
+  const saved = await settings(page); const intended = { moduleKey: 'instrument', enabled: true, roleIds: [actor.roleId], userIds: [actor.userId] };
+  expect(moduleAccessValues(saved.moduleAccess)[2]).toEqual(intended);
+  expect((await update(page, { moduleAccess: moduleAccessValues(saved.moduleAccess.slice(0, 2)), dateFormat: 'YYYY-MM-DD' })).status()).toBe(200);
+  expect(moduleAccessValues((await settings(page)).moduleAccess)[2]).toEqual(intended);
+  await open(page); await expect(instrument).toContainText('2 assigned');
+  await instrument.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: info.outputPath('instrument-access-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 }); await instrument.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: info.outputPath('instrument-access-mobile.png'), fullPage: true });
+  const disabled = moduleAccessValues(saved.moduleAccess); disabled[2].enabled = false;
+  expect((await update(page, { moduleAccess: disabled })).status()).toBe(200);
+  await open(page); await expect(instrument).toContainText('2 assigned');
+  const reader = await createAccount(owner, { organizationId: actor.organizationId, permissions: ['settings.read'] });
+  await login(page, reader); await open(page); await expect(page.locator('#user-access-instrument')).toBeDisabled();
+  expect((await update(page, { moduleAccess: emptyModuleAccess() })).status()).toBe(403);
+});
+
 test('source Access Control grants explicit users, preserves disabled assignments and gates quick customer creation', async ({ page }, testInfo) => {
   test.setTimeout(90000);
   const actor = await createAccount(owner, { permissions: ['settings.manage', 'samples.create'] }); await login(page, actor);
@@ -55,6 +82,7 @@ test('source Access Control grants explicit users, preserves disabled assignment
   expect(moduleAccessValues(saved.moduleAccess)).toEqual([
     { moduleKey: 'customer', enabled: true, roleIds: [actor.roleId], userIds: [actor.userId] },
     { moduleKey: 'vendor', enabled: false, roleIds: [], userIds: [actor.userId] },
+    { moduleKey: 'instrument', enabled: false, roleIds: [], userIds: [] },
   ]);
   await open(page); await expect(customer).toContainText('2 assigned'); await expect(vendor).toContainText('1 assigned');
   await page.screenshot({ path: testInfo.outputPath('module-access-desktop.png'), fullPage: true, animations: 'disabled' });

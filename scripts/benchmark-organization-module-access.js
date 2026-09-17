@@ -82,8 +82,9 @@ try {
         if (iteration >= 0) { times.push(elapsed); queryCounts.push(queries); }
       }
       const row = { choices: count, operation: `${kind}-${search ? 'last-match' : 'first-page'}`, samplesMs: times, p95Ms: p95(times),
-        budgetMs: count === 10000 && search ? 1000 : 300, queryCounts, queryBudget: search ? Math.ceil(count / 500) : 1, responseBytes };
-      row.passed = row.p95Ms <= row.budgetMs && row.queryCounts.every(value => value === row.queryBudget); report.cases.push(row); console.log(JSON.stringify(row));
+        budgetMs: count === 10000 && search ? 1000 : 300, queryCounts, queryBudget: search ? Math.ceil(count / 500) : 1,
+        expectedQueryCount: search ? Math.ceil(count / 1000) : 1, responseBytes };
+      row.passed = row.p95Ms <= row.budgetMs && row.queryCounts.every(value => value === row.expectedQueryCount && value <= row.queryBudget); report.cases.push(row); console.log(JSON.stringify(row));
     }
   }
   assert.deepEqual(await hashes(), report.hashes); report.status = report.cases.every(row => row.passed) ? 'passed' : 'failed';
