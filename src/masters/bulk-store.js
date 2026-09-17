@@ -38,7 +38,7 @@ const batchSelect = `SELECT id,resource,file_name AS "fileName",file_format AS f
   header_row_number AS "headerRowNumber",sheet_name AS "sheetName",sheet_count AS "sheetCount",date_1904 AS "date1904",
   column_count AS "columnCount",row_count AS "rowCount",saved_by AS "savedBy",saved_at AS "savedAt",
   EXISTS (SELECT 1 FROM custom_field_definitions field WHERE field.organization_id=master_bulk_batches.organization_id AND field.active
-    AND field.associated_with=CASE master_bulk_batches.resource WHEN 'products' THEN 'product' WHEN 'test-parameters' THEN 'parameter' WHEN 'methods' THEN 'method_of_analysis' WHEN 'customers' THEN 'customer' END
+    AND field.associated_with=CASE master_bulk_batches.resource WHEN 'products' THEN 'product' WHEN 'test-parameters' THEN 'parameter' WHEN 'methods' THEN 'method_of_analysis' WHEN 'customers' THEN 'customer' WHEN 'vendors' THEN 'vendor' END
     AND field.field_type IN ('date','date_time')) AS "hasDateFields" FROM master_bulk_batches`;
 
 export async function loadMasterBulkBatch(client, identity, batchId) {
@@ -156,7 +156,7 @@ const rowStatus = `SELECT row.id,row.ordinal,row.source_row_number AS "rowNumber
   review.id AS "reviewId",review.valid,review.operation,review.error_code AS "validationCode",review.error_message AS "validationMessage",
   review.candidate_id AS "candidateId",review.expected_revision AS "expectedRevision",review.definitions_sha256 AS "definitionsSha256",
   attempt.id AS "attemptId",attempt.committed,attempt.error_code AS "processingCode",attempt.error_message AS "processingMessage",
-  attempt.result_revision AS "resultRevision",coalesce(attempt.product_id,attempt.parameter_id,attempt.method_id,attempt.user_id,attempt.customer_id) AS "resultId"
+  attempt.result_revision AS "resultRevision",coalesce(attempt.product_id,attempt.parameter_id,attempt.method_id,attempt.user_id,attempt.customer_id,attempt.vendor_id) AS "resultId"
   FROM master_bulk_rows row
   LEFT JOIN LATERAL (SELECT * FROM master_bulk_reviews WHERE organization_id=row.organization_id AND batch_id=row.batch_id AND row_id=row.id
     AND input_revision=row.revision ORDER BY sequence DESC LIMIT 1) review ON true

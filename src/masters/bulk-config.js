@@ -1,6 +1,7 @@
 import { userBulkHeaders } from '../users/bulk-input.js';
 import { customerBulkHeaders } from './customer-bulk-config.js';
 import { customerFormFields } from './customer-fields.js';
+import { vendorBulkHeaders, vendorBulkFields } from './vendor-bulk-config.js';
 
 export const masterBulkResources = Object.freeze({
   products: { permission: 'masters.manage', label: 'Products', path: '/products', key: 'key', required: ['key'],
@@ -15,6 +16,9 @@ export const masterBulkResources = Object.freeze({
   users: { permission: 'users.manage', label: 'Users', path: '/user_management', headers: userBulkHeaders },
   customers: { permission: 'masters.manage', module: 'customer', label: 'Customer', path: '/customer_masters', key: 'name', required: ['name', 'legalName'],
     headers: customerBulkHeaders, fields: customerFormFields.map(field => field.key) },
+  vendors: { permission: 'masters.manage', module: 'vendor', label: 'Vendor', path: '/vendor_masters', key: 'name',
+    required: ['name', 'legalName', 'contactPersonName', 'contactPersonEmail', 'contactPersonPhone'],
+    headers: vendorBulkHeaders, fields: vendorBulkFields.map(field => field.key) },
 });
 
 export const allowedMasterBulkResources = (permissions = [], modules = {}) => Object.entries(masterBulkResources)

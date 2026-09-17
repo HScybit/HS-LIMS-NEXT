@@ -1324,6 +1324,20 @@
       "when": 1789631844580,
       "tag": "0188_master_bulk_date_source",
       "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1789634284540,
+      "tag": "0189_vendor_master_authoring",
+      "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1789635024312,
+      "tag": "0190_vendor_bulk",
+      "breakpoints": true
     }
   ]
 }

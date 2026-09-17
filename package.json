@@ -25,6 +25,7 @@
     "benchmark:product-fields": "node --env-file=.env.local scripts/benchmark-product-fields.js",
     "benchmark:method-fields": "node --env-file=.env.local scripts/benchmark-method-fields.js",
     "benchmark:customer-fields": "node --env-file=.env.local scripts/benchmark-customer-fields.js",
+    "benchmark:vendor-fields": "node --env-file=.env.local scripts/benchmark-vendor-fields.js",
     "benchmark:product-context": "node --env-file=.env.local scripts/benchmark-product-context.js",
     "benchmark:browser": "playwright test --config=playwright.performance.config.js tests/performance/designer.spec.js",
     "benchmark:datasheet-browser": "playwright test --config=playwright.performance.config.js tests/performance/datasheets.spec.js",

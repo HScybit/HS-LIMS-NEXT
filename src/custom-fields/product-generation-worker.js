@@ -1,5 +1,5 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { generateProductScheme, generateParameterScheme, generateMethodScheme, generateUserScheme, generateCustomerScheme } from './product-generation.js';
+import { generateProductScheme, generateParameterScheme, generateMethodScheme, generateUserScheme, generateCustomerScheme, generateVendorScheme } from './product-generation.js';
 import { customFieldNeedsGeneration, customFieldFormDisplayValue } from './form-values.js';
 import { customFieldDateDisplayInZone } from './server-dates.js';
 
@@ -28,8 +28,8 @@ async function latestValue({ fieldId, pattern }) {
 }
 async function generate() {
   const { fields, values, doc, settings, counts, clock, timeZone, fieldId, mode } = workerData;
-  if (workerData.kind !== undefined && !['product', 'parameter', 'method', 'user', 'customer'].includes(workerData.kind)) throw new Error('Unsupported Custom Field master.');
-  const scheme = workerData.kind === 'customer' ? generateCustomerScheme : workerData.kind === 'user' ? generateUserScheme : workerData.kind === 'method' ? generateMethodScheme : workerData.kind === 'parameter' ? generateParameterScheme : generateProductScheme;
+  if (workerData.kind !== undefined && !['product', 'parameter', 'method', 'user', 'customer', 'vendor'].includes(workerData.kind)) throw new Error('Unsupported Custom Field master.');
+  const scheme = workerData.kind === 'vendor' ? generateVendorScheme : workerData.kind === 'customer' ? generateCustomerScheme : workerData.kind === 'user' ? generateUserScheme : workerData.kind === 'method' ? generateMethodScheme : workerData.kind === 'parameter' ? generateParameterScheme : generateProductScheme;
   const generated = [];
   for (const field of fields) {
     if (fieldId ? field.id !== fieldId : !customFieldNeedsGeneration(field, mode, values[field.id])) continue;

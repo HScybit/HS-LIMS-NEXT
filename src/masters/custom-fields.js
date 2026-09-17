@@ -73,6 +73,14 @@ export async function customerCustomFields(client, identity, options) {
   return masterCustomFields('customer', client, identity, options);
 }
 
+export async function vendorCustomFields(client, identity, options) {
+  requireRead(identity);
+  if (!(await client.query("SELECT masters_can_read_party('vendor') AS allowed")).rows[0]?.allowed) {
+    throw new HttpError(403, 'vendor_module_access_required', 'Vendor module access is required.');
+  }
+  return masterCustomFields('vendor', client, identity, options);
+}
+
 export async function loadCustomField(client, identity, fieldId, { atRevision } = {}) {
   requireRead(identity); uuid(fieldId, 'Custom field');
   if (atRevision !== undefined) integer(atRevision, 'Revision', 1, 2_147_483_647);

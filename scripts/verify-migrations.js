@@ -30,6 +30,7 @@ import { saveNablCertification, loadNablCertification, retireNablCertification, 
 import { uploadNablFile, readNablFile } from '../src/compliance/nabl-files.js';
 import { quickCreateCustomer } from '../src/samples/customer.js';
 import { saveCustomer, loadCustomer, retireCustomer } from '../src/masters/customers.js';
+import { saveVendor, loadVendor, retireVendor } from '../src/masters/vendors.js';
 import { registerSample } from '../src/samples/register.js';
 import { loadSample } from '../src/samples/load.js';
 import { generateTestRequests } from '../src/test-requests/generate.js';
@@ -275,6 +276,39 @@ try {
     const customerCapture = await loadCustomer(client, identity, customerOutcome.rows[0].resultId, { atRevision: 1 });
     assert.equal(customerCapture.igstPercent, '0.0000'); assert.equal(customerCapture.customFields[0].value, '2026-09-17T00:00:00.000Z');
     await client.query('ROLLBACK TO SAVEPOINT customer_write_allowed'); await client.query('RELEASE SAVEPOINT customer_write_allowed');
+    await client.query('SAVEPOINT vendor_write_denied');
+    const vendorWrite = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh Vendor', legalName: 'Synthetic Vendor legal',
+      totalBalance: '-1.235', contactPersonName: 'Fresh contact', contactPersonEmail: 'vendor@example.invalid', contactPersonPhone: '123' };
+    await assert.rejects(saveVendor(client, identity, vendorWrite), { code: 'vendor_module_access_required' });
+    await client.query('ROLLBACK TO SAVEPOINT vendor_write_denied'); await client.query('RELEASE SAVEPOINT vendor_write_denied');
+    await client.query('SAVEPOINT vendor_write_allowed');
+    await saveLaboratorySettings(client, identity, { revision: settings.revision, autoCreateJobs: settings.autoCreateJobs,
+      moduleAccess: moduleAccess.map(module => module.moduleKey === 'vendor' ? { ...module, enabled: true, userIds: [account.userId] } : module) });
+    const vendor = await saveVendor(client, identity, vendorWrite); assert.equal(vendor.totalBalance, '-1.24');
+    assert.equal(vendor.contacts[0].email, 'vendor@example.invalid'); assert.deepEqual(await saveVendor(client, identity, vendorWrite), vendor);
+    const inactiveVendor = await saveVendor(client, identity, { id: vendor.id, requestId: randomUUID(), revision: 1, status: 'inactive' });
+    assert.equal(inactiveVendor.active, false); assert.equal(inactiveVendor.retired, false);
+    assert.equal((await retireVendor(client, identity, { id: vendor.id, requestId: randomUUID(), revision: 2 })).revision, 3);
+    assert.deepEqual(await loadVendor(client, identity, vendor.id, { atRevision: 1 }), vendor);
+    await saveCustomField(client, identity, { id: randomUUID(), requestId: randomUUID(), revision: 0, associatedWith: 'vendor',
+      key: 'fresh_vendor_bulk_date', label: 'Fresh Vendor bulk date', fieldType: 'date_time' });
+    const vendorWorkbook = await masterWorkbook([['name', 'legal_name', 'contact_person_name', 'contact_person_email', 'contact_person_phone', 'vendor_total_balance', 'project_field.fresh_vendor_bulk_date'],
+      ['Fresh Vendor upload', 'Synthetic legal name', 'Contact', 'vendor@example.invalid', '123', 0, new Date('2026-09-17T00:00:00Z')]]);
+    const vendorBulkId = randomUUID();
+    await stageMasterBulk(client, identity, { id: vendorBulkId, resource: 'vendors', fileName: 'Fresh Vendors.xlsx', format: 'xlsx', timeZone: 'UTC',
+      sourceSha256: createHash('sha256').update(vendorWorkbook).digest('hex') }, await decodeMasterXlsx(vendorWorkbook));
+    const vendorRow = (await loadMasterBulkPreview(client, identity, vendorBulkId)).rows[0];
+    assert.equal(vendorRow.cellMetadata[0].type, 'date'); const vendorReview = randomUUID();
+    assert.equal((await reviewMasterBulk(client, identity, vendorBulkId, { rows: [{ id: vendorRow.id, revision: 1, requestId: vendorReview }] })).rows[0].valid, true);
+    const vendorProcess = { rows: [{ id: vendorRow.id, revision: 1, reviewId: vendorReview, requestId: randomUUID() }] };
+    const vendorOutcome = await processMasterBulk(client, identity, vendorBulkId, vendorProcess); assert.equal(vendorOutcome.committed, 1);
+    assert.deepEqual(await processMasterBulk(client, identity, vendorBulkId, vendorProcess), vendorOutcome);
+    const vendorCapture = await loadVendor(client, identity, vendorOutcome.rows[0].resultId, { atRevision: 1 });
+    assert.equal(vendorCapture.totalBalance, '0.00'); assert.equal(vendorCapture.customFields[0].value, '2026-09-17T00:00:00.000Z');
+    await client.query('SAVEPOINT vendor_raw_denied');
+    await assert.rejects(client.query('UPDATE vendors SET name=name WHERE organization_id=$1', [identity.organization_id]), { code: '42501' });
+    await client.query('ROLLBACK TO SAVEPOINT vendor_raw_denied'); await client.query('RELEASE SAVEPOINT vendor_raw_denied');
+    await client.query('ROLLBACK TO SAVEPOINT vendor_write_allowed'); await client.query('RELEASE SAVEPOINT vendor_write_allowed');
     await client.query('SAVEPOINT customer_scope_denied');
     await assert.rejects(client.query(`INSERT INTO customers(organization_id,id,code,name,legal_name)
       SELECT CASE WHEN position=1 THEN $1::uuid ELSE set_config('app.organization_id',$2,true)::uuid END,

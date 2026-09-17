@@ -127,8 +127,8 @@ export function BulkUploadPreview({ batchId }) {
   const disabled = busy || retry || Boolean(editing);
   const config = data && masterBulkResources[data.batch.resource];
   const userUpload = data?.batch.resource === 'users';
-  const customerUpload = data?.batch.resource === 'customers';
-  const fixedColumns = userUpload || customerUpload;
+  const partyUpload = ['customers', 'vendors'].includes(data?.batch.resource);
+  const fixedColumns = userUpload || partyUpload;
   return <><BulkHeader title="Bulk Upload Preview"><SecondaryButton disabled={disabled} href={returnPath ?? `/bulk_uploads${data ? `?resource=${data.batch.resource}` : ''}`}>Uploads</SecondaryButton>
     <SecondaryButton disabled={disabled || !data || data.summary.committed === data.summary.total} onClick={() => run('review')}>Validate</SecondaryButton>
     <PrimaryButton disabled={disabled || !data?.summary.ready} onClick={() => run('process')}>Process valid rows</PrimaryButton></BulkHeader>
@@ -142,12 +142,12 @@ export function BulkUploadPreview({ batchId }) {
           <div className="bulk-upload-summary__item"><span>{data.summary.total}</span><small>Total rows</small></div>
           <div className="bulk-upload-summary__item"><span>{data.summary.rejected}</span><small>Cannot upload</small></div>
           <div className="bulk-upload-summary__item"><span>{data.summary.committed}</span><small>Committed</small></div></div>
-        <div className="bulk-upload-validation-alert alert alert-info"><div>{data.summary.unvalidated ? `${data.summary.unvalidated} rows need validation.` : `${data.summary.ready} rows ready to process.${userUpload || customerUpload ? '' : ` ${data.summary.updates} matching records will be updated.`}`}</div>
+        <div className="bulk-upload-validation-alert alert alert-info"><div>{data.summary.unvalidated ? `${data.summary.unvalidated} rows need validation.` : `${data.summary.ready} rows ready to process.${userUpload || partyUpload ? '' : ` ${data.summary.updates} matching records will be updated.`}`}</div>
           {userUpload ? <><div>User uploads create new accounts. Existing usernames and emails must be corrected before processing.</div>
             <div>Passwords are hidden. Leave a password untouched to keep it, enter a replacement, or use Clear password. Downloads have blank password cells; reenter passwords before uploading them again.</div></>
-            : customerUpload ? <div>Customer uploads create new records. Existing names must be corrected before processing. Blank optional numeric fields use their defaults; supplied zero values are retained.</div>
+            : partyUpload ? <div>{config.label} uploads create new records. Existing names must be corrected before processing. Blank optional numeric fields use their defaults; supplied zero values are retained.</div>
               : <div>Omitted columns retain saved values. Supplied blank cells clear those fields. Each row shows whether it will create, update or reactivate a record.</div>}
-          {data.batch.hasDateFields ? <div>New date values use {data.batch.timeZone}.{customerUpload ? '' : ' Rows with omitted saved dates retain that record’s date time zone.'}</div> : null}
+          {data.batch.hasDateFields ? <div>New date values use {data.batch.timeZone}.{partyUpload ? '' : ' Rows with omitted saved dates retain that record’s date time zone.'}</div> : null}
           <Link href={config.path} className="btn btn-link p-0 mt-1">Open records</Link></div>
         {data.summary.rejected ? <div className="alert alert-warning d-flex flex-wrap justify-content-between gap-2"><span>{data.summary.rejected} rows need attention. Correct them below, then validate again.</span>
           <div className="d-flex gap-2"><SecondaryButton leftIcon="refresh" size="small" disabled={disabled} onClick={() => run('review', true)}>Retry rejected rows</SecondaryButton>

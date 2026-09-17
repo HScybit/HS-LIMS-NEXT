@@ -5,6 +5,7 @@ import { productVersions } from './product-history-schema.js';
 import { testParameterVersions } from './parameter-history-schema.js';
 import { methodVersions } from './method-history-schema.js';
 import { userProfileVersions } from './user-profile-schema.js';
+import { vendorVersions } from './vendor-schema.js';
 import { customerVersions } from './customer-history-schema.js';
 
 const transactionId = customType({ dataType: () => 'xid8' });
@@ -31,7 +32,7 @@ export const masterBulkBatches = pgTable('master_bulk_batches', {
   primaryKey({ name: 'master_bulk_batch_pk', columns: [table.organizationId, table.id] }),
   foreignKey({ name: 'master_bulk_batches_organization_id_fkey', columns: [table.organizationId], foreignColumns: [organizations.id] }),
   foreignKey({ name: 'master_bulk_batch_actor_fk', columns: [table.organizationId, table.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
-  check('master_bulk_batch_fields', sql`resource IN ('products','test-parameters','methods','users','customers')
+  check('master_bulk_batch_fields', sql`resource IN ('products','test-parameters','methods','users','customers','vendors')
   AND length(file_name) BETWEEN 1 AND 250 AND file_format IN ('csv','xlsx')
   AND ((resource='users' AND source_sha256 IS NULL AND source_hmac_sha256 IS NOT NULL AND source_hmac_sha256 ~ '^[a-f0-9]{64}$')
     OR (resource<>'users' AND source_hmac_sha256 IS NULL AND source_sha256 IS NOT NULL AND source_sha256 ~ '^[a-f0-9]{64}$'))
@@ -177,6 +178,7 @@ export const masterBulkAttempts = pgTable('master_bulk_attempts', {
   methodId: uuid('method_id'),
   userId: uuid('user_id'),
   customerId: uuid('customer_id'),
+  vendorId: uuid('vendor_id'),
   resultRevision: integer('result_revision'),
   errorCode: text('error_code'),
   errorMessage: text('error_message'),
@@ -192,9 +194,10 @@ export const masterBulkAttempts = pgTable('master_bulk_attempts', {
   foreignKey({ name: 'master_bulk_attempt_method_fk', columns: [table.organizationId, table.methodId, table.resultRevision], foreignColumns: [methodVersions.organizationId, methodVersions.methodId, methodVersions.revision] }),
   foreignKey({ name: 'master_bulk_attempt_user_fk', columns: [table.organizationId, table.userId, table.resultRevision], foreignColumns: [userProfileVersions.organizationId, userProfileVersions.userId, userProfileVersions.revision] }),
   foreignKey({ name: 'master_bulk_attempt_customer_fk', columns: [table.organizationId, table.customerId, table.resultRevision], foreignColumns: [customerVersions.organizationId, customerVersions.customerId, customerVersions.revision] }),
+  foreignKey({ name: 'master_bulk_attempt_vendor_fk', columns: [table.organizationId, table.vendorId, table.resultRevision], foreignColumns: [vendorVersions.organizationId, vendorVersions.vendorId, vendorVersions.revision] }),
   check('master_bulk_attempt_fields', sql`
-    (committed AND num_nonnulls(product_id,parameter_id,method_id,user_id,customer_id)=1 AND result_revision IS NOT NULL AND result_revision>0 AND error_code IS NULL AND error_message IS NULL)
-    OR (NOT committed AND num_nonnulls(product_id,parameter_id,method_id,user_id,customer_id,result_revision)=0
+    (committed AND num_nonnulls(product_id,parameter_id,method_id,user_id,customer_id,vendor_id)=1 AND result_revision IS NOT NULL AND result_revision>0 AND error_code IS NULL AND error_message IS NULL)
+    OR (NOT committed AND num_nonnulls(product_id,parameter_id,method_id,user_id,customer_id,vendor_id,result_revision)=0
       AND error_code IS NOT NULL AND length(error_code) BETWEEN 1 AND 100 AND error_message IS NOT NULL AND length(error_message) BETWEEN 1 AND 2000)`),
   uniqueIndex('master_bulk_one_commit').on(table.organizationId, table.batchId, table.rowId).where(sql`${table.committed}`),
   index('master_bulk_attempt_latest').on(table.organizationId, table.batchId, table.rowId, table.sequence.desc().nullsFirst()),

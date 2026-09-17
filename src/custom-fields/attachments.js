@@ -43,22 +43,23 @@ export async function uploadCustomFieldAttachment(client, identity, input) {
   // moved or retired. RLS checks the saved definition and current module grant.
   const previous = (await client.query(`SELECT ${columns} FROM custom_field_attachments WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
   if (previous) return replay(previous);
-  // Inspect before row locks: Customer's native command acquires the shared
+  // Inspect before row locks: each party command acquires the shared
   // definition lock and organization authorization before the upload key.
   const association = (await client.query('SELECT associated_with FROM custom_field_definitions WHERE organization_id=$1 AND id=$2', [identity.organization_id, fieldId])).rows[0]?.associated_with;
-  if (association === 'customer') {
+  if (['customer', 'vendor'].includes(association)) {
+    const label = association === 'vendor' ? 'Vendor' : 'Customer';
     try {
-      const replayed = (await client.query('SELECT masters_upload_customer_attachment($1,$2,$3,$4,$5,$6) AS replayed',
+      const replayed = (await client.query(`SELECT masters_upload_${association}_attachment($1,$2,$3,$4,$5,$6) AS replayed`,
         [id, fieldId, fieldRevision, details.originalName, details.mediaType, input.content])).rows[0].replayed;
       const row = (await client.query(`SELECT ${columns} FROM custom_field_attachments WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
       if (!row) throw new HttpError(409, 'attachment_unavailable', 'The saved attachment is unavailable.');
       return { ...metadata(row), replayed };
     } catch (error) {
-      if (error.constraint === 'organization_module_access_required') throw new HttpError(403, 'customer_module_access_required', 'Customer module access is required.');
-      if (error.code === '42501') throw new HttpError(403, 'forbidden', 'Your Customer management permission changed. Reload before uploading.');
-      if (error.constraint === 'customer_attachment_field_not_found') throw new HttpError(404, 'attachment_field_not_found', 'The attachment field was not found.');
-      if (error.constraint === 'customer_attachment_field_changed') throw new HttpError(409, 'stale_custom_field', 'The Custom Field changed. Reload before uploading.');
-      if (['customer_attachment_request_reused', 'custom_field_attachment_pk'].includes(error.constraint)) throw new HttpError(409, 'attachment_request_reused', 'This upload request was already used with different details.');
+      if (error.constraint === 'organization_module_access_required') throw new HttpError(403, `${association}_module_access_required`, `${label} module access is required.`);
+      if (error.code === '42501') throw new HttpError(403, 'forbidden', `Your ${label} management permission changed. Reload before uploading.`);
+      if (error.constraint === `${association}_attachment_field_not_found`) throw new HttpError(404, 'attachment_field_not_found', 'The attachment field was not found.');
+      if (error.constraint === `${association}_attachment_field_changed`) throw new HttpError(409, 'stale_custom_field', 'The Custom Field changed. Reload before uploading.');
+      if ([`${association}_attachment_request_reused`, 'custom_field_attachment_pk'].includes(error.constraint)) throw new HttpError(409, 'attachment_request_reused', 'This upload request was already used with different details.');
       throw error;
     }
   }

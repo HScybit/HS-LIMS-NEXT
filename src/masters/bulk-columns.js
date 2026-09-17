@@ -3,8 +3,11 @@ import { integer, uuid } from '../templates/input.js';
 import { masterBulkCsvLimits as limits } from './bulk-csv.js';
 import { customFieldCaptureLimit } from './custom-field-config.js';
 import { customerFormFields } from './customer-fields.js';
+import { vendorBulkFields } from './vendor-bulk-config.js';
 
 const resources = {
+  vendors: { association: 'vendor', ignored: new Set(),
+    fields: { ...Object.fromEntries(vendorBulkFields.flatMap(field => [[field.source, field.key], [field.key, field.key]])), displayName: 'name' } },
   customers: { association: 'customer', ignored: new Set(),
     fields: { ...Object.fromEntries(customerFormFields.flatMap(field => [[field.source, field.key], [field.key, field.key]])), displayName: 'name' } },
   products: {

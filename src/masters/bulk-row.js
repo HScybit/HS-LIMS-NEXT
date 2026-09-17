@@ -1,6 +1,7 @@
 import { HttpError } from '../auth/errors.js';
 import { masterBulkResources } from './bulk-config.js';
 import { customerFormFields } from './customer-fields.js';
+import { vendorBulkFields } from './vendor-bulk-config.js';
 
 const invalid = message => new HttpError(400, 'invalid_bulk_row', message);
 
@@ -60,8 +61,8 @@ export async function masterBulkRowCommand({ resource, columns, row, definitions
     let value = bulkCellValue(row.values[column.columnNumber - 1]);
     if (column.kind === 'custom_field') { supplied.set(column.fieldId, value); continue; }
     const key = column.fieldName;
-    if (resource === 'customers') {
-      const field = customerFormFields.find(field => field.key === key);
+    if (['customers', 'vendors'].includes(resource)) {
+      const field = (resource === 'vendors' ? vendorBulkFields : customerFormFields).find(field => field.key === key);
       // PERN's file parser leaves optional blank scalars to API defaults.
       if (value === '' && ['number', 'boolean', 'select'].includes(field.type)) continue;
       if (field.type === 'boolean') value = bulkBoolean(value, column.header.trim());

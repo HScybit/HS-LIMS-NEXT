@@ -24,3 +24,13 @@ export async function grantSyntheticCustomerAccess(owner, account) {
   await saveModuleAccessSettings(manager, modules);
   return manager;
 }
+
+export async function grantSyntheticVendorAccess(owner, account) {
+  const manager = await createAccount(owner, { organizationId: account.organizationId, permissions: ['settings.manage'] });
+  Object.assign(manager, await signIn({ identifier: manager.username, password: manager.password }));
+  const modules = (await withSession(manager.token, loadLaboratorySettings, { readOnly: true })).settings.moduleAccess;
+  const vendor = modules.find(access => access.moduleKey === 'vendor');
+  vendor.enabled = true; vendor.userIds = [...new Set([...vendor.userIds, account.userId])];
+  await saveModuleAccessSettings(manager, modules);
+  return manager;
+}

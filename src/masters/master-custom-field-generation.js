@@ -4,7 +4,7 @@ import { customFieldFormDisplayValue, customFieldNeedsGeneration } from '../cust
 import { customFieldTimeZone, customFieldDateDisplayInZone } from '../custom-fields/server-dates.js';
 import { schemeTokens } from '../custom-fields/product-generation.js';
 import { runMasterGeneration } from '../custom-fields/product-generation-runner.js';
-import { productCustomFields, parameterCustomFields, methodCustomFields, customerCustomFields } from './custom-fields.js';
+import { productCustomFields, parameterCustomFields, methodCustomFields, customerCustomFields, vendorCustomFields } from './custom-fields.js';
 import { currentLookupSelections, lookupOptionsForValue } from './master-custom-field-values.js';
 
 const stores = Object.freeze({
@@ -16,6 +16,8 @@ const stores = Object.freeze({
     context: 'masters_method_scheme_context', definitions: methodCustomFields, countKey: 'methods', countColumn: 'methodCount' }),
   customer: Object.freeze({ label: 'Customer', collection: 'CustomerMaster', table: 'customers', fieldTable: 'customer_version_custom_fields', idColumn: 'customer_id',
     context: 'masters_customer_scheme_context', definitions: customerCustomFields, countKey: 'customers', countColumn: 'customerCount', retirement: true }),
+  vendor: Object.freeze({ label: 'Vendor', collection: 'VendorMaster', table: 'vendors', fieldTable: 'vendor_version_custom_fields', idColumn: 'vendor_id',
+    context: 'masters_vendor_scheme_context', definitions: vendorCustomFields, countKey: 'vendors', countColumn: 'vendorCount', retirement: true }),
 });
 
 export async function generateMasterCustomFields(kind, client, identity, command) {
