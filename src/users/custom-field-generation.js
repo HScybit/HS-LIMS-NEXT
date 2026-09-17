@@ -6,7 +6,7 @@ import { customFieldFormDisplayValue, customFieldNeedsGeneration } from '../cust
 import { schemeTokens } from '../custom-fields/product-generation.js';
 import { runMasterGeneration } from '../custom-fields/product-generation-runner.js';
 import { userCustomFields } from '../masters/custom-fields.js';
-import { currentLookupSelections } from '../masters/master-custom-field-values.js';
+import { currentLookupSelections, lookupOptionsForValue } from '../masters/master-custom-field-values.js';
 
 export function userGenerationInput(input) {
   fieldsOnly(input, ['userId', 'user', 'customFields', 'customFieldTimeZone', 'fieldId']);
@@ -62,7 +62,7 @@ export async function generateUserCustomFields(client, identity, input) {
   const doc = { ...command.doc, _id: command.id ?? undefined, __scheme_collname: 'Meteor.users', organization_id: identity.organization_id,
     project_field_data: Object.fromEntries(fields.map(field => [field.key, { key: field.key, name: field.label, type: field.fieldType,
       value: values[field.id], display_value: customFieldFormDisplayValue(values[field.id], field,
-        [...lookupSelections.get(field.lookupSourceId)?.values() ?? []].filter(Boolean), (raw, definition) => customFieldDateDisplayInZone(raw, definition, command.timeZone)),
+        lookupOptionsForValue(lookupSelections, field.lookupSourceId, values[field.id]), (raw, definition) => customFieldDateDisplayInZone(raw, definition, command.timeZone)),
       ...(field.scheme ? { scheme: field.scheme } : {}), ...(field.splitter ? { splitter: field.splitter } : {}),
       ...(field.paddedNumber == null ? {} : { padded_number: field.paddedNumber }),
       ...(field.dateFormat ? { date_format: field.dateFormat } : {}), ...(field.datetimeFormat ? { datetime_format: field.datetimeFormat } : {}),

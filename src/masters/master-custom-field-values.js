@@ -94,6 +94,11 @@ function postgresDate(value, includeTime = false) {
   return day + (includeTime ? value.format(' HH:mm:ss.SSS') + '+00' : '') + era;
 }
 
+export function lookupOptionsForValue(selections, sourceId, value) {
+  const source = selections.get(sourceId);
+  return [...new Set((Array.isArray(value) ? value : [value]).map(String))].map(key => source?.get(key)).filter(Boolean);
+}
+
 export async function currentLookupSelections(kind, client, identity, definitions, entries) {
   const bySource = new Map();
   for (const entry of entries) {
@@ -146,7 +151,7 @@ export async function prepareMasterCustomFieldValues(kind, client, identity, { d
     const previousField = previousByKey.get(field.key);
     const values = Array.isArray(entry.value) ? entry.value : [entry.value];
     const lookupSource = lookupSelections.get(field.lookupSourceId);
-    const lookupOptions = field.fieldType === 'lookup' ? [...new Set(values.map(String))].map(value => lookupSource?.get(value)).filter(Boolean) : [];
+    const lookupOptions = field.fieldType === 'lookup' ? lookupOptionsForValue(lookupSelections, field.lookupSourceId, entry.value) : [];
     const display = typedPrimitive(customFieldFormDisplayValue(entry.value, field, lookupOptions, (value, definition) => customFieldDateDisplayInZone(value, definition, zone)));
     fields.push({ fieldId: field.id, fieldRevision: field.revision, fieldType: field.fieldType, position, isArray: Array.isArray(entry.value), valueCount: values.length,
       displayKind: display.kind, displayText: display.text, displayNumber: display.number, displayBoolean: display.boolean,

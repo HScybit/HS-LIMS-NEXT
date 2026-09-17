@@ -5,6 +5,7 @@ import { customFieldTimeZone, customFieldDateDisplayInZone } from '../custom-fie
 import { schemeTokens } from '../custom-fields/product-generation.js';
 import { runMasterGeneration } from '../custom-fields/product-generation-runner.js';
 import { productCustomFields, parameterCustomFields, methodCustomFields } from './custom-fields.js';
+import { currentLookupSelections, lookupOptionsForValue } from './master-custom-field-values.js';
 
 const stores = Object.freeze({
   product: Object.freeze({ label: 'Product', collection: 'Product', table: 'products', fieldTable: 'product_version_custom_fields', idColumn: 'product_id',
@@ -39,9 +40,11 @@ export async function generateMasterCustomFields(kind, client, identity, command
   const context = (await client.query(`SELECT * FROM ${store.context}($1,$2)`,
     [['total_counter', 'nabl_counter'].some((token) => tokens.has(token)), ['samples_counter', 'sample_category_counter'].some((token) => tokens.has(token))])).rows[0];
   if (!context) throw new HttpError(403, 'forbidden', `You cannot generate ${store.label} fields.`);
+  const lookupSelections = await currentLookupSelections(kind, client, identity, byId, command.customFields);
   const doc = { ...command.doc, _id: command.id ?? undefined, __scheme_collname: store.collection, organization_id: identity.organization_id,
     project_field_data: Object.fromEntries(fields.map((field) => [field.key, { key: field.key, name: field.label, type: field.fieldType,
-      value: values[field.id], display_value: customFieldFormDisplayValue(values[field.id], field, [], (value, definition) => customFieldDateDisplayInZone(value, definition, command.timeZone)),
+      value: values[field.id], display_value: customFieldFormDisplayValue(values[field.id], field,
+        lookupOptionsForValue(lookupSelections, field.lookupSourceId, values[field.id]), (value, definition) => customFieldDateDisplayInZone(value, definition, command.timeZone)),
       ...(field.scheme ? { scheme: field.scheme } : {}), ...(field.splitter ? { splitter: field.splitter } : {}),
       ...(field.paddedNumber == null ? {} : { padded_number: field.paddedNumber }),
       ...(field.startFrom == null || field.startFrom === '' ? {} : { start_from: field.startFrom }),
@@ -67,6 +70,11 @@ export async function generateMasterCustomFields(kind, client, identity, command
       FROM budget WHERE bytes<=8388608 OR position=1 ORDER BY created_at DESC,updated_at DESC,id DESC`,
     [identity.organization_id, fieldId, command.id, cursor?.createdAt ?? null, cursor?.updatedAt ?? null, cursor?.productId ?? null])).rows;
   };
-  return { values: await runMasterGeneration({ kind, fields, values, doc, settings: context, counts: { [store.countKey]: context[store.countColumn], samples: context.sampleCount },
-    clock, timeZone: command.timeZone, fieldId: command.fieldId, mode }, readPage) };
+  const readLookup = async (fieldId, value) => {
+    const selections = await currentLookupSelections(kind, client, identity, byId, [{ fieldId, value }]);
+    return [...selections.get(byId.get(fieldId).lookupSourceId)?.values() ?? []].filter(Boolean);
+  };
+  return { values: await runMasterGeneration({ kind, fields, values, doc, settings: context, resolveLookups: true,
+    counts: { [store.countKey]: context[store.countColumn], samples: context.sampleCount },
+    clock, timeZone: command.timeZone, fieldId: command.fieldId, mode }, readPage, { readLookup }) };
 }
