@@ -19,7 +19,7 @@ async function loadTagFilters(search, { signal }) {
   return { options: result.rows.map((tag) => ({ value: tag.id, label: tag.name })), hasMore: result.hasMore };
 }
 
-export default function ProductList({ canManage }) {
+export default function ProductList({ canManage, bulkResources }) {
   const router = useRouter(); const search = useSearchParams(); const [reload, setReload] = useState(0);
   const [deletion, setDeletion] = useState(null); const [deleting, setDeleting] = useState(false); const [error, setError] = useState('');
   const [customFields, setCustomFields] = useState(null); const [customFieldError, setCustomFieldError] = useState('');
@@ -69,7 +69,7 @@ export default function ProductList({ canManage }) {
   return <>
     <PageHeader><div className="page-header"><div className="container-fluid h-100"><div className="row h-100 align-items-center justify-content-between page-header__row">
       <div className="col page-header__start"><h1 className="page-title mb-0">Products</h1></div>
-      <div className="col-auto page-header__actions d-flex gap-2">{canManage ? <><MasterBulkButton resource="products" /><PrimaryButton leftIcon="plus" onClick={() => router.push(`/products/new?from=${encodeURIComponent(returnPath)}`)}>New Product</PrimaryButton></> : null}</div>
+      <div className="col-auto page-header__actions d-flex gap-2">{canManage ? <><MasterBulkButton resource="products" resources={bulkResources} /><PrimaryButton leftIcon="plus" onClick={() => router.push(`/products/new?from=${encodeURIComponent(returnPath)}`)}>New Product</PrimaryButton></> : null}</div>
     </div></div></div></PageHeader>
     {customFieldError ? <div className="alert alert-danger m-4" role="alert">{customFieldError}<button type="button" className="btn btn-link"
       onClick={() => setReload((value) => value+1)}>Retry loading fields</button></div> : null}

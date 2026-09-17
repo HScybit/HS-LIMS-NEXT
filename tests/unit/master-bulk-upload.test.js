@@ -5,6 +5,7 @@ import { readMasterBulkUpload } from '../../src/masters/bulk-upload.js';
 import { writeMasterXlsx } from '../../src/masters/bulk-xlsx-export.js';
 import { decodeMasterXlsx } from '../../src/masters/bulk-xlsx.js';
 import { masterWorkbook } from '../helpers/master-workbooks.js';
+import { userBulkSourceFingerprint } from '../../src/users/bulk-credentials.js';
 
 function request(body, headers = {}, resource = 'products') {
   const url = new URL(`http://localhost/api/master-bulk?resource=${resource}`);
@@ -25,12 +26,26 @@ test('upload reader preserves CSV bytes/hash and raw values, and validates actua
 test('upload reader rejects wrong resource, type, length, encoding, name, size and missing bodies', async () => {
   const source = 'name,key\nA,A';
   for (const [body, headers, resource] of [
-    [source, {}, 'users'], [source, { 'content-type': 'application/json' }], [source, { 'x-file-name': 'source.xls' }],
+    [source, {}, 'unavailable'], [source, { 'content-type': 'application/json' }], [source, { 'x-file-name': 'source.xls' }],
     [source, { 'x-file-name': '%broken' }], [source, { 'x-file-name': '' }], [source, { 'content-length': '-1' }],
     [source, { 'content-length': '999' }], [source, { 'content-length': '16777217' }], [null, {}],
     [Buffer.from([0xc0, 0xaf]), {}], [source, { 'x-upload-time-zone': 'Unknown/Zone' }], [source, { 'x-upload-request-id': 'bad' }],
   ]) await assert.rejects(readMasterBulkUpload(request(body, headers, resource)), error => [400, 413, 415].includes(error.status));
   await assert.rejects(readMasterBulkUpload(request(Buffer.alloc(16 * 1_048_576 + 1))), { code: 'bulk_file_limit' });
+});
+
+test('User upload transport uses a private keyed fingerprint and keeps decoded passwords only for server preparation', async () => {
+  const previous = process.env.MFA_ENCRYPTION_KEY; process.env.MFA_ENCRYPTION_KEY = 'a'.repeat(64);
+  try {
+    const source = 'name,password\nPerson,Synthetic password';
+    const result = await readMasterBulkUpload(request(source, {}, 'users'));
+    assert.equal(result.input.sourceHmacSha256, userBulkSourceFingerprint(Buffer.from(source)));
+    assert.equal(Object.hasOwn(result.input, 'sourceSha256'), false);
+    assert.notEqual(result.input.sourceHmacSha256, createHash('sha256').update(source).digest('hex'));
+    assert.equal(result.decoded.rows[0].values[1], 'Synthetic password');
+    delete process.env.MFA_ENCRYPTION_KEY;
+    await assert.rejects(readMasterBulkUpload(request(source, {}, 'users')), { code: 'account_command_key_unavailable' });
+  } finally { if (previous === undefined) delete process.env.MFA_ENCRYPTION_KEY; else process.env.MFA_ENCRYPTION_KEY = previous; }
 });
 
 test('export worker retains scalars/dates and formula-looking text as literal non-executable cells', async () => {

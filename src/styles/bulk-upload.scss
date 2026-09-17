@@ -218,6 +218,14 @@
   word-break: break-word;
 }
 
+.bulk-upload-user-table.smplfy-table.table > tbody > tr > td {
+  vertical-align: top;
+}
+
+.bulk-upload-user-table .bulk-upload-cell-editor.form-control {
+  min-width: 156px;
+}
+
 .bulk-upload-row--blocked {
   --bs-table-bg: var(--smplfy-primitive-red-50);
   --bs-table-hover-bg: var(--smplfy-primitive-red-50);

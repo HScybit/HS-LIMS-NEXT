@@ -119,6 +119,7 @@ const nextConfig = {
   experimental: { optimizePackageImports: ['@tabler/icons-react'] },
   outputFileTracingIncludes: {
     '/api/master-bulk{,/**}': masterWorkbookRuntimeFiles,
+    '/api/master-bulk/*/{review,process}': userOptionRuntimeFiles,
     // The Node-only user filter loads this existing dependency graph at runtime.
     '/api/users{,/**}': userOptionRuntimeFiles,
     '/api/masters/{products,test-parameters,methods}/custom-field-users': userOptionRuntimeFiles,

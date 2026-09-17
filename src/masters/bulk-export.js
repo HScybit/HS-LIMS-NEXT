@@ -5,7 +5,8 @@ import { masterBulkResource } from './bulk-row.js';
 import { loadMasterBulkBatch, loadMasterBulkCells, masterBulkRowStatus } from './bulk-store.js';
 
 export async function masterBulkTemplate(client, identity, resource) {
-  requirePermission(identity, 'masters.manage'); const config = masterBulkResource(resource);
+  const config = masterBulkResource(resource); requirePermission(identity, config.permission);
+  if (resource === 'users') return { headers: [...config.headers], rows: [], fileName: 'users-sample.xlsx' };
   const readers = { products: productCustomFields, 'test-parameters': parameterCustomFields, methods: methodCustomFields };
   const fields = await readers[resource](client, identity);
   const headers = [...config.headers, ...fields.map(field => `project_field.${field.key}`)];

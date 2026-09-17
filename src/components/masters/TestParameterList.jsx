@@ -15,7 +15,7 @@ import { customFieldColumnKey, customFieldListDisplay } from '../../custom-field
 
 const actionClass = 'smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 flex-shrink-0 text-nowrap';
 
-export default function TestParameterList({ canManage }) {
+export default function TestParameterList({ canManage, bulkResources }) {
   const router = useRouter(); const search = useSearchParams(); const [reload, setReload] = useState(0);
   const [deletion, setDeletion] = useState(null); const [deleting, setDeleting] = useState(false); const [error, setError] = useState('');
   const [customFields, setCustomFields] = useState(null); const [customFieldError, setCustomFieldError] = useState('');
@@ -64,7 +64,7 @@ export default function TestParameterList({ canManage }) {
   return <>
     <PageHeader><div className="page-header"><div className="container-fluid h-100"><div className="row h-100 align-items-center justify-content-between page-header__row">
       <div className="col page-header__start"><h1 className="page-title mb-0">Test Parameters</h1></div>
-      <div className="col-auto page-header__actions d-flex gap-2">{canManage ? <><MasterBulkButton resource="test-parameters" /><PrimaryButton leftIcon="plus" onClick={() => router.push(`/test_parameters/new?from=${encodeURIComponent(returnPath)}`)}>New Test Parameter</PrimaryButton></> : null}</div>
+      <div className="col-auto page-header__actions d-flex gap-2">{canManage ? <><MasterBulkButton resource="test-parameters" resources={bulkResources} /><PrimaryButton leftIcon="plus" onClick={() => router.push(`/test_parameters/new?from=${encodeURIComponent(returnPath)}`)}>New Test Parameter</PrimaryButton></> : null}</div>
     </div></div></div></PageHeader>
     {customFieldError ? <div className="alert alert-danger m-4" role="alert">{customFieldError}<button type="button" className="btn btn-link"
       onClick={() => setReload((value) => value+1)}>Retry loading fields</button></div> : null}

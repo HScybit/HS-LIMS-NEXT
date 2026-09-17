@@ -14,6 +14,10 @@ const errors = {
   users_pkey: [409, 'user_already_exists', 'This account already exists. Reload before continuing.'],
 };
 
+export function userCreationCommandError(error) {
+  return errors[error.constraint] ? new HttpError(...errors[error.constraint]) : userProfileCommandError(error);
+}
+
 export async function createUser(client, identity, value) {
   requirePermission(identity, 'users.manage'); const input = userCreationInput(value);
   const fingerprint = userCreationFingerprint(input); const passwordHash = await hashPassword(input.password);
@@ -28,7 +32,6 @@ export async function createUser(client, identity, value) {
     return { user: { id: input.id, username: input.username, email: input.email, displayName: input.displayName }, profileRevision: result.rows[0].revision,
       ...(fields ? { customFieldRevision: fields.revision } : {}) };
   } catch (error) {
-    if (errors[error.constraint]) throw new HttpError(...errors[error.constraint]);
-    throw userProfileCommandError(error);
+    throw userCreationCommandError(error);
   }
 }

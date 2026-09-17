@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { HttpError } from '../auth/errors.js';
-import { fieldsOnly, integer, requirePermission, uuid } from '../templates/input.js';
+import { fieldsOnly, integer, uuid } from '../templates/input.js';
 import { productInput, loadProduct, saveProduct } from './products.js';
 import { testParameterInput, loadTestParameter, saveTestParameter } from './test-parameters.js';
 import { methodInput, loadMethod, saveMethod, generatedMethodCode } from './methods.js';
@@ -11,6 +11,7 @@ import { bindMasterBulkColumns } from './bulk-columns.js';
 import { bulkCellValue, bulkRowKey, masterBulkResource, masterBulkRowCommand, requiredBulkColumns } from './bulk-row.js';
 import { masterBulkChunkSize } from './bulk-config.js';
 import { loadMasterBulkBatch, loadMasterBulkCells } from './bulk-store.js';
+import { prepareUserBulkRow, userBulkContext } from '../users/bulk-service.js';
 
 const resources = {
   products: { kind: 'product', table: 'products', key: 'code', input: productInput, load: loadProduct, save: saveProduct, fields: productCustomFields },
@@ -41,7 +42,7 @@ async function lockRows(client, identity, batch, requests) {
 }
 
 function safeFailure(error) {
-  if (error.status === 401 || error.status === 403 || error.code === '42501') throw new HttpError(403, 'forbidden', 'An active master management session is required.');
+  if (error.status === 401 || error.status === 403 || error.code === '42501') throw new HttpError(403, 'forbidden', 'An active session with access to this upload is required.');
   if (error instanceof HttpError) return { code: error.code.slice(0, 100), message: error.message.slice(0, 2000) };
   throw error;
 }
@@ -76,7 +77,8 @@ function referenceResolver(client, identity) {
   };
 }
 
-async function contextFor(client, identity, batch) {
+async function contextFor(client, identity, batch, requestedRows) {
+  if (batch.resource === 'users') return userBulkContext(client, identity, batch, requestedRows);
   masterBulkResource(batch.resource); const store = resources[batch.resource];
   const definitions = await store.fields(client, identity);
   // Trailing unheaded blanks retain provenance but are not authoring columns.
@@ -102,6 +104,7 @@ async function contextFor(client, identity, batch) {
 }
 
 async function prepareRow(client, identity, batch, context, row, reviewId, expected) {
+  if (batch.resource === 'users') return prepareUserBulkRow(batch, context, row, reviewId, expected);
   const { store, definitions, columns, definitionHash, duplicates, resolve } = context;
   if (row.values.slice(columns.length).some(value => bulkCellValue(value) !== '')) throw invalid('A value was entered in a column without a header.');
   const key = bulkRowKey(batch.resource, columns, row.values);
@@ -136,12 +139,12 @@ async function prepareRow(client, identity, batch, context, row, reviewId, expec
 }
 
 export async function reviewMasterBulk(client, identity, batchId, input) {
-  requirePermission(identity, 'masters.manage'); const requests = requestsInput(input, false);
+  const requests = requestsInput(input, false);
   const batch = await loadMasterBulkBatch(client, identity, batchId);
   const locked = await lockRows(client, identity, batch, requests);
   const rows = new Map((await loadMasterBulkCells(client, identity, batch.id, [...locked.values()])).map(row => [row.id, row]));
   let context; let contextFailure;
-  try { context = await contextFor(client, identity, batch); } catch (error) { contextFailure = safeFailure(error); }
+  try { context = await contextFor(client, identity, batch, [...locked.values()]); } catch (error) { contextFailure = safeFailure(error); }
   const results = [];
   for (const request of requests) {
     const prior = (await client.query('SELECT batch_id,row_id,input_revision,saved_by,valid FROM master_bulk_reviews WHERE organization_id=$1 AND id=$2', [identity.organization_id, request.requestId])).rows[0];
@@ -168,26 +171,27 @@ export async function reviewMasterBulk(client, identity, batchId, input) {
 }
 
 export async function processMasterBulk(client, identity, batchId, input) {
-  requirePermission(identity, 'masters.manage'); const requests = requestsInput(input, true);
+  const requests = requestsInput(input, true);
   const batch = await loadMasterBulkBatch(client, identity, batchId);
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended('master-bulk-process:'||$1::text,0))", [identity.organization_id]);
-  await lockMasterCustomFieldCapture(client);
+  if (batch.resource === 'users') await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended('custom-field-definitions:'||$1::text,0))", [identity.organization_id]);
+  else await lockMasterCustomFieldCapture(client);
   if (batch.resource === 'methods') await lockMethodCustomFieldCapture(client);
   const locked = await lockRows(client, identity, batch, requests);
   const rows = new Map((await loadMasterBulkCells(client, identity, batch.id, [...locked.values()])).map(row => [row.id, row]));
   let context; let contextFailure;
-  try { context = await contextFor(client, identity, batch); } catch (error) { contextFailure = safeFailure(error); }
+  try { context = await contextFor(client, identity, batch, [...locked.values()]); } catch (error) { contextFailure = safeFailure(error); }
   const results = [];
   for (const request of requests) {
     const prior = (await client.query('SELECT * FROM master_bulk_attempts WHERE organization_id=$1 AND id=$2', [identity.organization_id, request.requestId])).rows[0];
     if (prior) {
       if (prior.batch_id !== batch.id || prior.row_id !== request.id || prior.input_revision !== request.revision || prior.review_id !== request.reviewId || prior.saved_by !== identity.user_id) throw new HttpError(409, 'bulk_request_reused', 'This processing request was already used.');
-      results.push({ id: request.id, committed: prior.committed, resultId: prior.product_id ?? prior.parameter_id ?? prior.method_id,
+      results.push({ id: request.id, committed: prior.committed, resultId: prior.product_id ?? prior.parameter_id ?? prior.method_id ?? prior.user_id,
         resultRevision: prior.result_revision, error: prior.error_code ? { code: prior.error_code, message: prior.error_message } : null }); continue;
     }
-    const committed = (await client.query('SELECT product_id,parameter_id,method_id,result_revision FROM master_bulk_attempts WHERE organization_id=$1 AND batch_id=$2 AND row_id=$3 AND committed', [identity.organization_id, batch.id, request.id])).rows[0];
+    const committed = (await client.query('SELECT product_id,parameter_id,method_id,user_id,result_revision FROM master_bulk_attempts WHERE organization_id=$1 AND batch_id=$2 AND row_id=$3 AND committed', [identity.organization_id, batch.id, request.id])).rows[0];
     if (committed) {
-      results.push({ id: request.id, committed: true, resultId: committed.product_id ?? committed.parameter_id ?? committed.method_id, resultRevision: committed.result_revision, error: null }); continue;
+      results.push({ id: request.id, committed: true, resultId: committed.product_id ?? committed.parameter_id ?? committed.method_id ?? committed.user_id, resultRevision: committed.result_revision, error: null }); continue;
     }
     if (locked.get(request.id).revision !== request.revision) throw stale('Input cells changed. Validate again before processing.');
     const review = (await client.query('SELECT * FROM master_bulk_reviews WHERE organization_id=$1 AND id=$2 AND batch_id=$3 AND row_id=$4 AND input_revision=$5',
@@ -209,10 +213,11 @@ export async function processMasterBulk(client, identity, batchId, input) {
       await client.query('ROLLBACK TO SAVEPOINT master_bulk_row'); await client.query('RELEASE SAVEPOINT master_bulk_row');
       failure = safeFailure(error);
     }
-    await client.query(`INSERT INTO master_bulk_attempts(organization_id,id,batch_id,row_id,input_revision,review_id,committed,product_id,parameter_id,method_id,result_revision,error_code,error_message,saved_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [identity.organization_id, request.requestId, batch.id, request.id, request.revision, review.id, !failure,
+    await client.query(`INSERT INTO master_bulk_attempts(organization_id,id,batch_id,row_id,input_revision,review_id,committed,product_id,parameter_id,method_id,user_id,result_revision,error_code,error_message,saved_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, [identity.organization_id, request.requestId, batch.id, request.id, request.revision, review.id, !failure,
       !failure && batch.resource === 'products' ? saved.id : null, !failure && batch.resource === 'test-parameters' ? saved.id : null,
-      !failure && batch.resource === 'methods' ? saved.id : null, !failure ? saved.revision : null, failure?.code ?? null, failure?.message ?? null, identity.user_id]);
+      !failure && batch.resource === 'methods' ? saved.id : null, !failure && batch.resource === 'users' ? saved.id : null,
+      !failure ? saved.revision : null, failure?.code ?? null, failure?.message ?? null, identity.user_id]);
     results.push({ id: request.id, committed: !failure, resultId: saved?.id ?? null, resultRevision: saved?.revision ?? null, error: failure ?? null });
   }
   return { rows: results, committed: results.filter(row => row.committed).length, rejected: results.filter(row => !row.committed).length };

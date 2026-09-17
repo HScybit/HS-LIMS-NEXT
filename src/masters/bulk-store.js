@@ -2,13 +2,19 @@ import { randomUUID } from 'node:crypto';
 import { HttpError } from '../auth/errors.js';
 import { dateOnly, fieldsOnly, integer, requirePermission, text, uuid } from '../templates/input.js';
 import { customFieldTimeZone } from '../custom-fields/server-dates.js';
-import { masterBulkPageSize, masterBulkResources } from './bulk-config.js';
+import { allowedMasterBulkResources, masterBulkPageSize, masterBulkResources } from './bulk-config.js';
 import { masterBulkResource } from './bulk-row.js';
+import { prepareUserBulkCredential } from '../users/bulk-credentials.js';
+import { loadUserBulkCredentialStates, storeUserBulkCredentials } from '../users/bulk-store.js';
 
 const invalid = message => new HttpError(400, 'invalid_bulk_input', message);
 const conflict = () => new HttpError(409, 'bulk_request_reused', 'This request was already used for different upload data.');
 const idValue = (value, label) => uuid(value, label).toLowerCase();
 const sourceKeys = ['type', 'formula', 'hasResult', 'errorCode', 'hyperlink', 'numberFormat'];
+const requireBulkManager = identity => {
+  if (!allowedMasterBulkResources(identity.permission_codes).length) requirePermission(identity, 'masters.manage');
+};
+const publicBatch = batch => { const result = { ...batch }; delete result.sourceHmacSha256; return result; };
 
 function cellInput(value, metadata) {
   let kind = value === undefined ? 'missing' : value instanceof Date ? 'date' : typeof value;
@@ -27,17 +33,18 @@ function cellInput(value, metadata) {
     kind === 'date' ? value.toISOString() : null, ...sourceKeys.map(key => source[key] ?? null)];
 }
 
-const batchSelect = `SELECT id,resource,file_name AS "fileName",file_format AS format,source_sha256 AS "sourceSha256",time_zone AS "timeZone",
+const batchSelect = `SELECT id,resource,file_name AS "fileName",file_format AS format,source_sha256 AS "sourceSha256",source_hmac_sha256 AS "sourceHmacSha256",time_zone AS "timeZone",
   header_row_number AS "headerRowNumber",sheet_name AS "sheetName",sheet_count AS "sheetCount",date_1904 AS "date1904",
   column_count AS "columnCount",row_count AS "rowCount",saved_by AS "savedBy",saved_at AS "savedAt",
   EXISTS (SELECT 1 FROM custom_field_definitions field WHERE field.organization_id=master_bulk_batches.organization_id AND field.active
-    AND field.associated_with=CASE master_bulk_batches.resource WHEN 'products' THEN 'product' WHEN 'test-parameters' THEN 'parameter' ELSE 'method_of_analysis' END
+    AND field.associated_with=CASE master_bulk_batches.resource WHEN 'products' THEN 'product' WHEN 'test-parameters' THEN 'parameter' WHEN 'methods' THEN 'method_of_analysis' END
     AND field.field_type IN ('date','date_time')) AS "hasDateFields" FROM master_bulk_batches`;
 
 export async function loadMasterBulkBatch(client, identity, batchId) {
-  requirePermission(identity, 'masters.manage'); const id = idValue(batchId, 'Upload');
+  requireBulkManager(identity); const id = idValue(batchId, 'Upload');
   const batch = (await client.query(`${batchSelect} WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
   if (!batch) throw new HttpError(404, 'bulk_not_found', 'Bulk upload was not found.');
+  requirePermission(identity, masterBulkResource(batch.resource).permission);
   const columns = (await client.query(`SELECT column_number AS "columnNumber",source_header AS header,source_type AS type,formula,has_result AS "hasResult",
     error_code AS "errorCode",hyperlink,number_format AS "numberFormat" FROM master_bulk_columns WHERE organization_id=$1 AND batch_id=$2 ORDER BY column_number`, [identity.organization_id, id])).rows;
   return { ...batch, columns };
@@ -73,19 +80,36 @@ async function insertCells(client, organizationId, batchId, rows, columnCount) {
   await flush();
 }
 
-export async function stageMasterBulk(client, identity, input, decoded) {
-  requirePermission(identity, 'masters.manage');
-  fieldsOnly(input, ['id', 'resource', 'fileName', 'format', 'sourceSha256', 'timeZone']);
-  const id = idValue(input.id, 'Upload'); masterBulkResource(input.resource);
+function uploadMetadata(identity, input) {
+  requireBulkManager(identity);
+  fieldsOnly(input, ['id', 'resource', 'fileName', 'format', 'sourceSha256', 'sourceHmacSha256', 'timeZone']);
+  const id = idValue(input.id, 'Upload'); requirePermission(identity, masterBulkResource(input.resource).permission);
   const name = text(input.fileName, 'File name', 250); const zone = customFieldTimeZone(input.timeZone);
-  if (name.includes('\0') || !name.isWellFormed() || !['csv', 'xlsx'].includes(input.format) || !/^[a-f0-9]{64}$/.test(input.sourceSha256)) throw invalid('Upload file metadata is invalid.');
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('master-bulk:'||$1::text||':'||$2::text,0))", [identity.organization_id, id]);
-  const prior = (await client.query(`${batchSelect} WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
+  const user = input.resource === 'users';
+  if (name.includes('\0') || !name.isWellFormed() || !['csv', 'xlsx'].includes(input.format)
+    || !/^[a-f0-9]{64}$/.test(user ? input.sourceHmacSha256 : input.sourceSha256)
+    || Object.hasOwn(input, user ? 'sourceSha256' : 'sourceHmacSha256')) throw invalid('Upload file metadata is invalid.');
+  return { id, resource: input.resource, fileName: name, format: input.format, timeZone: zone,
+    sourceSha256: user ? null : input.sourceSha256, sourceHmacSha256: user ? input.sourceHmacSha256 : null };
+}
+
+async function priorUpload(client, identity, metadata) {
+  const prior = (await client.query(`${batchSelect} WHERE organization_id=$1 AND id=$2`, [identity.organization_id, metadata.id])).rows[0];
   if (prior) {
-    if (prior.resource !== input.resource || prior.sourceSha256 !== input.sourceSha256 || prior.fileName !== name || prior.format !== input.format
-      || prior.timeZone !== zone || prior.savedBy !== identity.user_id) throw conflict();
-    return { id, rowCount: prior.rowCount };
+    if (['resource', 'sourceSha256', 'sourceHmacSha256', 'fileName', 'format', 'timeZone'].some(key => prior[key] !== metadata[key])
+      || prior.savedBy !== identity.user_id) throw conflict();
+    return { id: metadata.id, rowCount: prior.rowCount };
   }
+  return null;
+}
+
+export const findMasterBulkUpload = (client, identity, input) => priorUpload(client, identity, uploadMetadata(identity, input));
+
+export async function stageMasterBulk(client, identity, input, decoded, { credentials } = {}) {
+  const metadata = uploadMetadata(identity, input); const { id, fileName: name, timeZone: zone } = metadata;
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('master-bulk:'||$1::text||':'||$2::text,0))", [identity.organization_id, id]);
+  const prior = await priorUpload(client, identity, metadata); if (prior) return prior;
+  if (input.resource !== 'users' && credentials !== undefined) throw invalid('Credentials belong to User uploads only.');
   if (!decoded || !Array.isArray(decoded.rows) || decoded.rows.length < 1 || decoded.rows.length > 2500
     || !Array.isArray(decoded.sourceHeaders) || decoded.sourceHeaders.length < 1 || decoded.sourceHeaders.length > 250) throw invalid('Upload shape is invalid.');
   const columns = [...decoded.sourceHeaders];
@@ -98,8 +122,8 @@ export async function stageMasterBulk(client, identity, input, decoded) {
   const rows = decoded.rows.map((row, index) => ({ ...row, rowNumber: integer(row.rowNumber, 'Source row', headerRow + 1, 2_147_483_647),
     id: randomUUID(), requestId: randomUUID(), revision: 1, ordinal: index + 1 }));
   if (new Set(rows.map(row => row.rowNumber)).size !== rows.length || rows.some(row => !Array.isArray(row.values) || row.values.length > columns.length)) throw invalid('Source rows are invalid.');
-  await client.query(`INSERT INTO master_bulk_batches(organization_id,id,resource,file_name,file_format,source_sha256,time_zone,header_row_number,sheet_name,sheet_count,date_1904,column_count,row_count,saved_by)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [identity.organization_id, id, input.resource, name, input.format, input.sourceSha256, zone,
+  await client.query(`INSERT INTO master_bulk_batches(organization_id,id,resource,file_name,file_format,source_sha256,source_hmac_sha256,time_zone,header_row_number,sheet_name,sheet_count,date_1904,column_count,row_count,saved_by)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, [identity.organization_id, id, input.resource, name, input.format, metadata.sourceSha256, metadata.sourceHmacSha256, zone,
     headerRow, input.format === 'xlsx' ? decoded.sheetName : null, input.format === 'xlsx' ? decoded.sheetCount : null,
     input.format === 'xlsx' ? decoded.date1904 : null, columns.length, rows.length, identity.user_id]);
   const sourceColumns = columns.map((header, index) => {
@@ -118,6 +142,7 @@ export async function stageMasterBulk(client, identity, input, decoded) {
     SELECT $1,$2,id,1,request_id,$5 FROM unnest($3::uuid[],$4::uuid[]) AS rows(id,request_id)`,
   [identity.organization_id, id, rows.map(row => row.id), rows.map(row => row.requestId), identity.user_id]);
   await insertCells(client, identity.organization_id, id, rows, columns.length);
+  if (input.resource === 'users') await storeUserBulkCredentials(client, identity, id, rows, credentials);
   return { id, rowCount: rows.length };
 }
 
@@ -125,7 +150,7 @@ const rowStatus = `SELECT row.id,row.ordinal,row.source_row_number AS "rowNumber
   review.id AS "reviewId",review.valid,review.operation,review.error_code AS "validationCode",review.error_message AS "validationMessage",
   review.candidate_id AS "candidateId",review.expected_revision AS "expectedRevision",review.definitions_sha256 AS "definitionsSha256",
   attempt.id AS "attemptId",attempt.committed,attempt.error_code AS "processingCode",attempt.error_message AS "processingMessage",
-  attempt.result_revision AS "resultRevision",coalesce(attempt.product_id,attempt.parameter_id,attempt.method_id) AS "resultId"
+  attempt.result_revision AS "resultRevision",coalesce(attempt.product_id,attempt.parameter_id,attempt.method_id,attempt.user_id) AS "resultId"
   FROM master_bulk_rows row
   LEFT JOIN LATERAL (SELECT * FROM master_bulk_reviews WHERE organization_id=row.organization_id AND batch_id=row.batch_id AND row_id=row.id
     AND input_revision=row.revision ORDER BY sequence DESC LIMIT 1) review ON true
@@ -171,15 +196,20 @@ export async function loadMasterBulkPreview(client, identity, batchId, input = {
   const filtered = filter === 'rejected' ? status.filter(row => !row.committed && (row.valid === false || row.processingCode)) : status;
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(filtered.length / masterBulkPageSize)));
   const rows = await loadMasterBulkCells(client, identity, batch.id, filtered.slice((page - 1) * masterBulkPageSize, page * masterBulkPageSize));
+  if (batch.resource === 'users') {
+    const credentials = await loadUserBulkCredentialStates(client, identity, batch.id, rows);
+    if (credentials.size !== rows.length) throw new HttpError(403, 'forbidden', 'User upload credentials are unavailable. Reload your session.');
+    for (const row of rows) row.passwordState = credentials.get(row.id).state;
+  }
   const fileErrors = [...new Set(status.filter(row => !row.committed && ['invalid_bulk_columns', 'missing_bulk_columns', 'invalid_bulk_definitions'].includes(row.validationCode)).map(row => row.validationMessage))];
-  return { batch, summary: masterBulkSummary(status), rows, page, pageSize: masterBulkPageSize, filteredTotal: filtered.length, fileErrors,
+  return { batch: publicBatch(batch), summary: masterBulkSummary(status), rows, page, pageSize: masterBulkPageSize, filteredTotal: filtered.length, fileErrors,
     // Bounded identifiers allow chunked validation/processing without downloading all cell data.
     rowStates: status.map(({ id, revision, reviewId, valid, committed, processingCode }) => ({ id, revision, reviewId, valid, committed, rejected: valid === false || Boolean(processingCode) })) };
 }
 
 export async function listMasterBulk(client, identity, resource, input = {}) {
-  requirePermission(identity, 'masters.manage');
-  if (resource !== 'all') masterBulkResource(resource);
+  requireBulkManager(identity);
+  if (resource !== 'all') requirePermission(identity, masterBulkResource(resource).permission);
   fieldsOnly(input, ['page', 'pageSize', 'search', 'filters', 'sort']);
   const page = integer(input.page ?? 1, 'Page', 1, 1_000_000);
   const pageSize = integer(input.pageSize ?? 50, 'Page size', 1, 100);
@@ -206,7 +236,7 @@ export async function listMasterBulk(client, identity, resource, input = {}) {
       if (to) conditions.push(`saved_at<((${bind(to)}::date+1)::timestamp AT TIME ZONE 'UTC')`);
     } else if (key === 'resource') {
       if (filter.type !== 'select') throw invalid('Select an upload model.');
-      const value = queryText(filter.value); if (value) { masterBulkResource(value); conditions.push(`resource=${bind(value)}`); }
+      const value = queryText(filter.value); if (value) { requirePermission(identity, masterBulkResource(value).permission); conditions.push(`resource=${bind(value)}`); }
     } else {
       if (filter.type !== 'text') throw invalid('File name filters require text.');
       const value = queryText(filter.value); if (value) conditions.push(`file_name ILIKE ${bind(literal(value).replace(/\s+/g, '%'))}`);
@@ -234,7 +264,7 @@ export async function listMasterBulk(client, identity, resource, input = {}) {
       AND input_revision=row.revision AND (committed OR review_id=review.id) ORDER BY sequence DESC LIMIT 1) attempt ON true
     WHERE row.organization_id=$1 AND row.batch_id=ANY($2::uuid[]) GROUP BY row.batch_id`, [identity.organization_id, visible.map(row => row.id)])).rows : [];
   const byId = new Map(counts.map(row => [row.id, row]));
-  return { rows: visible.map(row => ({ ...row, _id: row.id, ...byId.get(row.id) })), totalCount, hasMore: page * pageSize < totalCount, page };
+  return { rows: visible.map(row => ({ ...publicBatch(row), _id: row.id, ...byId.get(row.id) })), totalCount, hasMore: page * pageSize < totalCount, page };
 }
 
 export async function correctMasterBulkRow(client, identity, batchId, input) {
@@ -249,6 +279,12 @@ export async function correctMasterBulkRow(client, identity, batchId, input) {
     if (!Object.hasOwn(cell, 'value') || fixes.has(column)) throw invalid('Provide each corrected cell once.');
     cellInput(cell.value); fixes.set(column, cell.value);
   }
+  const passwordColumn = batch.resource === 'users' ? batch.columns.find(column => column.header.trim() === 'password')?.columnNumber : null;
+  let credential;
+  if (passwordColumn && fixes.has(passwordColumn)) {
+    credential = await prepareUserBulkCredential(fixes.get(passwordColumn));
+    fixes.set(passwordColumn, '');
+  }
   // Serialize corrections across a batch to enforce the aggregate current-input limit.
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended('master-bulk:'||$1::text||':'||$2::text,0))", [identity.organization_id, batch.id]);
   const current = (await client.query('SELECT id,revision FROM master_bulk_rows WHERE organization_id=$1 AND batch_id=$2 AND id=$3 FOR UPDATE', [identity.organization_id, batch.id, id])).rows[0];
@@ -261,6 +297,11 @@ export async function correctMasterBulkRow(client, identity, batchId, input) {
     for (const [column, value] of fixes) before.values[column - 1] = value;
     if (JSON.stringify(before.values) !== JSON.stringify(saved.values)
       || saved.cellMetadata.some(cell => fixes.has(cell.columnNumber))) throw conflict();
+    if (batch.resource === 'users') {
+      const savedCredential = (await loadUserBulkCredentialStates(client, identity, batch.id, [{ id, revision: prior.revision }])).get(id);
+      const expectedCredential = credential ?? (await loadUserBulkCredentialStates(client, identity, batch.id, [{ id, revision }])).get(id);
+      if (!savedCredential || !expectedCredential || savedCredential.fingerprint !== expectedCredential.fingerprint) throw conflict();
+    }
     return { id, revision: prior.revision };
   }
   if (current.revision !== revision) throw new HttpError(409, 'stale_bulk_input', 'This row changed. Reload before correcting it.');
@@ -283,5 +324,9 @@ export async function correctMasterBulkRow(client, identity, batchId, input) {
   await client.query('INSERT INTO master_bulk_row_versions(organization_id,batch_id,row_id,revision,request_id,saved_by) VALUES($1,$2,$3,$4,$5,$6)',
     [identity.organization_id, batch.id, id, row.revision, requestId, identity.user_id]);
   await insertCells(client, identity.organization_id, batch.id, [row], batch.columnCount);
+  if (batch.resource === 'users') {
+    if (credential) await storeUserBulkCredentials(client, identity, batch.id, [row], [credential]);
+    else await client.query('SELECT master_bulk_copy_user_credential($1,$2,$3)', [batch.id, id, row.revision]);
+  }
   return { id, revision: row.revision };
 }

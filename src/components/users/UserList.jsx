@@ -6,6 +6,7 @@ import Link from 'next/link';
 import DataTable from '../ui/DataTable.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
 import PrimaryButton from '../ui/PrimaryButton.jsx';
+import MasterBulkButton from '../masters/BulkUpload.jsx';
 import PageHeader from '../layout/PageHeader.jsx';
 import { apiRequest, notifySessionChange } from '../../lib/api-client.js';
 import { userReferences } from './UserReferenceField.jsx';
@@ -40,7 +41,7 @@ async function roleFilterOptions(search, { signal }) {
   return { options: result.rows.map(row => ({ value: row.id, label: row.description || row.name })), hasMore: result.hasMore };
 }
 
-export default function UserList({ canManage, currentUserId }) {
+export default function UserList({ canManage, currentUserId, bulkResources }) {
   const router = useRouter(); const search = useSearchParams(); const [reload, setReload] = useState(0);
   const [customFields, setCustomFields] = useState(null); const [customFieldError, setCustomFieldError] = useState('');
   // DataTable replaces its rows with skeletons during refresh; pending commands must outlive those cells.
@@ -96,8 +97,8 @@ export default function UserList({ canManage, currentUserId }) {
     return () => { window.clearInterval(timer); window.removeEventListener('focus', visibleRefresh); document.removeEventListener('visibilitychange', visibleRefresh); };
   }, [refresh]);
   return <><PageHeader><div className="page-header"><div className="container-fluid h-100"><div className="row h-100 align-items-center justify-content-between page-header__row">
-    <div className="col page-header__start"><h1 className="page-title mb-0">User Management</h1></div><div className="col-auto page-header__actions">
-      {canManage ? <PrimaryButton leftIcon="plus" onClick={() => router.push(`/user_management/new?from=${encodeURIComponent(returnPath)}`)}>New User</PrimaryButton> : null}
+    <div className="col page-header__start"><h1 className="page-title mb-0">User Management</h1></div><div className="col-auto page-header__actions d-flex gap-2">
+      {canManage ? <><MasterBulkButton resource="users" resources={bulkResources} /><PrimaryButton leftIcon="plus" onClick={() => router.push(`/user_management/new?from=${encodeURIComponent(returnPath)}`)}>New User</PrimaryButton></> : null}
     </div></div></div></div></PageHeader>
     {customFieldError ? <div className="alert alert-danger m-4" role="alert">{customFieldError}<button type="button" className="btn btn-link" onClick={refresh}>Retry loading fields</button></div> : null}
     {customFields ? <DataTable columns={columns} loadRows={loadRows} tableLayout="auto" /> : !customFieldError

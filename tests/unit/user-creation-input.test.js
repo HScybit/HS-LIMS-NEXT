@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { userCreationInput, userCreationFingerprint } from '../../src/users/creation-input.js';
+import { userCreationInput, userCreationDetails, userCreationFingerprint } from '../../src/users/creation-input.js';
 
 const id = 'abcdef00-0000-4000-8000-000000000001'; const role = 'abcdef00-0000-4000-8000-000000000002';
 const input = () => ({ id, requestId: id, revision: 0, username: ' Employee007 ', email: ' Person@Example.invalid ', displayName: ' Synthetic Person ',
@@ -57,4 +57,19 @@ test('creation fields preserve omission, explicit empty and typed captures in th
     { customFields: [{ ...fields[0], savedBy: id }] }, { customFields: fields, customFieldTimeZone: 'Unknown/Zone' }]) {
     assert.throws(() => userCreationInput({ ...original, ...changed }), { status: 400 });
   }
+});
+
+test('nonsecret creation details share actual identity/profile validation without allowing a caller to omit normal creation credentials', () => {
+  const full = input(); const { password, ...details } = full;
+  assert.equal(typeof password, 'string');
+  assert.deepEqual(userCreationDetails(details), { id, username: 'Employee007', email: 'Person@Example.invalid', displayName: 'Synthetic Person',
+    requestId: id, revision: 0, defaultRoleId: role, laboratoryId: id });
+  for (const forbidden of [{ password }, { passwordHash: 'hash' }, { fingerprint: 'digest' }, { active: true }]) {
+    assert.throws(() => userCreationDetails({ ...details, ...forbidden }), { status: 400 });
+  }
+  for (const changed of [{ username: '' }, { email: 'invalid' }, { defaultRoleId: null }, { laboratoryId: null }, { revision: 1 }]) {
+    assert.throws(() => userCreationDetails({ ...details, ...changed }), { status: 400 });
+  }
+  assert.throws(() => userCreationInput(details), { status: 400, code: 'invalid_user_password' });
+  assert.equal(userCreationFingerprint(full, key).toString('hex'), '9295bfd5030d408665882de4dd8b91f2f0610d5b3e71eacb34628cbcaecce4ef');
 });

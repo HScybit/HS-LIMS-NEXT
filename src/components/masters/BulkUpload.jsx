@@ -18,7 +18,7 @@ export async function downloadBulkWorkbook(path, fileName) {
   link.href = url; link.download = fileName; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function BulkUploadModal({ resource, open, onClose }) {
+export function BulkUploadModal({ resource, resources = [resource], open, onClose }) {
   const [model, setModel] = useState(resource);
   const router = useRouter(); const [file, setFile] = useState(null); const [busy, setBusy] = useState('');
   const [error, setError] = useState(''); const [uncertain, setUncertain] = useState(false);
@@ -58,10 +58,11 @@ export function BulkUploadModal({ resource, open, onClose }) {
   </>}>
     <form id="bulk-upload-form" className="bulk-upload-form" onSubmit={upload}>
       <div className="alert alert-info">Download the sample file, keep its headers, and upload the completed CSV or XLSX file.
-        <strong className="d-block mt-1">Maximum 2,500 data rows, 250 columns and 16 MiB per file.</strong></div>
+        <strong className="d-block mt-1">Maximum 2,500 data rows, 250 columns and 16 MiB per file.</strong>
+        {model === 'users' ? <span className="d-block mt-1">User uploads create new accounts. Supply an active Role and Lab for each user. Passwords are hidden in previews and downloaded files.</span> : null}</div>
       <div className="row g-3"><div className="col-12 col-md-5"><label className="form-label" htmlFor="bulk-model">Select Model</label>
         <select id="bulk-model" className="form-select" value={model} disabled={Boolean(busy) || uncertain} onChange={event => { setModel(event.target.value); setError(''); }}>
-          {Object.entries(masterBulkResources).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
+          {resources.map(value => <option key={value} value={value}>{masterBulkResources[value].label}</option>)}</select></div>
       <div className="col-12 col-md-7"><label className="form-label" htmlFor="bulk-file">Select File</label>
         <input id="bulk-file" type="file" className="form-control" accept=".csv,.xlsx" disabled={Boolean(busy) || uncertain}
           onChange={event => { setFile(event.target.files?.[0] ?? null); pending.current = null; setError(''); }} /></div></div>
@@ -71,8 +72,8 @@ export function BulkUploadModal({ resource, open, onClose }) {
   </Modal>;
 }
 
-export default function MasterBulkButton({ resource }) {
+export default function MasterBulkButton({ resource, resources }) {
   const [open, setOpen] = useState(false);
   return <><SecondaryButton leftIcon="upload" onClick={() => setOpen(true)}>Bulk Upload</SecondaryButton>
-    {open ? <BulkUploadModal resource={resource} open onClose={() => setOpen(false)} /> : null}</>;
+    {open ? <BulkUploadModal resource={resource} resources={resources} open onClose={() => setOpen(false)} /> : null}</>;
 }

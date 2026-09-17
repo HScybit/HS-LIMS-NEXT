@@ -14,6 +14,7 @@ import '../../styles/bulk-upload.scss';
 
 const cellText = value => value == null ? '' : String(value);
 const operationLabel = { create: 'Create', update: 'Update existing record', reactivate: 'Reactivate and update', update_retired: 'Update retired record' };
+const passwordStateLabel = { valid: 'Password saved', missing: 'Missing', invalid: 'Needs correction' };
 
 function BulkHeader({ title, children }) {
   return <PageHeader><div className="page-header"><div className="container-fluid h-100"><div className="row h-100 align-items-center justify-content-between page-header__row">
@@ -22,13 +23,13 @@ function BulkHeader({ title, children }) {
   </div></div></div></PageHeader>;
 }
 
-export function BulkUploadList() {
+export function BulkUploadList({ resources }) {
   const search = useSearchParams(); const router = useRouter(); const requested = search.get('resource');
-  const resource = Object.hasOwn(masterBulkResources, requested ?? '') ? requested : 'all';
+  const resource = resources.includes(requested) ? requested : 'all';
   const [error, setError] = useState('');
   const returnPath = `/bulk_uploads${search.size ? `?${search}` : ''}`;
   const columns = useMemo(() => [
-    { key: 'resource', header: 'Model', searchable: true, filterOptions: Object.entries(masterBulkResources).map(([value, config]) => ({ value, label: config.label })),
+    { key: 'resource', header: 'Model', searchable: true, filterOptions: resources.map(value => ({ value, label: masterBulkResources[value].label })),
       format: value => masterBulkResources[value].label },
     { key: 'fileName', header: 'File Name', searchable: true },
     { key: 'savedAt', header: 'Uploaded On', type: 'date' },
@@ -40,14 +41,15 @@ export function BulkUploadList() {
       <Link className="btn btn-outline-secondary btn-sm" href={`/bulk_uploads/${row.id}?from=${encodeURIComponent(returnPath)}`}>Preview</Link>
       <SecondaryButton size="small" leftIcon="download" onClick={() => downloadBulkWorkbook(`/api/master-bulk/${row.id}/original`, `${row.resource}-original-rows.xlsx`).catch(failure => setError(failure.message))}>Original rows</SecondaryButton>
     </div> },
-  ], [returnPath]);
+  ], [returnPath, resources]);
   const loadRows = useCallback(({ page, pageSize, search, filters, sort }) => apiRequest(`/api/master-bulk?resource=${resource}&query=${encodeURIComponent(JSON.stringify({ page, pageSize, search, filters, sort }))}`), [resource]);
-  return <><BulkHeader title="Bulk Uploads"><MasterBulkButton key={resource} resource={resource === 'all' ? 'products' : resource} /></BulkHeader>
+  return <><BulkHeader title="Bulk Uploads"><MasterBulkButton key={resource} resource={resource === 'all' ? resources[0] : resource} resources={resources} /></BulkHeader>
     <section className="bulk-upload-page">
       <div className="bulk-upload-toolbar"><div className="bulk-upload-toolbar__copy"><h2>{masterBulkResources[resource]?.label ?? 'All models'}</h2><p>Uploaded spreadsheets and their processing results</p></div>
         <select aria-label="Filter model" className="form-select bulk-upload-toolbar__filters" value={resource} onChange={event => router.push(`/bulk_uploads?resource=${event.target.value}`)}>
           <option value="all">All models</option>
-          {Object.entries(masterBulkResources).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
+          {resources.map(value => <option key={value} value={value}>{masterBulkResources[value].label}</option>)}</select></div>
+      {resources.includes('users') ? <p className="text-muted">User downloads have blank password cells. Reenter passwords before uploading a downloaded file.</p> : null}
       {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
       <DataTable key={resource} columns={columns} loadRows={loadRows} />
     </section></>;
@@ -124,6 +126,7 @@ export function BulkUploadPreview({ batchId }) {
   }
   const disabled = busy || retry || Boolean(editing);
   const config = data && masterBulkResources[data.batch.resource];
+  const userUpload = data?.batch.resource === 'users';
   return <><BulkHeader title="Bulk Upload Preview"><SecondaryButton disabled={disabled} href={returnPath ?? `/bulk_uploads${data ? `?resource=${data.batch.resource}` : ''}`}>Uploads</SecondaryButton>
     <SecondaryButton disabled={disabled || !data || data.summary.committed === data.summary.total} onClick={() => run('review')}>Validate</SecondaryButton>
     <PrimaryButton disabled={disabled || !data?.summary.ready} onClick={() => run('process')}>Process valid rows</PrimaryButton></BulkHeader>
@@ -137,8 +140,10 @@ export function BulkUploadPreview({ batchId }) {
           <div className="bulk-upload-summary__item"><span>{data.summary.total}</span><small>Total rows</small></div>
           <div className="bulk-upload-summary__item"><span>{data.summary.rejected}</span><small>Cannot upload</small></div>
           <div className="bulk-upload-summary__item"><span>{data.summary.committed}</span><small>Committed</small></div></div>
-        <div className="bulk-upload-validation-alert alert alert-info"><div>{data.summary.unvalidated ? `${data.summary.unvalidated} rows need validation.` : `${data.summary.ready} rows ready to process. ${data.summary.updates} matching records will be updated.`}</div>
-          <div>Omitted columns retain saved values. Supplied blank cells clear those fields. Each row shows whether it will create, update or reactivate a record.</div>
+        <div className="bulk-upload-validation-alert alert alert-info"><div>{data.summary.unvalidated ? `${data.summary.unvalidated} rows need validation.` : `${data.summary.ready} rows ready to process.${userUpload ? '' : ` ${data.summary.updates} matching records will be updated.`}`}</div>
+          {userUpload ? <><div>User uploads create new accounts. Existing usernames and emails must be corrected before processing.</div>
+            <div>Passwords are hidden. Leave a password untouched to keep it, enter a replacement, or use Clear password. Downloads have blank password cells; reenter passwords before uploading them again.</div></>
+            : <div>Omitted columns retain saved values. Supplied blank cells clear those fields. Each row shows whether it will create, update or reactivate a record.</div>}
           {data.batch.hasDateFields ? <div>New date values use {data.batch.timeZone}. Rows with omitted saved dates retain that record’s date time zone.</div> : null}
           <Link href={config.path} className="btn btn-link p-0 mt-1">Open records</Link></div>
         {data.summary.rejected ? <div className="alert alert-warning d-flex flex-wrap justify-content-between gap-2"><span>{data.summary.rejected} rows need attention. Correct them below, then validate again.</span>
@@ -151,7 +156,8 @@ export function BulkUploadPreview({ batchId }) {
             <PrimaryButton disabled={busy || retry || !Object.keys(fixes).length} onClick={correct}>Save fixes &amp; revalidate</PrimaryButton></> : null}
             <SecondaryButton size="small" disabled={disabled || data.summary.unvalidated === data.summary.total} onClick={() => { setPage(1); setBlockedOnly(value => !value); }}>
               {blockedOnly ? 'Show All Rows' : 'Show Only Blocked Rows'}</SecondaryButton></div></div>
-          <DataTable className="bulk-upload-preview-table"><thead><tr><th>Row</th><th>Validation</th>{data.batch.columns.map(column => <th key={column.columnNumber}>{column.header || '(blank)'}</th>)}</tr></thead>
+          <DataTable className={`bulk-upload-preview-table${userUpload ? ' bulk-upload-user-table' : ''}`} style={userUpload ? { minWidth: 332 + 180 * data.batch.columnCount, tableLayout: 'fixed' } : undefined}>
+            <thead><tr><th>Row</th><th>Validation</th>{data.batch.columns.map(column => <th key={column.columnNumber}>{column.header || '(blank)'}</th>)}</tr></thead>
             <tbody>{data.rows.map(row => { const blocked = !row.committed && (row.valid === false || row.processingCode); return <tr key={row.id}
               className={blocked ? 'bulk-upload-row--blocked' : row.valid && row.operation !== 'create' && !row.committed ? 'bulk-upload-row--warning' : ''}>
               <td>{row.rowNumber}</td><td className="bulk-upload-validation-cell">
@@ -160,6 +166,15 @@ export function BulkUploadPreview({ batchId }) {
                 <div className="bulk-upload-validation-messages"><span>{row.committed ? `Committed · revision ${row.resultRevision}` : row.valid ? operationLabel[row.operation] : row.valid === false ? 'Cannot upload' : 'Not validated'}</span>
                   {blocked ? <span>{row.processingMessage || row.validationMessage}</span> : null}</div></td>
               {data.batch.columns.map(column => { const changed = editing?.id === row.id && Object.hasOwn(fixes, column.columnNumber); const value = changed ? fixes[column.columnNumber] : cellText(row.values[column.columnNumber - 1]);
+                if (userUpload && column.header.trim() === 'password') return <td key={column.columnNumber} className={changed ? 'bulk-upload-cell--changed' : undefined}>
+                  {editing?.id === row.id ? <><input type="password" autoComplete="new-password" className="form-control bulk-upload-cell-editor" maxLength={200}
+                    aria-label={`Row ${row.rowNumber} password`} disabled={busy || retry} value={changed ? value : ''}
+                    placeholder={row.passwordState === 'valid' ? 'Keep saved password' : 'Enter password'}
+                    onChange={event => setFixes(current => ({ ...current, [column.columnNumber]: event.target.value }))} />
+                    <small className="d-block mt-1">{changed ? value.trim() ? 'Replacement entered' : 'Password will be cleared' : passwordStateLabel[row.passwordState]}</small>
+                    <button type="button" className="btn btn-link btn-sm px-0" disabled={busy || retry}
+                      onClick={() => setFixes(current => ({ ...current, [column.columnNumber]: '' }))}>Clear password</button></>
+                    : <span>{passwordStateLabel[row.passwordState]}</span>}</td>;
                 return <td key={column.columnNumber} className={changed ? 'bulk-upload-cell--changed' : undefined}>{editing?.id === row.id
                   ? <textarea className="form-control bulk-upload-cell-editor" aria-label={`Row ${row.rowNumber} ${column.header || `column ${column.columnNumber}`}`} rows={2} maxLength={16000}
                     disabled={busy || retry} value={value} onChange={event => setFixes(current => ({ ...current, [column.columnNumber]: event.target.value }))} />

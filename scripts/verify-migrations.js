@@ -9,6 +9,8 @@ import { signIn, withSession } from '../src/auth/service.js';
 import { parseMasterBulkCsv } from '../src/masters/bulk-csv.js';
 import { stageMasterBulk, loadMasterBulkPreview } from '../src/masters/bulk-store.js';
 import { reviewMasterBulk, processMasterBulk } from '../src/masters/bulk-service.js';
+import { prepareUserBulkDecoded, userBulkSourceFingerprint } from '../src/users/bulk-credentials.js';
+import { userBulkHeaders } from '../src/users/bulk-input.js';
 import { startMfaSetup, verifyMfaSetup, disableMfa, loadMfaStatus } from '../src/auth/mfa.js';
 import { totpAt } from '../src/auth/totp.js';
 import { closePool, getPool } from '../src/db/pool.js';
@@ -126,6 +128,25 @@ try {
   const bulkResult = await withSession(bulkSession.token, (client, identity) => processMasterBulk(client, identity, bulkId, bulkCommand));
   assert.equal(bulkResult.committed, 1);
   assert.deepEqual(await withSession(bulkSession.token, (client, identity) => processMasterBulk(client, identity, bulkId, bulkCommand)), bulkResult);
+  const userBulkAccount = await createAccount(owner, { permissions: ['users.manage'] });
+  const userBulkSession = await signIn({ identifier: userBulkAccount.username, password: userBulkAccount.password });
+  const userBulkLab = randomUUID(); const userBulkId = randomUUID(); const userBulkAlias = `fresh-${randomUUID()}`;
+  await owner.query("INSERT INTO laboratories(organization_id,id,code,name) VALUES($1,$2::uuid,$2::text,'Fresh User bulk lab')", [userBulkAccount.organizationId, userBulkLab]);
+  const userBulkSource = [userBulkHeaders.join(','), ['Fresh imported user', `${userBulkAlias}@example.invalid`, '00123', userBulkAlias, 'Analyst', '', userBulkAccount.roleId, 'Synthetic fresh bulk password', userBulkLab].join(',')].join('\n');
+  const preparedUserBulk = await prepareUserBulkDecoded(parseMasterBulkCsv(userBulkSource));
+  await withSession(userBulkSession.token, (client, identity) => stageMasterBulk(client, identity, {
+    id: userBulkId, resource: 'users', fileName: 'Fresh users.csv', format: 'csv', timeZone: 'UTC', sourceHmacSha256: userBulkSourceFingerprint(Buffer.from(userBulkSource)),
+  }, preparedUserBulk.decoded, { credentials: preparedUserBulk.credentials }));
+  const userBulkPreview = await withSession(userBulkSession.token, (client, identity) => loadMasterBulkPreview(client, identity, userBulkId), { readOnly: true });
+  assert.equal(userBulkPreview.rows[0].values[7], ''); assert.equal(userBulkPreview.rows[0].passwordState, 'valid');
+  assert.equal(Object.hasOwn(userBulkPreview.batch, 'sourceHmacSha256'), false);
+  const userBulkRow = userBulkPreview.rows[0]; const userBulkReview = randomUUID();
+  await withSession(userBulkSession.token, (client, identity) => reviewMasterBulk(client, identity, userBulkId, { rows: [{ id: userBulkRow.id, revision: 1, requestId: userBulkReview }] }));
+  const userBulkCommand = { rows: [{ id: userBulkRow.id, revision: 1, reviewId: userBulkReview, requestId: randomUUID() }] };
+  const userBulkResult = await withSession(userBulkSession.token, (client, identity) => processMasterBulk(client, identity, userBulkId, userBulkCommand));
+  assert.equal(userBulkResult.committed, 1);
+  assert.deepEqual(await withSession(userBulkSession.token, (client, identity) => processMasterBulk(client, identity, userBulkId, userBulkCommand)), userBulkResult);
+  assert((await signIn({ identifier: userBulkAlias, password: 'Synthetic fresh bulk password' })).token);
   await withSession(session.token, async (client, identity) => {
     const input = { id: randomUUID(), requestId: randomUUID(), revision: 0, name: 'Fresh checklist', isActive: false,
       items: [{ id: randomUUID(), prompt: '0' }, { id: randomUUID(), prompt: 'Verify results' }] };

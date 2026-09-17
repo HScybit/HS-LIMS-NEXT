@@ -4,6 +4,7 @@ import { organizations, memberships } from './schema.js';
 import { productVersions } from './product-history-schema.js';
 import { testParameterVersions } from './parameter-history-schema.js';
 import { methodVersions } from './method-history-schema.js';
+import { userProfileVersions } from './user-profile-schema.js';
 
 const transactionId = customType({ dataType: () => 'xid8' });
 
@@ -13,7 +14,8 @@ export const masterBulkBatches = pgTable('master_bulk_batches', {
   resource: text('resource').notNull(),
   fileName: text('file_name').notNull(),
   fileFormat: text('file_format').notNull(),
-  sourceSha256: text('source_sha256').notNull(),
+  sourceSha256: text('source_sha256'),
+  sourceHmacSha256: text('source_hmac_sha256'),
   timeZone: text('time_zone').notNull(),
   headerRowNumber: integer('header_row_number').notNull(),
   sheetName: text('sheet_name'),
@@ -28,13 +30,15 @@ export const masterBulkBatches = pgTable('master_bulk_batches', {
   primaryKey({ name: 'master_bulk_batch_pk', columns: [table.organizationId, table.id] }),
   foreignKey({ name: 'master_bulk_batches_organization_id_fkey', columns: [table.organizationId], foreignColumns: [organizations.id] }),
   foreignKey({ name: 'master_bulk_batch_actor_fk', columns: [table.organizationId, table.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
-  check('master_bulk_batch_fields', sql`resource IN ('products','test-parameters','methods')
-    AND length(file_name) BETWEEN 1 AND 250 AND file_format IN ('csv','xlsx') AND source_sha256 ~ '^[a-f0-9]{64}$'
-    AND length(time_zone) BETWEEN 1 AND 100 AND header_row_number>0
-    AND column_count BETWEEN 1 AND 250 AND row_count BETWEEN 1 AND 2500
-    AND ((file_format='csv' AND num_nonnulls(sheet_name,sheet_count,date_1904)=0)
-      OR (file_format='xlsx' AND sheet_name IS NOT NULL AND length(sheet_name) BETWEEN 1 AND 100
-        AND sheet_count IS NOT NULL AND sheet_count BETWEEN 1 AND 512 AND date_1904 IS NOT NULL))`),
+  check('master_bulk_batch_fields', sql`resource IN ('products','test-parameters','methods','users')
+  AND length(file_name) BETWEEN 1 AND 250 AND file_format IN ('csv','xlsx')
+  AND ((resource='users' AND source_sha256 IS NULL AND source_hmac_sha256 IS NOT NULL AND source_hmac_sha256 ~ '^[a-f0-9]{64}$')
+    OR (resource<>'users' AND source_hmac_sha256 IS NULL AND source_sha256 IS NOT NULL AND source_sha256 ~ '^[a-f0-9]{64}$'))
+  AND length(time_zone) BETWEEN 1 AND 100 AND header_row_number>0
+  AND column_count BETWEEN 1 AND 250 AND row_count BETWEEN 1 AND 2500
+  AND ((file_format='csv' AND num_nonnulls(sheet_name,sheet_count,date_1904)=0)
+    OR (file_format='xlsx' AND sheet_name IS NOT NULL AND length(sheet_name) BETWEEN 1 AND 100
+      AND sheet_count IS NOT NULL AND sheet_count BETWEEN 1 AND 512 AND date_1904 IS NOT NULL))`),
   index('master_bulk_batch_list').on(table.organizationId, table.resource, table.savedAt.desc().nullsFirst(), table.id),
 ]);
 
@@ -170,6 +174,7 @@ export const masterBulkAttempts = pgTable('master_bulk_attempts', {
   productId: uuid('product_id'),
   parameterId: uuid('parameter_id'),
   methodId: uuid('method_id'),
+  userId: uuid('user_id'),
   resultRevision: integer('result_revision'),
   errorCode: text('error_code'),
   errorMessage: text('error_message'),
@@ -183,9 +188,10 @@ export const masterBulkAttempts = pgTable('master_bulk_attempts', {
   foreignKey({ name: 'master_bulk_attempt_product_fk', columns: [table.organizationId, table.productId, table.resultRevision], foreignColumns: [productVersions.organizationId, productVersions.productId, productVersions.revision] }),
   foreignKey({ name: 'master_bulk_attempt_parameter_fk', columns: [table.organizationId, table.parameterId, table.resultRevision], foreignColumns: [testParameterVersions.organizationId, testParameterVersions.parameterId, testParameterVersions.revision] }),
   foreignKey({ name: 'master_bulk_attempt_method_fk', columns: [table.organizationId, table.methodId, table.resultRevision], foreignColumns: [methodVersions.organizationId, methodVersions.methodId, methodVersions.revision] }),
+  foreignKey({ name: 'master_bulk_attempt_user_fk', columns: [table.organizationId, table.userId, table.resultRevision], foreignColumns: [userProfileVersions.organizationId, userProfileVersions.userId, userProfileVersions.revision] }),
   check('master_bulk_attempt_fields', sql`
-    (committed AND num_nonnulls(product_id,parameter_id,method_id)=1 AND result_revision IS NOT NULL AND result_revision>0 AND error_code IS NULL AND error_message IS NULL)
-    OR (NOT committed AND num_nonnulls(product_id,parameter_id,method_id,result_revision)=0
+    (committed AND num_nonnulls(product_id,parameter_id,method_id,user_id)=1 AND result_revision IS NOT NULL AND result_revision>0 AND error_code IS NULL AND error_message IS NULL)
+    OR (NOT committed AND num_nonnulls(product_id,parameter_id,method_id,user_id,result_revision)=0
       AND error_code IS NOT NULL AND length(error_code) BETWEEN 1 AND 100 AND error_message IS NOT NULL AND length(error_message) BETWEEN 1 AND 2000)`),
   uniqueIndex('master_bulk_one_commit').on(table.organizationId, table.batchId, table.rowId).where(sql`${table.committed}`),
   index('master_bulk_attempt_latest').on(table.organizationId, table.batchId, table.rowId, table.sequence.desc().nullsFirst()),
@@ -198,4 +204,35 @@ export const masterBulkUserLabels = pgView('master_bulk_user_labels', {
   FROM public.memberships member JOIN public.users person ON person.id=member.user_id
   WHERE member.organization_id=nullif(current_setting('app.organization_id',true),'')::uuid
     AND (SELECT public.app_has_permission('masters.manage'))
+`);
+
+const binary = customType({ dataType: () => 'bytea' });
+export const masterBulkUserCredentials = pgTable('master_bulk_user_credentials', {
+  organizationId: uuid('organization_id').notNull(),
+  batchId: uuid('batch_id').notNull(),
+  rowId: uuid('row_id').notNull(),
+  inputRevision: integer('input_revision').notNull(),
+  state: text('state').notNull(),
+  fingerprint: binary('fingerprint').notNull(),
+  passwordHash: text('password_hash'),
+  savedBy: uuid('saved_by').notNull(),
+  savedAt: timestamp('saved_at', { withTimezone: true, mode: 'date' }).notNull().default(sql`transaction_timestamp()`),
+  createdTransactionId: transactionId('created_transaction_id').notNull().default(sql`pg_current_xact_id()`),
+}, table => [
+  primaryKey({ name: 'master_bulk_user_credential_pk', columns: [table.organizationId, table.batchId, table.rowId, table.inputRevision] }),
+  foreignKey({ name: 'master_bulk_user_credential_input_fk', columns: [table.organizationId, table.batchId, table.rowId, table.inputRevision], foreignColumns: [masterBulkRowVersions.organizationId, masterBulkRowVersions.batchId, masterBulkRowVersions.rowId, masterBulkRowVersions.revision] }),
+  foreignKey({ name: 'master_bulk_user_credential_actor_fk', columns: [table.organizationId, table.savedBy], foreignColumns: [memberships.organizationId, memberships.userId] }),
+  check('master_bulk_user_credential_fields', sql`octet_length(fingerprint)=32
+    AND ((state='valid' AND password_hash IS NOT NULL AND password_hash ~ '^scrypt[$]1[$]32768[$]8[$]1[$][A-Za-z0-9_-]{22}[$][A-Za-z0-9_-]{86}$')
+      OR (state IN ('missing','invalid') AND password_hash IS NULL))`),
+]);
+
+export const masterBulkUserCredentialStates = pgView('master_bulk_user_credential_states', {
+  organizationId: uuid('organization_id'), batchId: uuid('batch_id'), rowId: uuid('row_id'), inputRevision: integer('input_revision'),
+  state: text('state'), fingerprint: text('fingerprint'),
+}).with({ securityBarrier: true, securityInvoker: false }).as(sql`
+  SELECT organization_id,batch_id,row_id,input_revision,state,encode(fingerprint,'hex') AS fingerprint
+  FROM public.master_bulk_user_credentials
+  WHERE organization_id IS NOT DISTINCT FROM nullif(current_setting('app.organization_id',true),'')::uuid
+    AND (SELECT public.app_has_permission('users.manage'))
 `);

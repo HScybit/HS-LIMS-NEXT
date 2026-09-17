@@ -1282,6 +1282,13 @@
       "when": 1789608294535,
       "tag": "0182_master_bulk_cell_statement_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1789614163914,
+      "tag": "0183_user_bulk_credentials",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import { customFieldTimeZone } from '../custom-fields/server-dates.js';
 import { masterBulkResource } from './bulk-row.js';
 import { parseMasterBulkCsv } from './bulk-csv.js';
 import { readMasterXlsx } from './bulk-xlsx-runner.js';
+import { userBulkSourceFingerprint } from '../users/bulk-credentials.js';
 
 export async function readMasterBulkUpload(request) {
   const resource = request.nextUrl.searchParams.get('resource'); masterBulkResource(resource);
@@ -42,5 +43,6 @@ export async function readMasterBulkUpload(request) {
     catch { throw new HttpError(400, 'invalid_bulk_encoding', 'Save the CSV file with UTF-8 encoding.'); }
     decoded = parseMasterBulkCsv(source);
   }
-  return { input: { id, resource, fileName, format, timeZone, sourceSha256: createHash('sha256').update(bytes).digest('hex') }, decoded };
+  return { input: { id, resource, fileName, format, timeZone, ...(resource === 'users'
+    ? { sourceHmacSha256: userBulkSourceFingerprint(bytes) } : { sourceSha256: createHash('sha256').update(bytes).digest('hex') }) }, decoded };
 }

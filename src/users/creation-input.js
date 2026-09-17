@@ -11,14 +11,14 @@ function identityText(value, label, maximum) {
   return result;
 }
 
-export function userCreationInput(value) {
-  fieldsOnly(value, ['id', 'requestId', 'revision', 'username', 'email', 'displayName', 'password', ...profileFields, 'customFields', 'customFieldTimeZone']);
+function creationInput(value, withPassword) {
+  fieldsOnly(value, ['id', 'requestId', 'revision', 'username', 'email', 'displayName', ...(withPassword ? ['password'] : []), ...profileFields, 'customFields', 'customFieldTimeZone']);
   const id = uuid(value.id, 'New user').toLowerCase();
   if (value.revision !== 0) throw new HttpError(400, 'invalid_user_creation_revision', 'New accounts start at revision zero.');
   const username = identityText(value.username, 'Username', 100); const email = identityText(value.email, 'Email', 320);
   const displayName = identityText(value.displayName, 'Name', 200);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'invalid_email', 'Enter a valid email address.');
-  if (typeof value.password !== 'string' || value.password.length < 8 || value.password.length > 200 || !value.password.isWellFormed()) {
+  if (withPassword && (typeof value.password !== 'string' || value.password.length < 8 || value.password.length > 200 || !value.password.isWellFormed())) {
     throw new HttpError(400, 'invalid_user_password', 'Password must contain 8 to 200 valid characters.');
   }
   if (!Object.hasOwn(value, 'defaultRoleId') || !Object.hasOwn(value, 'laboratoryId')) {
@@ -31,9 +31,14 @@ export function userCreationInput(value) {
   if (!suppliedFields && Object.hasOwn(value, 'customFieldTimeZone')) throw new HttpError(400, 'invalid_custom_field_values', 'A Custom Field time zone requires supplied fields.');
   const fields = suppliedFields ? userCustomFieldInput(id, { requestId: profile.requestId, revision: 0,
     customFields: value.customFields, customFieldTimeZone: value.customFieldTimeZone }) : null;
-  return { id, username, email, displayName, password: value.password, ...profile,
+  return { id, username, email, displayName, ...(withPassword ? { password: value.password } : {}), ...profile,
     ...(fields ? { customFields: fields.customFields, customFieldTimeZone: fields.customFieldTimeZone } : {}) };
 }
+
+export const userCreationInput = value => creationInput(value, true);
+// Bulk creation supplies a protected, previously prepared credential separately.
+// Keep the normal creation input's property order and exact fingerprint unchanged.
+export const userCreationDetails = value => creationInput(value, false);
 
 export function userCreationFingerprint(value, key = process.env.MFA_ENCRYPTION_KEY) {
   const input = userCreationInput(value);
