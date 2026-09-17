@@ -11,17 +11,17 @@ const uniqueIds = (values) => [...new Set(values.filter(Boolean))];
 export async function registrationReferences(client, organizationId, input) {
   await sampleImageReferences(client, organizationId, input.products);
   const db = database(client);
-  async function activeRows(table, ids, label) {
+  async function activeRows(table, ids, label, readSource = table) {
     const selected = uniqueIds(ids);
     if (!selected.length) return new Map();
     await lockReferences(client, table, selected);
-    const rows = await db.select().from(table).where(and(eq(table.organizationId, organizationId), inArray(table.id, selected), eq(table.active, true))).orderBy(asc(table.id));
+    const rows = await db.select().from(readSource).where(and(eq(readSource.organizationId, organizationId), inArray(readSource.id, selected), eq(readSource.active, true))).orderBy(asc(readSource.id));
     if (rows.length !== selected.length) invalid(`Select active ${label} from this organization.`);
     return new Map(rows.map((row) => [row.id, row]));
   }
   const selectedTests = input.products.flatMap((product) => product.tests);
   const categories = await activeRows(masters.sampleCategories, [input.sampleCategoryId, ...input.products.map((product) => product.sampleCategoryId)], 'sample categories');
-  const customers = await activeRows(masters.customers, [input.customerId], 'customers');
+  const customers = await activeRows(masters.customers, [input.customerId], 'customers', masters.laboratoryCustomerReferences);
   if (input.customerQuotationId) {
     await lockReferences(client, masters.customerQuotations, [input.customerQuotationId]);
     const quotation = await client.query(`SELECT id FROM customer_quotations WHERE organization_id = $1 AND id = $2 AND customer_id = $3

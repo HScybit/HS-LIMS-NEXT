@@ -13,15 +13,15 @@ export async function sampleRegistrationOptions(client, identity) {
   // fetched per product, parameter, customer or rendered control.
   const sampleCategories = await rows(`SELECT id, code, name, estimated_time_in_days AS "estimatedTimeInDays"
     FROM sample_categories WHERE organization_id=$1 AND active ORDER BY lower(name), id`);
-  const customers = await rows(`SELECT id, code, name, legal_name AS "legalName" FROM customers WHERE organization_id=$1 AND active ORDER BY lower(name), id`);
+  const customers = await rows(`SELECT id, code, name, legal_name AS "legalName" FROM laboratory_customer_references WHERE organization_id=$1 AND active ORDER BY lower(name), id`);
   const addresses = await rows(`SELECT address.id, address.customer_id AS "customerId", address.address_type AS "addressType", address.attention_to AS "attentionTo",
     address.line_1 AS "line1", address.line_2 AS "line2", address.city, address.state, address.postal_code AS "postalCode", address.country_code AS "countryCode",
-    address.freeform_address AS "freeformAddress", address.is_default AS "isDefault" FROM customer_addresses address JOIN customers customer
+    address.freeform_address AS "freeformAddress", address.is_default AS "isDefault" FROM laboratory_customer_address_references address JOIN laboratory_customer_references customer
     ON customer.organization_id=address.organization_id AND customer.id=address.customer_id
     WHERE address.organization_id=$1 AND customer.active ORDER BY address.customer_id, address.is_default DESC, address.address_type, address.id`);
   const quotations = await rows(`SELECT quotation.id, quotation.customer_id AS "customerId", quotation.quotation_number AS "quotationNumber",
     quotation.quotation_date::text AS "quotationDate", quotation.currency_code AS "currencyCode", quotation.total_amount AS "totalAmount"
-    FROM customer_quotations quotation JOIN customers customer ON customer.organization_id=quotation.organization_id AND customer.id=quotation.customer_id
+    FROM customer_quotations quotation JOIN laboratory_customer_references customer ON customer.organization_id=quotation.organization_id AND customer.id=quotation.customer_id
     WHERE quotation.organization_id=$1 AND customer.active AND quotation.status='approved' AND (quotation.valid_until IS NULL OR quotation.valid_until>=current_date)
     ORDER BY quotation.customer_id, quotation.quotation_date DESC, quotation.quotation_number, quotation.id`);
   const products = await rows(`SELECT product.id, product.code, product.name, product.description,

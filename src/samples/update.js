@@ -20,7 +20,7 @@ async function changedCustomerReferences(client, organizationId, existing, chang
   if (customerChanged) {
     if (customerId) {
       await lockReferences(client, customers, [customerId]);
-      const customer = (await client.query('SELECT code,name,legal_name FROM customers WHERE organization_id=$1 AND id=$2 AND active', [organizationId, customerId])).rows[0];
+      const customer = (await client.query('SELECT code,name,legal_name FROM laboratory_customer_references WHERE organization_id=$1 AND id=$2 AND active', [organizationId, customerId])).rows[0];
       if (!customer) invalidReference('Select an active customer from this organization.');
       Object.assign(captured, { customerCode: customer.code, customerName: customer.name, customerLegalName: customer.legal_name });
     } else Object.assign(captured, { customerCode: null, customerName: null, customerLegalName: null });

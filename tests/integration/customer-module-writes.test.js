@@ -107,14 +107,17 @@ test('Customer Default Role grants use the recorded profile and do not grant mas
   await assert.rejects(execute(registrar, { ...commands[0], values: [actor.organizationId, randomUUID()] }), { code: '42501' });
 });
 
-test('sample reference reads and the configured create-only quick command survive the additional write policies', async () => {
+test('sample reference projections and the configured create-only quick command survive the module policies', async () => {
   const { manager, actor, parentId, commands } = await fixture();
   const registrar = await account({ organizationId: actor.organizationId, permissions: ['samples.create'] });
   const reader = await account({ organizationId: actor.organizationId, permissions: ['samples.read'] });
   const options = await work(registrar, sampleRegistrationOptions, true);
   assert(options.customers.some(row => row.id === parentId)); assert.equal(options.canQuickCreateCustomer, false);
   for (const table of ['customers', 'customer_addresses', 'customer_contacts']) {
-    assert((await work(reader, client => client.query(`SELECT id FROM ${table} WHERE organization_id=$1`, [actor.organizationId]), true)).rowCount > 0);
+    assert.equal((await work(reader, client => client.query(`SELECT id FROM ${table} WHERE organization_id=$1`, [actor.organizationId]), true)).rowCount, 0);
+  }
+  for (const view of ['laboratory_customer_references', 'laboratory_customer_address_references']) {
+    assert((await work(reader, client => client.query(`SELECT id FROM ${view} WHERE organization_id=$1`, [actor.organizationId]), true)).rowCount > 0);
   }
   await configure(manager, registrar);
   const saved = await work(registrar, (client, identity) => quickCreateCustomer(client, identity, quickInput()));
@@ -195,7 +198,7 @@ test('module writes reject old transaction snapshots while statement snapshots o
 
 test('Customer write policies remain restrictive and the write helper rejects forged session scope and worker access', async () => {
   const { manager, actor, commands } = await fixture(); await configure(manager, actor); const foreign = await account();
-  const policies = (await owner.query("SELECT tablename,permissive,cmd FROM pg_policies WHERE policyname LIKE 'customer_module_%' ORDER BY tablename,cmd")).rows;
+  const policies = (await owner.query("SELECT tablename,permissive,cmd FROM pg_policies WHERE policyname LIKE 'customer_module_%' AND cmd<>'SELECT' ORDER BY tablename,cmd")).rows;
   assert.equal(policies.length, 9); assert(policies.every(row => row.permissive === 'RESTRICTIVE'));
   for (const table of ['customers', 'customer_addresses', 'customer_contacts']) assert.deepEqual(policies.filter(row => row.tablename === table).map(row => row.cmd).sort(), ['DELETE', 'INSERT', 'UPDATE']);
   const privileges = (await owner.query("SELECT has_function_privilege('sampleify_report_worker','masters_require_customer_write()','EXECUTE') AS worker,EXISTS(SELECT 1 FROM pg_proc routine,LATERAL aclexplode(routine.proacl) acl WHERE routine.oid='masters_require_customer_write()'::regprocedure AND acl.grantee=0 AND acl.privilege_type='EXECUTE') AS public")).rows[0];

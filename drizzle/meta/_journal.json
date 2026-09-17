@@ -1289,6 +1289,13 @@
       "when": 1789614163914,
       "tag": "0183_user_bulk_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "7",
+      "when": 1789619985946,
+      "tag": "0184_customer_master_read_scope",
+      "breakpoints": true
     }
   ]
 }

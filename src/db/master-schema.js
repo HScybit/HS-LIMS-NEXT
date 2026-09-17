@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, boolean, timestamp, integer, numeric, doublePrecision, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, pgView, uuid, text, boolean, timestamp, integer, numeric, doublePrecision, date, primaryKey, unique, uniqueIndex, index, check, foreignKey } from 'drizzle-orm/pg-core';
 import { organizations, memberships } from './schema.js';
 import { templates } from './template-schema.js';
 
@@ -85,6 +85,29 @@ export const customerContacts = pgTable('customer_contacts', {
   check('customer_contact_details', sql`length(trim(${t.name})) between 1 and 200 and (nullif(trim(${t.email}), '') is not null or nullif(trim(${t.phone}), '') is not null)`)]);
 
 // Quotation selection is a bounded reference dependency, not a billing module.
+// Registration and workflow conditions read only their scientific references.
+export const laboratoryCustomerReferences = pgView('laboratory_customer_references', {
+  organizationId: uuid('organization_id'), id: uuid('id'), code: text('code'), name: text('name'), legalName: text('legal_name'), active: boolean('active'),
+}).with({ securityBarrier: true, securityInvoker: false }).as(sql`
+  SELECT customer.organization_id,customer.id,customer.code,customer.name,customer.legal_name,customer.active
+  FROM public.customers customer
+  WHERE customer.organization_id IS NOT DISTINCT FROM (SELECT public.organization_module_scope())
+    AND (SELECT public.laboratory_can_read_customer_reference())
+`);
+
+export const laboratoryCustomerAddressReferences = pgView('laboratory_customer_address_references', {
+  organizationId: uuid('organization_id'), id: uuid('id'), customerId: uuid('customer_id'), addressType: text('address_type'), attentionTo: text('attention_to'),
+  line1: text('line_1'), line2: text('line_2'), city: text('city'), state: text('state'), postalCode: text('postal_code'), countryCode: text('country_code'),
+  freeformAddress: text('freeform_address'), isDefault: boolean('is_default'),
+}).with({ securityBarrier: true, securityInvoker: false }).as(sql`
+  SELECT address.organization_id,address.id,address.customer_id,address.address_type,address.attention_to,
+    address.line_1,address.line_2,address.city,address.state,address.postal_code,address.country_code,
+    address.freeform_address,address.is_default
+  FROM public.customer_addresses address
+  WHERE address.organization_id IS NOT DISTINCT FROM (SELECT public.organization_module_scope())
+    AND (SELECT public.laboratory_can_read_customer_reference())
+`);
+
 export const customerQuotations = pgTable('customer_quotations', {
   ...identity(), customerId: uuid('customer_id').notNull(), quotationNumber: text('quotation_number').notNull(),
   quotationDate: date('quotation_date', { mode: 'string' }).notNull(), validUntil: date('valid_until', { mode: 'string' }),

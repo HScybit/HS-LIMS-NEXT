@@ -16,7 +16,7 @@ export async function quickCreateCustomer(client, identity, rawInput) {
     if (error.code === '23505') throw new HttpError(409, 'customer_exists', 'A customer with this code already exists. Select the existing customer or use a distinct name.');
     throw error;
   }
-  const record = await client.query('SELECT id, code, name, legal_name AS "legalName" FROM customers WHERE organization_id=$1 AND id=$2', [identity.organization_id, id]);
+  const record = await client.query('SELECT id, code, name, legal_name AS "legalName" FROM laboratory_customer_references WHERE organization_id=$1 AND id=$2', [identity.organization_id, id]);
   return { ...record.rows[0], addresses: [{ addressType: 'billing', isDefault: true, text: input.billToAddress },
     { addressType: 'shipping', isDefault: true, text: input.shipToAddress }], quotations: [] };
 }

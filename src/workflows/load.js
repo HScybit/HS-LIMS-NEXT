@@ -20,7 +20,7 @@ export async function workflowConditionSource(client, identity, run) {
     const sample = (await client.query(`SELECT sample.*, category.code AS sample_category_code, category.name AS sample_category_name,
       customer.code AS customer_code, customer.name AS customer_name FROM samples sample
       JOIN sample_categories category ON category.organization_id=sample.organization_id AND category.id=sample.sample_category_id
-      LEFT JOIN customers customer ON customer.organization_id=sample.organization_id AND customer.id=sample.customer_id
+      LEFT JOIN laboratory_customer_references customer ON customer.organization_id=sample.organization_id AND customer.id=sample.customer_id
       WHERE sample.organization_id=$1 AND sample.id=$2`, [identity.organization_id, run.sample_id])).rows[0];
     return { ...sample, sample };
   }
