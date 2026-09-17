@@ -1,8 +1,6 @@
 import { HttpError } from '../auth/errors.js';
-
-export function customerAddressText(address) {
-  return address.freeformAddress ?? [address.attentionTo, address.line1, address.line2, address.city, address.state, address.postalCode, address.countryCode].filter(Boolean).join(', ');
-}
+import { customerAddressText } from '../masters/customer-address.js';
+export { customerAddressText } from '../masters/customer-address.js';
 
 export async function sampleRegistrationOptions(client, identity) {
   if (!['samples.read', 'samples.create'].some((permission) => identity.permission_codes?.includes(permission))) {

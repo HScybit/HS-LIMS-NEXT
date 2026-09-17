@@ -65,6 +65,13 @@ export const productCustomFields = (...args) => masterCustomFields('product', ..
 export const parameterCustomFields = (...args) => masterCustomFields('parameter', ...args);
 export const methodCustomFields = (...args) => masterCustomFields('method_of_analysis', ...args);
 export const userCustomFields = (...args) => masterCustomFields('users', ...args);
+export async function customerCustomFields(client, identity, options) {
+  requireRead(identity);
+  if (!(await client.query("SELECT masters_can_read_party('customer') AS allowed")).rows[0]?.allowed) {
+    throw new HttpError(403, 'customer_module_access_required', 'Customer module access is required.');
+  }
+  return masterCustomFields('customer', client, identity, options);
+}
 
 export async function loadCustomField(client, identity, fieldId, { atRevision } = {}) {
   requireRead(identity); uuid(fieldId, 'Custom field');

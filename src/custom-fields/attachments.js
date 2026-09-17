@@ -32,15 +32,39 @@ export async function uploadCustomFieldAttachment(client, identity, input) {
   if (!Buffer.isBuffer(input.content)) throw new HttpError(400, 'invalid_attachment', 'Attachment content is required.');
   if (input.content.length > customFieldAttachmentByteLimit) throw new HttpError(413, 'attachment_size_limit', 'Attachments can be at most 20 MiB.');
   const sha256 = checksum(input.content);
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('custom-field-upload:'||$1::text||':'||$2::text,0))", [identity.organization_id, id]);
-  const stored = (await client.query(`SELECT ${columns} FROM custom_field_attachments WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
-  if (stored) {
+  const replay = stored => {
     if (stored.fieldId !== fieldId || stored.fieldRevision !== fieldRevision || stored.uploadedBy !== identity.user_id
       || stored.originalName !== details.originalName || stored.mediaType !== details.mediaType || stored.sha256 !== sha256 || stored.byteLength !== input.content.length) {
       throw new HttpError(409, 'attachment_request_reused', 'This upload request was already used with different details.');
     }
     return { ...metadata(stored), replayed: true };
+  };
+  // Immutable uploads retain their original association when a definition is
+  // moved or retired. RLS checks the saved definition and current module grant.
+  const previous = (await client.query(`SELECT ${columns} FROM custom_field_attachments WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
+  if (previous) return replay(previous);
+  // Inspect before row locks: Customer's native command acquires the shared
+  // definition lock and organization authorization before the upload key.
+  const association = (await client.query('SELECT associated_with FROM custom_field_definitions WHERE organization_id=$1 AND id=$2', [identity.organization_id, fieldId])).rows[0]?.associated_with;
+  if (association === 'customer') {
+    try {
+      const replayed = (await client.query('SELECT masters_upload_customer_attachment($1,$2,$3,$4,$5,$6) AS replayed',
+        [id, fieldId, fieldRevision, details.originalName, details.mediaType, input.content])).rows[0].replayed;
+      const row = (await client.query(`SELECT ${columns} FROM custom_field_attachments WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
+      if (!row) throw new HttpError(409, 'attachment_unavailable', 'The saved attachment is unavailable.');
+      return { ...metadata(row), replayed };
+    } catch (error) {
+      if (error.constraint === 'organization_module_access_required') throw new HttpError(403, 'customer_module_access_required', 'Customer module access is required.');
+      if (error.code === '42501') throw new HttpError(403, 'forbidden', 'Your Customer management permission changed. Reload before uploading.');
+      if (error.constraint === 'customer_attachment_field_not_found') throw new HttpError(404, 'attachment_field_not_found', 'The attachment field was not found.');
+      if (error.constraint === 'customer_attachment_field_changed') throw new HttpError(409, 'stale_custom_field', 'The Custom Field changed. Reload before uploading.');
+      if (['customer_attachment_request_reused', 'custom_field_attachment_pk'].includes(error.constraint)) throw new HttpError(409, 'attachment_request_reused', 'This upload request was already used with different details.');
+      throw error;
+    }
   }
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended('custom-field-upload:'||$1::text||':'||$2::text,0))", [identity.organization_id, id]);
+  const stored = (await client.query(`SELECT ${columns} FROM custom_field_attachments WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
+  if (stored) return replay(stored);
   const field = (await client.query(`SELECT revision,field_type,associated_with,active FROM custom_field_definitions
     WHERE organization_id=$1 AND id=$2 FOR SHARE`, [identity.organization_id, fieldId])).rows[0];
   if (!field?.active || field.field_type !== 'attachment' || !['product', 'parameter', 'method_of_analysis'].includes(field.associated_with)) {

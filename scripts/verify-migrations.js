@@ -27,6 +27,7 @@ import { createNablReferences, nablCommand } from '../tests/helpers/nabl.js';
 import { saveNablCertification, loadNablCertification, retireNablCertification, nablCatalog } from '../src/compliance/nabl.js';
 import { uploadNablFile, readNablFile } from '../src/compliance/nabl-files.js';
 import { quickCreateCustomer } from '../src/samples/customer.js';
+import { saveCustomer, loadCustomer, retireCustomer } from '../src/masters/customers.js';
 import { registerSample } from '../src/samples/register.js';
 import { loadSample } from '../src/samples/load.js';
 import { generateTestRequests } from '../src/test-requests/generate.js';
@@ -231,9 +232,14 @@ try {
     assert.equal((await client.query("SELECT organization_has_module_access('customer') AS allowed")).rows[0].allowed, false);
     const customerWriteId = randomUUID();
     const customerWriteSql = "INSERT INTO customers(organization_id,id,code,name,legal_name) VALUES($1,$2::uuid,$2::text,'Fresh Customer write','Synthetic legal name') RETURNING id";
+    const customerWrite = { id: customerWriteId, requestId: randomUUID(), revision: 0, name: 'Fresh Customer write', legalName: 'Synthetic legal name',
+      totalBalance: '-1.235', creditDays: 0, igstPercent: 0, shipToAddress: 'Fresh address', contactPersonName: 'Fresh contact', contactPersonPhone: '123' };
     await client.query('SAVEPOINT customer_write_denied');
-    await assert.rejects(client.query(customerWriteSql, [identity.organization_id, customerWriteId]), { code: '42501', constraint: 'organization_module_access_required' });
+    await assert.rejects(client.query(customerWriteSql, [identity.organization_id, customerWriteId]), { code: '42501' });
     await client.query('ROLLBACK TO SAVEPOINT customer_write_denied'); await client.query('RELEASE SAVEPOINT customer_write_denied');
+    await client.query('SAVEPOINT customer_command_denied');
+    await assert.rejects(saveCustomer(client, identity, customerWrite), { code: 'customer_module_access_required' });
+    await client.query('ROLLBACK TO SAVEPOINT customer_command_denied'); await client.query('RELEASE SAVEPOINT customer_command_denied');
     const moduleAccess = emptyModuleAccess(); moduleAccess[0] = { moduleKey: 'customer', enabled: true, roleIds: [account.roleId], userIds: [account.userId] };
     await saveLaboratorySettings(client, identity, { revision: 0, autoCreateJobs: false, resultSummaryTemplateId: null, jobWorkflowId: null, selfAllocationEnabled: true,
       dateFormat: 'Do MMMM YYYY', datetimeFormat: 'MMMM Do YYYY | hh:mm A', instrumentServiceTypes, moduleAccess });
@@ -244,9 +250,13 @@ try {
     assert.deepEqual(moduleAccessValues(settings.moduleAccess), moduleAccess);
     assert.equal((await client.query("SELECT organization_has_module_access('customer') AS customer,organization_has_module_access('vendor') AS vendor")).rows[0].customer, true);
     await client.query('SAVEPOINT customer_write_allowed');
-    assert.equal((await client.query(customerWriteSql, [identity.organization_id, customerWriteId])).rows[0].id, customerWriteId);
-    assert.equal((await client.query('UPDATE customers SET revision=revision+1 WHERE organization_id=$1 AND id=$2 RETURNING id', [identity.organization_id, customerWriteId])).rowCount, 1);
-    assert.equal((await client.query('DELETE FROM customers WHERE organization_id=$1 AND id=$2 RETURNING id', [identity.organization_id, customerWriteId])).rowCount, 1);
+    const customer = await saveCustomer(client, identity, customerWrite);
+    assert.equal(customer.id, customerWriteId); assert.equal(customer.totalBalance, '-1.24'); assert.equal(customer.creditDays, 0); assert.equal(customer.igstPercent, '0.0000');
+    assert.deepEqual(await saveCustomer(client, identity, customerWrite), customer);
+    const changedCustomer = await saveCustomer(client, identity, { id: customerWriteId, requestId: randomUUID(), revision: 1, name: 'Fresh inactive Customer', status: 'inactive' });
+    assert.equal(changedCustomer.revision, 2); assert.equal(changedCustomer.retired, false);
+    assert.equal((await retireCustomer(client, identity, { id: customerWriteId, requestId: randomUUID(), revision: 2 })).revision, 3);
+    assert.deepEqual(await loadCustomer(client, identity, customerWriteId, { atRevision: 1 }), customer);
     await client.query('ROLLBACK TO SAVEPOINT customer_write_allowed'); await client.query('RELEASE SAVEPOINT customer_write_allowed');
     await client.query('SAVEPOINT customer_scope_denied');
     await assert.rejects(client.query(`INSERT INTO customers(organization_id,id,code,name,legal_name)

@@ -66,7 +66,24 @@ export const productTags = pgTable('product_tags', {
 export const customers = pgTable('customers', {
   ...identity(), ...metadata(), legalName: text('legal_name').notNull(), abbreviation: text('abbreviation'), taxIdentifier: text('tax_identifier'),
   creditDays: integer('credit_days').notNull().default(0),
-}, (t) => [...named(t, 'customers'), check('customers_details', sql`length(trim(${t.legalName})) between 1 and 250 and ${t.creditDays} between 0 and 3650`)]);
+  totalBalance: numeric('total_balance', { precision: 20, scale: 2 }).notNull().default('0'),
+  defaultInvoiceNotes: text('default_invoice_notes'), feedbackApplicable: boolean('feedback_applicable').notNull().default(false),
+  igstPercent: numeric('igst_percent', { precision: 7, scale: 4 }).notNull().default('18'),
+  sgstPercent: numeric('sgst_percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  cgstPercent: numeric('cgst_percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  discountPercent: numeric('discount_percent', { precision: 7, scale: 4 }).notNull().default('0'),
+  isKaleenBandhu: boolean('is_kaleen_bandhu').notNull().default(false), retired: boolean('retired').notNull().default(false),
+  saveRequestId: uuid('save_request_id'), saveSource: text('save_source'),
+  customFieldCount: integer('custom_field_count').notNull().default(0), customFieldsProvided: boolean('custom_fields_provided').notNull().default(false),
+}, (t) => [key(t), uniqueIndex('customers_code_key').on(t.organizationId, sql`lower(${t.code})`).where(sql`not ${t.retired}`),
+  check('customers_metadata', sql`length(trim(${t.code})) between 1 and 64 and length(trim(${t.name})) between 1 and 250 and ${t.revision} > 0`),
+  check('customers_details', sql`length(trim(${t.legalName})) between 1 and 250 and ${t.creditDays} between 0 and 3650`),
+  check('customer_master_values', sql`${finite(t.totalBalance)} and ${t.igstPercent} between 0 and 100 and ${t.sgstPercent} between 0 and 100
+    and ${t.cgstPercent} between 0 and 100 and ${t.discountPercent} between 0 and 100
+    and (not ${t.retired} or not ${t.active}) and ${t.customFieldCount} between 0 and 500
+    and ((${t.saveRequestId} is null and ${t.saveSource} is null) or (${t.saveRequestId} is not null and ${t.saveSource} is not null and ${t.saveSource} in ('master','registration')))`),
+  index('customer_scheme_order').on(t.organizationId, t.createdAt, t.updatedAt, t.id).where(sql`not ${t.retired}`),
+]);
 
 export const customerAddresses = pgTable('customer_addresses', {
   ...identity(), customerId: uuid('customer_id').notNull(), addressType: text('address_type').notNull(), attentionTo: text('attention_to'),

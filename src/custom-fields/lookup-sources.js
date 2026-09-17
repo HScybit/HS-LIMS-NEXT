@@ -9,8 +9,11 @@ function requireRead(identity) {
 }
 
 export async function loadMasterFieldLookupOptions(kind, client, identity, input) {
-  if (!['product', 'parameter', 'method'].includes(kind)) throw new TypeError('Unsupported lookup field master.');
+  if (!['product', 'parameter', 'method', 'customer'].includes(kind)) throw new TypeError('Unsupported lookup field master.');
   requireRead(identity); fieldsOnly(input, ['sourceId', 'revision', 'knownOrganizationId']);
+  if (kind === 'customer' && !(await client.query("SELECT masters_can_read_party('customer') AS allowed")).rows[0]?.allowed) {
+    throw new HttpError(403, 'customer_module_access_required', 'Customer module access is required.');
+  }
   const sourceId = uuid(input.sourceId, 'Lookup source').toLowerCase();
   if (input.revision !== undefined) integer(input.revision, 'Known lookup revision', 1, 2_147_483_647);
   const knownOrganizationId = input.knownOrganizationId === undefined ? null : uuid(input.knownOrganizationId, 'Known lookup organization').toLowerCase();

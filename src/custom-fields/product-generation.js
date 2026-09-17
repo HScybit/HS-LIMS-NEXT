@@ -63,7 +63,7 @@ function replaceToken(scheme, token, value) {
 const finish = (value) => value.replace(/}}/g, '').replace(/{{/g, '');
 
 // The caller supplies an explicit clock/zone, tenant settings, batched counts and a latest-value reader.
-// The source Product, Parameter and Method forms have no hidden NABL/category/customer context.
+// Each source form provides its own visible fields and no hidden laboratory context.
 async function generateMasterScheme({ field, doc, settings = {}, clock, counts, latestValue }, kind) {
   async function tokenValue(token) {
     switch (token) {
@@ -91,11 +91,11 @@ async function generateMasterScheme({ field, doc, settings = {}, clock, counts, 
       case 'sample_category_counter': return padSchemeNumber(counts.samples + 1, field);
       case 'product_name': return kind === 'product' ? doc.name || '' : '';
       case 'product_abbr': return kind === 'product' ? doc.abbr || '' : '';
+      case 'customer_name': return kind === 'customer' ? doc.name || '' : '';
+      case 'customer_abbr': return kind === 'customer' ? doc.abbr || '' : '';
       case 'nabl_term': return field.nonNablDisplayTerm || '';
       case 'category_name':
       case 'category_abbr':
-      case 'customer_name':
-      case 'customer_abbr':
       case 'business_unit':
       case 'business_sub_unit':
       case 'sample_id':
@@ -113,3 +113,4 @@ export const generateProductScheme = (input) => generateMasterScheme({ ...input,
 export const generateParameterScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.parameters } }, 'parameter');
 export const generateMethodScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.methods } }, 'method');
 export const generateUserScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.users } }, 'user');
+export const generateCustomerScheme = (input) => generateMasterScheme({ ...input, counts: { ...input.counts, records: input.counts?.customers } }, 'customer');

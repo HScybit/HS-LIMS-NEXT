@@ -4,7 +4,7 @@ import { customFieldFormDisplayValue, customFieldNeedsGeneration } from '../cust
 import { customFieldTimeZone, customFieldDateDisplayInZone } from '../custom-fields/server-dates.js';
 import { schemeTokens } from '../custom-fields/product-generation.js';
 import { runMasterGeneration } from '../custom-fields/product-generation-runner.js';
-import { productCustomFields, parameterCustomFields, methodCustomFields } from './custom-fields.js';
+import { productCustomFields, parameterCustomFields, methodCustomFields, customerCustomFields } from './custom-fields.js';
 import { currentLookupSelections, lookupOptionsForValue } from './master-custom-field-values.js';
 
 const stores = Object.freeze({
@@ -14,6 +14,8 @@ const stores = Object.freeze({
     context: 'masters_parameter_scheme_context', definitions: parameterCustomFields, countKey: 'parameters', countColumn: 'parameterCount' }),
   method: Object.freeze({ label: 'Method', collection: 'MethodOfAnalysis', table: 'methods_of_analysis', fieldTable: 'method_version_custom_fields', idColumn: 'method_id',
     context: 'masters_method_scheme_context', definitions: methodCustomFields, countKey: 'methods', countColumn: 'methodCount' }),
+  customer: Object.freeze({ label: 'Customer', collection: 'CustomerMaster', table: 'customers', fieldTable: 'customer_version_custom_fields', idColumn: 'customer_id',
+    context: 'masters_customer_scheme_context', definitions: customerCustomFields, countKey: 'customers', countColumn: 'customerCount', retirement: true }),
 });
 
 export async function generateMasterCustomFields(kind, client, identity, command) {
@@ -29,7 +31,7 @@ export async function generateMasterCustomFields(kind, client, identity, command
   const hasDates = fields.some((field) => ['date', 'date_time'].includes(field.fieldType));
   if (hasDates) customFieldTimeZone(command.timeZone);
   else if (command.timeZone !== null) throw new HttpError(400, 'invalid_custom_field_timezone', 'A Custom Field time zone requires captured date fields.');
-  if (command.id && !(await client.query(`SELECT id FROM ${store.table} WHERE organization_id=$1 AND id=$2 AND active`, [identity.organization_id, command.id])).rowCount) {
+  if (command.id && !(await client.query(`SELECT id FROM ${store.table} WHERE organization_id=$1 AND id=$2 AND ${store.retirement ? 'NOT retired' : 'active'}`, [identity.organization_id, command.id])).rowCount) {
     throw new HttpError(404, `${kind}_not_found`, `${store.label} was not found.`);
   }
   const values = Object.fromEntries(command.customFields.map((field) => [field.fieldId, field.value]));
@@ -60,7 +62,7 @@ export async function generateMasterCustomFields(kind, client, identity, command
       SELECT product.id,product.created_at,product.updated_at,field.display_text
       FROM ${store.table} product JOIN ${store.fieldTable} field
         ON field.organization_id=product.organization_id AND field.${store.idColumn}=product.id AND field.revision=product.revision
-      WHERE product.organization_id=$1 AND field.field_id=$2 AND product.active AND field.display_kind='text'
+      WHERE product.organization_id=$1 AND field.field_id=$2 AND ${store.retirement ? 'NOT product.retired' : 'product.active'} AND field.display_kind='text'
         AND ($3::uuid IS NULL OR product.id<>$3) AND ($4::timestamptz IS NULL OR (product.created_at,product.updated_at,product.id)<($4::timestamptz,$5::timestamptz,$6::uuid))
       ORDER BY product.created_at DESC,product.updated_at DESC,product.id DESC LIMIT 500
     ), budget AS (

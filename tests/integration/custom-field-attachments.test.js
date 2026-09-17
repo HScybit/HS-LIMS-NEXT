@@ -70,7 +70,7 @@ test('definition changes and retirement prevent new uploads while existing attac
   await work((client, identity) => saveCustomField(client, identity, { ...initial, revision: 1, requestId: randomUUID(), label: 'Changed label' }));
   await assert.rejects(work((client, identity) => uploadCustomFieldAttachment(client, identity, { ...command, requestId: randomUUID() })), { code: 'stale_custom_field' });
   await work((client, identity) => saveCustomField(client, identity, { ...initial, revision: 2, requestId: randomUUID(), fieldType: 'text', associatedWith: 'customer' }));
-  await assert.rejects(work((client, identity) => uploadCustomFieldAttachment(client, identity, { ...command, requestId: randomUUID(), fieldRevision: 3 })), { code: 'attachment_field_not_found' });
+  await assert.rejects(work((client, identity) => uploadCustomFieldAttachment(client, identity, { ...command, requestId: randomUUID(), fieldRevision: 3 })), { code: 'customer_module_access_required' });
   await work((client, identity) => retireCustomField(client, identity, { id: definition.id, revision: 3, requestId: randomUUID() }));
   assert.deepEqual((await work((client, identity) => readCustomFieldAttachment(client, identity, saved.id), viewer, true)).content, command.content);
   assert.deepEqual(await work((client, identity) => uploadCustomFieldAttachment(client, identity, command)), { ...saved, replayed: true });
@@ -78,11 +78,12 @@ test('definition changes and retirement prevent new uploads while existing attac
 
 test('attachment service and RLS enforce tenant, role and Product field boundaries', async () => {
   const definition = await field(); const foreign = await field({}, outsider); const wrongType = await field({ fieldType: 'text' });
-  const wrongOwner = await field({ associatedWith: 'customer' }); const command = input(definition);
+  const customerField = await field({ associatedWith: 'customer' }); const command = input(definition);
   const saved = await work((client, identity) => uploadCustomFieldAttachment(client, identity, command));
-  for (const invalid of [foreign, wrongType, wrongOwner, { id: randomUUID(), revision: 1 }]) {
+  for (const invalid of [foreign, wrongType, { id: randomUUID(), revision: 1 }]) {
     await assert.rejects(work((client, identity) => uploadCustomFieldAttachment(client, identity, input(invalid))), { code: 'attachment_field_not_found' });
   }
+  await assert.rejects(work((client, identity) => uploadCustomFieldAttachment(client, identity, input(customerField))), { code: 'customer_module_access_required' });
   for (const user of [viewer, noAccess]) await assert.rejects(work((client, identity) => uploadCustomFieldAttachment(client, identity, input(definition)), user), { code: 'forbidden' });
   await assert.rejects(work((client, identity) => readCustomFieldAttachment(client, identity, saved.id), noAccess, true), { code: 'forbidden' });
   await assert.rejects(work((client, identity) => readCustomFieldAttachment(client, identity, saved.id), outsider, true), { code: 'attachment_not_found' });
