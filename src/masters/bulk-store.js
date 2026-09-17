@@ -16,12 +16,13 @@ const requireBulkManager = identity => {
   if (!allowedMasterBulkResources(identity.permission_codes).length) requirePermission(identity, 'masters.manage');
 };
 const publicBatch = batch => { const result = { ...batch }; delete result.sourceHmacSha256; return result; };
+const validCellText = value => typeof value === 'string' && value.length <= 16000 && value.isWellFormed() && !value.includes('\0');
 
 function cellInput(value, metadata) {
   let kind = value === undefined ? 'missing' : value instanceof Date ? 'date' : typeof value;
   if (kind === 'string') kind = 'text';
   if (!['missing', 'text', 'number', 'boolean', 'date'].includes(kind)
-    || kind === 'text' && (value.length > 16000 || !value.isWellFormed() || value.includes('\0'))
+    || kind === 'text' && !validCellText(value)
     || kind === 'number' && !Number.isFinite(value) || kind === 'date' && !Number.isFinite(value.valueOf())) throw invalid('A cell has an unsupported value.');
   const source = metadata ?? {};
   for (const key of sourceKeys) {
@@ -51,7 +52,37 @@ export async function loadMasterBulkBatch(client, identity, batchId) {
   return { ...batch, columns };
 }
 
+function plainTextRows(rows, columnCount) {
+  for (const row of rows) {
+    if (row.cellMetadata?.length || row.values.length !== columnCount) return false;
+    // Iteration includes sparse positions, which must keep their missing kind.
+    for (const value of row.values) if (!validCellText(value)) return false;
+  }
+  return true;
+}
+
+async function insertTextCells(client, organizationId, batchId, rows, columnCount) {
+  let pendingRows = []; let values = []; let textBytes = 0;
+  const flush = async () => {
+    if (!pendingRows.length) return;
+    await client.query(`INSERT INTO master_bulk_cells(organization_id,batch_id,row_id,revision,column_number,value_kind,text_value)
+      SELECT $1,$2,($3::uuid[])[((position-1)/$5::integer)::integer+1],($4::integer[])[((position-1)/$5::integer)::integer+1],
+        ((position-1)%$5::integer+1)::integer,'text',text_value
+      FROM unnest($6::text[]) WITH ORDINALITY AS cells(text_value,position)`,
+    [organizationId, batchId, pendingRows.map(row => row.id), pendingRows.map(row => row.revision), columnCount, values]);
+    pendingRows = []; values = []; textBytes = 0;
+  };
+  for (const row of rows) {
+    const rowBytes = row.values.reduce((sum, value) => sum + Buffer.byteLength(value), 0);
+    // Keep whole rows together. A single valid wide row can exceed the byte target.
+    if (values.length + columnCount > 25000 || textBytes + rowBytes > 1024 * 1024) await flush();
+    pendingRows.push(row); values.push(...row.values); textBytes += rowBytes;
+  }
+  await flush();
+}
+
 async function insertCells(client, organizationId, batchId, rows, columnCount) {
+  if (plainTextRows(rows, columnCount)) return insertTextCells(client, organizationId, batchId, rows, columnCount);
   let pending = [];
   const flush = async () => {
     if (!pending.length) return;
@@ -125,8 +156,10 @@ export async function stageMasterBulk(client, identity, input, decoded, { creden
   while (columns.length < width) columns.push('');
   const headerMetadata = new Map((decoded.headerCellMetadata ?? []).map(cell => [cell.columnNumber, cell]));
   const headerRow = integer(decoded.headerRowNumber, 'Header row', 1, 2_147_483_647);
+  // Match the cell primary-key order without changing source row ordinals.
+  const orderedIds = decoded.rows.map(() => randomUUID()).sort();
   const rows = decoded.rows.map((row, index) => ({ ...row, rowNumber: integer(row.rowNumber, 'Source row', headerRow + 1, 2_147_483_647),
-    id: randomUUID(), requestId: randomUUID(), revision: 1, ordinal: index + 1 }));
+    id: orderedIds[index], requestId: randomUUID(), revision: 1, ordinal: index + 1 }));
   if (new Set(rows.map(row => row.rowNumber)).size !== rows.length || rows.some(row => !Array.isArray(row.values) || row.values.length > columns.length)) throw invalid('Source rows are invalid.');
   await client.query(`INSERT INTO master_bulk_batches(organization_id,id,resource,file_name,file_format,source_sha256,source_hmac_sha256,time_zone,header_row_number,sheet_name,sheet_count,date_1904,column_count,row_count,saved_by)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, [identity.organization_id, id, input.resource, name, input.format, metadata.sourceSha256, metadata.sourceHmacSha256, zone,
@@ -169,11 +202,14 @@ export async function masterBulkRowStatus(client, identity, batchId) {
 
 export async function loadMasterBulkCells(client, identity, batchId, rows, { original = false } = {}) {
   if (!rows.length) return [];
+  // Preserve per-row index probes even before a new batch has planner statistics.
+  // OFFSET 0 keeps the lateral read from being flattened into a whole-batch scan.
   const cells = (await client.query(`SELECT cell.row_id AS "rowId",cell.column_number AS "columnNumber",cell.value_kind AS kind,
     cell.text_value AS "textValue",cell.number_value AS "numberValue",cell.boolean_value AS "booleanValue",cell.date_value AS "dateValue",
     cell.source_type AS type,cell.formula,cell.has_result AS "hasResult",cell.error_code AS "errorCode",cell.hyperlink,cell.number_format AS "numberFormat"
-    FROM master_bulk_cells cell JOIN unnest($3::uuid[],$4::integer[]) AS requested(id,revision) ON requested.id=cell.row_id AND requested.revision=cell.revision
-    WHERE cell.organization_id=$1 AND cell.batch_id=$2 ORDER BY cell.row_id,cell.column_number`,
+    FROM unnest($3::uuid[],$4::integer[]) AS requested(id,revision)
+    CROSS JOIN LATERAL (SELECT * FROM master_bulk_cells WHERE organization_id=$1 AND batch_id=$2
+      AND row_id=requested.id AND revision=requested.revision OFFSET 0) cell ORDER BY cell.row_id,cell.column_number`,
   [identity.organization_id, batchId, rows.map(row => row.id), rows.map(row => original ? 1 : row.revision)])).rows;
   const byId = new Map(rows.map(row => [row.id, { ...row, values: [], cellMetadata: [] }]));
   for (const cell of cells) {

@@ -22,6 +22,7 @@
     "test:e2e": "playwright test",
     "benchmark:templates": "node --env-file=.env.local scripts/benchmark-templates.js",
     "benchmark:datasheets": "node --env-file=.env.local scripts/benchmark-datasheets.js",
+    "benchmark:master-bulk": "node scripts/benchmark-master-bulk.js",
     "benchmark:product-fields": "node --env-file=.env.local scripts/benchmark-product-fields.js",
     "benchmark:method-fields": "node --env-file=.env.local scripts/benchmark-method-fields.js",
     "benchmark:customer-fields": "node --env-file=.env.local scripts/benchmark-customer-fields.js",

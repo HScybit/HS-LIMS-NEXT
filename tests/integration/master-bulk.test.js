@@ -216,13 +216,71 @@ test('cell statements require their actual input actor, valid references and com
       if (sql.startsWith('INSERT INTO master_bulk_cells')) {
         if (change === 'actor') await client.query('SELECT * FROM auth_session_context($1)', [hashToken(other.token)]);
         if (change === 'tenant') values[0] = foreign.organizationId;
-        if (change === 'column') values[4][0] = 250;
+        if (change === 'column') {
+          if (typeof values[4] === 'number') values[4] = 250;
+          else values[4][0] = 250;
+        }
         if (change === 'revision') values[3][0] = 2;
-        if (change === 'incomplete') values = values.map((value, index) => index >= 2 ? value.slice(0, -1) : value);
+        if (change === 'incomplete') values[5] = values[5].slice(0, -1);
       }
       return client.query(sql, values);
     } }, identity, { id, resource: 'products', fileName: 'Boundary.csv', format: 'csv',
       sourceSha256: createHash('sha256').update(source).digest('hex'), timeZone: 'UTC' }, decoded)), { code }, change);
+    assert.equal((await owner.query('SELECT 1 FROM master_bulk_batches WHERE organization_id=$1 AND id=$2', [actor.organizationId, id])).rowCount, 0);
+  }
+});
+
+test('text staging preserves complete source rows across batches, preview pages, corrections and retries', async () => {
+  const actor = await account(); const columns = 249; const count = 205;
+  const decoded = { headerRowNumber: 2, sourceHeaders: ['name', 'key', ...Array.from({ length: columns - 2 }, (_, index) => `project_field.field_${index}`)],
+    rows: Array.from({ length: count }, (_, index) => ({ rowNumber: index + 3,
+      values: Array.from({ length: columns }, (_, column) => column % 7 === 0 ? '' : ` ${index}/${column}: éह😀,{}"\\\n\r\t `) })) };
+  const input = { id: randomUUID(), resource: 'products', fileName: 'Text boundaries.csv', format: 'csv', timeZone: 'UTC',
+    sourceSha256: createHash('sha256').update('synthetic decoded text boundaries').digest('hex') };
+  const staged = await work(actor, (client, identity) => stageMasterBulk(client, identity, input, decoded));
+  assert.deepEqual(await work(actor, (client, identity) => stageMasterBulk(client, identity, input, decoded)), staged);
+  const state = await preview(actor, staged.id); assert.equal(state.summary.total, count); assert.equal(state.rows.length, 50);
+  const loaded = await work(actor, (client, identity) => loadMasterBulkCells(client, identity, staged.id, state.rowStates), true);
+  assert.equal(loaded.length, count);
+  for (let index = 0; index < count; index++) assert.deepEqual(loaded[index].values, decoded.rows[index].values, `source row ${index}`);
+  const lastPage = await work(actor, (client, identity) => loadMasterBulkPreview(client, identity, staged.id, { page: 50 }), true);
+  assert.equal(lastPage.page, 5); assert.equal(lastPage.rows.length, 5); assert.equal(lastPage.rows[0].rowNumber, 203);
+  const row = state.rowStates[100]; const correction = { id: row.id, revision: 1, requestId: randomUUID(), cells: [{ columnNumber: 249, value: 'Corrected' }] };
+  const changed = await work(actor, (client, identity) => correctMasterBulkRow(client, identity, staged.id, correction));
+  assert.equal(changed.revision, 2);
+  assert.deepEqual(await work(actor, (client, identity) => correctMasterBulkRow(client, identity, staged.id, correction)), changed);
+  const current = await work(actor, (client, identity) => loadMasterBulkCells(client, identity, staged.id, [{ id: row.id, revision: 2 }]), true);
+  const original = await work(actor, (client, identity) => loadMasterBulkCells(client, identity, staged.id, [{ id: row.id, revision: 2 }], { original: true }), true);
+  assert.equal(current[0].values[248], 'Corrected'); assert.deepEqual(original[0].values, decoded.rows[100].values);
+});
+
+test('text byte batching accepts a complete wide Unicode row and keeps following rows intact', async () => {
+  const actor = await account(); const value = '😀'.repeat(8000);
+  const decoded = { headerRowNumber: 1, sourceHeaders: Array.from({ length: 40 }, (_, index) => `field_${index}`),
+    rows: [Array(40).fill(value), Array(40).fill(''), Array(40).fill('Tail')].map((values, index) => ({ rowNumber: index + 2, values })) };
+  const input = { id: randomUUID(), resource: 'products', fileName: 'Wide Unicode.csv', format: 'csv', timeZone: 'UTC',
+    sourceSha256: createHash('sha256').update('synthetic decoded Unicode boundaries').digest('hex') };
+  await work(actor, (client, identity) => stageMasterBulk(client, identity, input, decoded));
+  const state = await preview(actor, input.id);
+  assert.deepEqual(state.rows.map(row => row.values), decoded.rows.map(row => row.values));
+});
+
+test('typed staging preserves sparse missing cells, zero, false and source metadata and rejects invalid text atomically', async () => {
+  const actor = await account(); const values = ['Sparse', 'KEY', undefined, 0, false, new Date('2026-09-17T00:00:00Z'), ''];
+  delete values[2];
+  const decoded = { headerRowNumber: 1, sourceHeaders: ['name', 'key', 'missing', 'zero', 'false', 'date', 'blank'],
+    sheetName: 'Data', sheetCount: 1, date1904: false,
+    rows: [{ rowNumber: 2, values, cellMetadata: [{ columnNumber: 4, type: 'formula', formula: '1-1', hasResult: true }, { columnNumber: 6, type: 'date' }] }] };
+  const input = { id: randomUUID(), resource: 'products', fileName: 'Typed.xlsx', format: 'xlsx', timeZone: 'UTC',
+    sourceSha256: createHash('sha256').update('synthetic decoded typed boundaries').digest('hex') };
+  await work(actor, (client, identity) => stageMasterBulk(client, identity, input, decoded));
+  const state = await preview(actor, input.id);
+  assert.deepEqual(state.rows[0].values, Array.from(values));
+  assert.deepEqual(state.rows[0].cellMetadata, decoded.rows[0].cellMetadata);
+  for (const value of ['x'.repeat(16001), '\ud800', '\0', null]) {
+    const id = randomUUID();
+    await assert.rejects(work(actor, (client, identity) => stageMasterBulk(client, identity, { ...input, id },
+      { ...decoded, rows: [{ rowNumber: 2, values: ['Name', 'KEY', value] }] })), { code: 'invalid_bulk_input' });
     assert.equal((await owner.query('SELECT 1 FROM master_bulk_batches WHERE organization_id=$1 AND id=$2', [actor.organizationId, id])).rowCount, 0);
   }
 });
