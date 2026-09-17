@@ -11,10 +11,11 @@ import SecondaryButton from '../ui/SecondaryButton.jsx';
 import PageHeader from '../layout/PageHeader.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import { customFieldColumnKey, customFieldListDisplay } from '../../custom-fields/listing-values.js';
+import MasterBulkButton from './BulkUpload.jsx';
 
 const actionClass = 'smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 flex-shrink-0 text-nowrap';
 
-export default function CustomerList({ canManage, canRead }) {
+export default function CustomerList({ canManage, canRead, bulkResources }) {
   const router = useRouter(); const search = useSearchParams(); const [reload, setReload] = useState(0);
   const [deletion, setDeletion] = useState(null); const [deleting, setDeleting] = useState(false); const [error, setError] = useState('');
   const [customFields, setCustomFields] = useState(null); const [customFieldError, setCustomFieldError] = useState('');
@@ -71,7 +72,7 @@ export default function CustomerList({ canManage, canRead }) {
   return <>
     <PageHeader><div className="page-header"><div className="container-fluid h-100"><div className="row h-100 align-items-center justify-content-between page-header__row">
       <div className="col page-header__start"><h1 className="page-title mb-0">Customer Masters</h1></div>
-      <div className="col-auto page-header__actions d-flex gap-2">{canManage ? <><PrimaryButton leftIcon="plus" onClick={() => router.push(`/customer_masters/new?from=${encodeURIComponent(returnPath)}`)}>New Customer</PrimaryButton></> : null}</div>
+      <div className="col-auto page-header__actions d-flex gap-2">{canManage ? <><MasterBulkButton resource="customers" resources={bulkResources} /><PrimaryButton leftIcon="plus" onClick={() => router.push(`/customer_masters/new?from=${encodeURIComponent(returnPath)}`)}>New Customer</PrimaryButton></> : null}</div>
     </div></div></div></PageHeader>
     {customFieldError ? <div className="alert alert-danger m-4" role="alert">{customFieldError}<button type="button" className="btn btn-link"
       onClick={() => setReload(value => value + 1)}>Retry loading fields</button></div> : null}

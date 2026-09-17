@@ -43,6 +43,20 @@ const field = (actor, association, key, extra = {}) => work(actor, (client, iden
   id: randomUUID(), requestId: randomUUID(), revision: 0, associatedWith: association, key, label: key, fieldType: 'text', ...extra,
 }));
 
+test('Product XLSX Date cells retain typed instants and date provenance through native capture', async () => {
+  const actor = await account(); await field(actor, 'product', 'date', { fieldType: 'date_time' });
+  const bytes = await masterWorkbook([['name', 'key', 'project_field.date'], ['Dated', 'D', new Date('2026-09-17T00:00:00Z')]]);
+  const decoded = await decodeMasterXlsx(bytes); const id = randomUUID();
+  await work(actor, (client, identity) => stageMasterBulk(client, identity, { id, resource: 'products', fileName: 'Date.xlsx', format: 'xlsx',
+    sourceSha256: createHash('sha256').update(bytes).digest('hex'), timeZone: 'Asia/Kolkata' }, decoded));
+  const state = await review(actor, id); assert.equal(state.preview.summary.ready, 1);
+  assert.equal(state.preview.rows[0].cellMetadata[0].type, 'date');
+  assert.equal(state.preview.rows[0].values[2].toISOString(), '2026-09-17T00:00:00.000Z');
+  const result = await process(actor, id, processInput(state.preview)); assert.equal(result.committed, 1);
+  const product = await work(actor, (client, identity) => loadProduct(client, identity, result.rows[0].resultId), true);
+  assert.equal(product.customFields[0].value, '2026-09-17T00:00:00.000Z'); assert.equal(product.customFields[0].timeZone, 'Asia/Kolkata');
+});
+
 test('bulk staging/review do not write masters; corrections, partial processing and exact retries retain accurate outcomes', async () => {
   const actor = await account(); const batch = await stage(actor, 'products', 'name,key,description\nWater,W, source text \n,B,');
   assert.deepEqual(await work(actor, (client, identity) => stageMasterBulk(client, identity, batch.input, batch.decoded)), { id: batch.id, rowCount: 2 });

@@ -218,11 +218,11 @@
   word-break: break-word;
 }
 
-.bulk-upload-user-table.smplfy-table.table > tbody > tr > td {
+.bulk-upload-fixed-columns.smplfy-table.table > tbody > tr > td {
   vertical-align: top;
 }
 
-.bulk-upload-user-table .bulk-upload-cell-editor.form-control {
+.bulk-upload-fixed-columns .bulk-upload-cell-editor.form-control {
   min-width: 156px;
 }
 

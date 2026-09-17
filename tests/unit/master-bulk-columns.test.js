@@ -86,7 +86,7 @@ test('bulk columns never turn arbitrary or protected headers into master propert
 });
 
 test('bulk columns enforce input shape and header limits including sparse arrays', () => {
-  for (const resource of [null, {}, '__proto__', 'constructor', 'customers', 'product']) invalid(() => bind(resource, ['name']));
+  for (const resource of [null, {}, '__proto__', 'constructor', 'unavailable', 'product']) invalid(() => bind(resource, ['name']));
   for (const headers of [null, {}, 'name', [], Array(1), [null], [1], [''], [' '], ['a\0b'], ['\ud800'], ['a'.repeat(251)], [' '.repeat(16000) + 'name']]) invalid(() => bind('products', headers));
   assert.throws(() => bind('products', ['a'.repeat(250)]), /not supported/);
 });

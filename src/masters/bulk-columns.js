@@ -2,8 +2,11 @@ import { HttpError } from '../auth/errors.js';
 import { integer, uuid } from '../templates/input.js';
 import { masterBulkCsvLimits as limits } from './bulk-csv.js';
 import { customFieldCaptureLimit } from './custom-field-config.js';
+import { customerFormFields } from './customer-fields.js';
 
 const resources = {
+  customers: { association: 'customer', ignored: new Set(),
+    fields: { ...Object.fromEntries(customerFormFields.flatMap(field => [[field.source, field.key], [field.key, field.key]])), displayName: 'name' } },
   products: {
     association: 'product',
     fields: { name: 'name', description: 'description', key: 'key', abbr: 'abbreviation', abbreviation: 'abbreviation',

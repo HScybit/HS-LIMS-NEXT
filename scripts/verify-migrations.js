@@ -7,6 +7,8 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createAccount } from '../tests/helpers/database.js';
 import { signIn, withSession } from '../src/auth/service.js';
 import { parseMasterBulkCsv } from '../src/masters/bulk-csv.js';
+import { decodeMasterXlsx } from '../src/masters/bulk-xlsx.js';
+import { masterWorkbook } from '../tests/helpers/master-workbooks.js';
 import { stageMasterBulk, loadMasterBulkPreview } from '../src/masters/bulk-store.js';
 import { reviewMasterBulk, processMasterBulk } from '../src/masters/bulk-service.js';
 import { prepareUserBulkDecoded, userBulkSourceFingerprint } from '../src/users/bulk-credentials.js';
@@ -257,6 +259,21 @@ try {
     assert.equal(changedCustomer.revision, 2); assert.equal(changedCustomer.retired, false);
     assert.equal((await retireCustomer(client, identity, { id: customerWriteId, requestId: randomUUID(), revision: 2 })).revision, 3);
     assert.deepEqual(await loadCustomer(client, identity, customerWriteId, { atRevision: 1 }), customer);
+    await saveCustomField(client, identity, { id: randomUUID(), requestId: randomUUID(), revision: 0, associatedWith: 'customer',
+      key: 'fresh_customer_bulk_date', label: 'Fresh Customer bulk date', fieldType: 'date_time' });
+    const customerWorkbook = await masterWorkbook([['name', 'legal_name', 'igst', 'project_field.fresh_customer_bulk_date'],
+      ['Fresh Customer upload', 'Synthetic legal name', 0, new Date('2026-09-17T00:00:00Z')]]);
+    const customerBulkId = randomUUID();
+    await stageMasterBulk(client, identity, { id: customerBulkId, resource: 'customers', fileName: 'Fresh Customers.xlsx', format: 'xlsx', timeZone: 'UTC',
+      sourceSha256: createHash('sha256').update(customerWorkbook).digest('hex') }, await decodeMasterXlsx(customerWorkbook));
+    const customerRow = (await loadMasterBulkPreview(client, identity, customerBulkId)).rows[0];
+    assert.equal(customerRow.cellMetadata[0].type, 'date'); const customerReview = randomUUID();
+    assert.equal((await reviewMasterBulk(client, identity, customerBulkId, { rows: [{ id: customerRow.id, revision: 1, requestId: customerReview }] })).rows[0].valid, true);
+    const customerProcess = { rows: [{ id: customerRow.id, revision: 1, reviewId: customerReview, requestId: randomUUID() }] };
+    const customerOutcome = await processMasterBulk(client, identity, customerBulkId, customerProcess); assert.equal(customerOutcome.committed, 1);
+    assert.deepEqual(await processMasterBulk(client, identity, customerBulkId, customerProcess), customerOutcome);
+    const customerCapture = await loadCustomer(client, identity, customerOutcome.rows[0].resultId, { atRevision: 1 });
+    assert.equal(customerCapture.igstPercent, '0.0000'); assert.equal(customerCapture.customFields[0].value, '2026-09-17T00:00:00.000Z');
     await client.query('ROLLBACK TO SAVEPOINT customer_write_allowed'); await client.query('RELEASE SAVEPOINT customer_write_allowed');
     await client.query('SAVEPOINT customer_scope_denied');
     await assert.rejects(client.query(`INSERT INTO customers(organization_id,id,code,name,legal_name)

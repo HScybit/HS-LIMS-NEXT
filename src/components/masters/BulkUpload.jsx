@@ -59,7 +59,8 @@ export function BulkUploadModal({ resource, resources = [resource], open, onClos
     <form id="bulk-upload-form" className="bulk-upload-form" onSubmit={upload}>
       <div className="alert alert-info">Download the sample file, keep its headers, and upload the completed CSV or XLSX file.
         <strong className="d-block mt-1">Maximum 2,500 data rows, 250 columns and 16 MiB per file.</strong>
-        {model === 'users' ? <span className="d-block mt-1">User uploads create new accounts. Supply an active Role and Lab for each user. Passwords are hidden in previews and downloaded files.</span> : null}</div>
+        {model === 'users' ? <span className="d-block mt-1">User uploads create new accounts. Supply an active Role and Lab for each user. Passwords are hidden in previews and downloaded files.</span> : null}
+        {model === 'customers' ? <span className="d-block mt-1">Customer uploads create new records. Existing names must be corrected before processing. Supply Name, Legal Name and any required Custom Fields.</span> : null}</div>
       <div className="row g-3"><div className="col-12 col-md-5"><label className="form-label" htmlFor="bulk-model">Select Model</label>
         <select id="bulk-model" className="form-select" value={model} disabled={Boolean(busy) || uncertain} onChange={event => { setModel(event.target.value); setError(''); }}>
           {resources.map(value => <option key={value} value={value}>{masterBulkResources[value].label}</option>)}</select></div>

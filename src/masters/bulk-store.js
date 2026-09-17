@@ -6,6 +6,7 @@ import { allowedMasterBulkResources, masterBulkPageSize, masterBulkResources } f
 import { masterBulkResource } from './bulk-row.js';
 import { prepareUserBulkCredential } from '../users/bulk-credentials.js';
 import { loadUserBulkCredentialStates, storeUserBulkCredentials } from '../users/bulk-store.js';
+import { requireMasterBulkAccess } from './bulk-access.js';
 
 const invalid = message => new HttpError(400, 'invalid_bulk_input', message);
 const conflict = () => new HttpError(409, 'bulk_request_reused', 'This request was already used for different upload data.');
@@ -28,7 +29,7 @@ function cellInput(value, metadata) {
     if (key === 'hasResult' ? typeof source[key] !== 'boolean'
       : typeof source[key] !== 'string' || source[key].length > 16000 || !source[key].isWellFormed() || source[key].includes('\0')) throw invalid('A cell has invalid source metadata.');
   }
-  if (source.type && !['formula', 'error', 'hyperlink', 'rich_text', 'formatted'].includes(source.type)) throw invalid('A cell has unsupported source metadata.');
+  if (source.type && !['formula', 'error', 'hyperlink', 'rich_text', 'formatted', 'date'].includes(source.type)) throw invalid('A cell has unsupported source metadata.');
   return [kind, kind === 'text' ? value : null, kind === 'number' ? value : null, kind === 'boolean' ? value : null,
     kind === 'date' ? value.toISOString() : null, ...sourceKeys.map(key => source[key] ?? null)];
 }
@@ -37,14 +38,14 @@ const batchSelect = `SELECT id,resource,file_name AS "fileName",file_format AS f
   header_row_number AS "headerRowNumber",sheet_name AS "sheetName",sheet_count AS "sheetCount",date_1904 AS "date1904",
   column_count AS "columnCount",row_count AS "rowCount",saved_by AS "savedBy",saved_at AS "savedAt",
   EXISTS (SELECT 1 FROM custom_field_definitions field WHERE field.organization_id=master_bulk_batches.organization_id AND field.active
-    AND field.associated_with=CASE master_bulk_batches.resource WHEN 'products' THEN 'product' WHEN 'test-parameters' THEN 'parameter' WHEN 'methods' THEN 'method_of_analysis' END
+    AND field.associated_with=CASE master_bulk_batches.resource WHEN 'products' THEN 'product' WHEN 'test-parameters' THEN 'parameter' WHEN 'methods' THEN 'method_of_analysis' WHEN 'customers' THEN 'customer' END
     AND field.field_type IN ('date','date_time')) AS "hasDateFields" FROM master_bulk_batches`;
 
 export async function loadMasterBulkBatch(client, identity, batchId) {
   requireBulkManager(identity); const id = idValue(batchId, 'Upload');
   const batch = (await client.query(`${batchSelect} WHERE organization_id=$1 AND id=$2`, [identity.organization_id, id])).rows[0];
   if (!batch) throw new HttpError(404, 'bulk_not_found', 'Bulk upload was not found.');
-  requirePermission(identity, masterBulkResource(batch.resource).permission);
+  await requireMasterBulkAccess(client, identity, batch.resource);
   const columns = (await client.query(`SELECT column_number AS "columnNumber",source_header AS header,source_type AS type,formula,has_result AS "hasResult",
     error_code AS "errorCode",hyperlink,number_format AS "numberFormat" FROM master_bulk_columns WHERE organization_id=$1 AND batch_id=$2 ORDER BY column_number`, [identity.organization_id, id])).rows;
   return { ...batch, columns };
@@ -103,10 +104,15 @@ async function priorUpload(client, identity, metadata) {
   return null;
 }
 
-export const findMasterBulkUpload = (client, identity, input) => priorUpload(client, identity, uploadMetadata(identity, input));
+export async function findMasterBulkUpload(client, identity, input) {
+  const metadata = uploadMetadata(identity, input);
+  await requireMasterBulkAccess(client, identity, metadata.resource);
+  return priorUpload(client, identity, metadata);
+}
 
 export async function stageMasterBulk(client, identity, input, decoded, { credentials } = {}) {
   const metadata = uploadMetadata(identity, input); const { id, fileName: name, timeZone: zone } = metadata;
+  await requireMasterBulkAccess(client, identity, metadata.resource, { write: true });
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended('master-bulk:'||$1::text||':'||$2::text,0))", [identity.organization_id, id]);
   const prior = await priorUpload(client, identity, metadata); if (prior) return prior;
   if (input.resource !== 'users' && credentials !== undefined) throw invalid('Credentials belong to User uploads only.');
@@ -150,7 +156,7 @@ const rowStatus = `SELECT row.id,row.ordinal,row.source_row_number AS "rowNumber
   review.id AS "reviewId",review.valid,review.operation,review.error_code AS "validationCode",review.error_message AS "validationMessage",
   review.candidate_id AS "candidateId",review.expected_revision AS "expectedRevision",review.definitions_sha256 AS "definitionsSha256",
   attempt.id AS "attemptId",attempt.committed,attempt.error_code AS "processingCode",attempt.error_message AS "processingMessage",
-  attempt.result_revision AS "resultRevision",coalesce(attempt.product_id,attempt.parameter_id,attempt.method_id,attempt.user_id) AS "resultId"
+  attempt.result_revision AS "resultRevision",coalesce(attempt.product_id,attempt.parameter_id,attempt.method_id,attempt.user_id,attempt.customer_id) AS "resultId"
   FROM master_bulk_rows row
   LEFT JOIN LATERAL (SELECT * FROM master_bulk_reviews WHERE organization_id=row.organization_id AND batch_id=row.batch_id AND row_id=row.id
     AND input_revision=row.revision ORDER BY sequence DESC LIMIT 1) review ON true
@@ -209,7 +215,7 @@ export async function loadMasterBulkPreview(client, identity, batchId, input = {
 
 export async function listMasterBulk(client, identity, resource, input = {}) {
   requireBulkManager(identity);
-  if (resource !== 'all') requirePermission(identity, masterBulkResource(resource).permission);
+  if (resource !== 'all') await requireMasterBulkAccess(client, identity, resource);
   fieldsOnly(input, ['page', 'pageSize', 'search', 'filters', 'sort']);
   const page = integer(input.page ?? 1, 'Page', 1, 1_000_000);
   const pageSize = integer(input.pageSize ?? 50, 'Page size', 1, 100);
@@ -236,7 +242,7 @@ export async function listMasterBulk(client, identity, resource, input = {}) {
       if (to) conditions.push(`saved_at<((${bind(to)}::date+1)::timestamp AT TIME ZONE 'UTC')`);
     } else if (key === 'resource') {
       if (filter.type !== 'select') throw invalid('Select an upload model.');
-      const value = queryText(filter.value); if (value) { requirePermission(identity, masterBulkResource(value).permission); conditions.push(`resource=${bind(value)}`); }
+      const value = queryText(filter.value); if (value) { await requireMasterBulkAccess(client, identity, value); conditions.push(`resource=${bind(value)}`); }
     } else {
       if (filter.type !== 'text') throw invalid('File name filters require text.');
       const value = queryText(filter.value); if (value) conditions.push(`file_name ILIKE ${bind(literal(value).replace(/\s+/g, '%'))}`);
@@ -269,6 +275,7 @@ export async function listMasterBulk(client, identity, resource, input = {}) {
 
 export async function correctMasterBulkRow(client, identity, batchId, input) {
   const batch = await loadMasterBulkBatch(client, identity, batchId);
+  await requireMasterBulkAccess(client, identity, batch.resource, { write: true });
   fieldsOnly(input, ['id', 'revision', 'requestId', 'cells']);
   const id = idValue(input.id, 'Row'); const revision = integer(input.revision, 'Revision', 1, 2_147_483_646);
   const requestId = idValue(input.requestId, 'Correction request');

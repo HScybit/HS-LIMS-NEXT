@@ -1,9 +1,8 @@
 import { authenticated, endpoint, json } from '@/auth/http.js';
 import { HttpError } from '@/auth/errors.js';
-import { requirePermission } from '@/templates/input.js';
 import { findMasterBulkUpload, listMasterBulk, stageMasterBulk } from '@/masters/bulk-store.js';
 import { readMasterBulkUpload } from '@/masters/bulk-upload.js';
-import { masterBulkResource } from '@/masters/bulk-row.js';
+import { requireMasterBulkAccess } from '@/masters/bulk-access.js';
 import { prepareUserBulkDecoded } from '@/users/bulk-credentials.js';
 
 export const GET = endpoint(async request => {
@@ -16,7 +15,7 @@ export const GET = endpoint(async request => {
 
 export const POST = endpoint(async request => {
   // Authorize before allocating a file reader/worker; validate the session again at persistence.
-  await authenticated(request, (_client, identity) => requirePermission(identity, masterBulkResource(request.nextUrl.searchParams.get('resource')).permission), { readOnly: true });
+  await authenticated(request, (client, identity) => requireMasterBulkAccess(client, identity, request.nextUrl.searchParams.get('resource')), { readOnly: true });
   const { input, decoded } = await readMasterBulkUpload(request);
   if (input.resource === 'users') {
     const prior = await authenticated(request, (client, identity) => findMasterBulkUpload(client, identity, input), { readOnly: true });

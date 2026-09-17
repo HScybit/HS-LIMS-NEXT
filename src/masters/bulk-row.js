@@ -1,5 +1,6 @@
 import { HttpError } from '../auth/errors.js';
 import { masterBulkResources } from './bulk-config.js';
+import { customerFormFields } from './customer-fields.js';
 
 const invalid = message => new HttpError(400, 'invalid_bulk_row', message);
 
@@ -59,7 +60,16 @@ export async function masterBulkRowCommand({ resource, columns, row, definitions
     let value = bulkCellValue(row.values[column.columnNumber - 1]);
     if (column.kind === 'custom_field') { supplied.set(column.fieldId, value); continue; }
     const key = column.fieldName;
-    if (key === 'parseNumber') value = bulkBoolean(value, column.header.trim());
+    if (resource === 'customers') {
+      const field = customerFormFields.find(field => field.key === key);
+      // PERN's file parser leaves optional blank scalars to API defaults.
+      if (value === '' && ['number', 'boolean', 'select'].includes(field.type)) continue;
+      if (field.type === 'boolean') value = bulkBoolean(value, column.header.trim());
+      else if (field.type === 'number') {
+        if (typeof value === 'boolean') throw invalid(`${field.label} must be a number.`);
+        value = key === 'creditDays' ? Number(value) : String(value);
+      } else value = String(value);
+    } else if (key === 'parseNumber') value = bulkBoolean(value, column.header.trim());
     else if (['order', 'decimalScale'].includes(key)) {
       // A supplied blank uses the existing new-record default, not the old value.
       value = value === '' ? (key === 'order' ? 0 : 4) : Number(value);
