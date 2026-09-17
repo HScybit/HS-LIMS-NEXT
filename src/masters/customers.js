@@ -16,7 +16,7 @@ const contactColumns = `contact.id,contact.name,contact.email,contact.phone,cont
 const addressKeys = ['id', 'addressType', 'attentionTo', 'line1', 'line2', 'city', 'state', 'postalCode', 'countryCode', 'freeformAddress', 'isDefault'];
 const contactKeys = ['id', 'name', 'email', 'phone', 'designation', 'isPrimary'];
 
-async function requireRead(client, identity) {
+export async function requireCustomerRead(client, identity) {
   if (!identity.permission_codes?.some(code => ['masters.read', 'masters.manage'].includes(code))) throw new HttpError(403, 'forbidden', 'You cannot view Customers.');
   if (!(await client.query("SELECT masters_can_read_party('customer') AS allowed")).rows[0]?.allowed) throw new HttpError(403, 'customer_module_access_required', 'Customer module access is required.');
 }
@@ -65,7 +65,7 @@ async function readCustomer(client, identity, id, atRevision) {
 }
 
 export async function loadCustomer(client, identity, customerId, { atRevision } = {}) {
-  await requireRead(client, identity); const id = uuid(customerId, 'Customer').toLowerCase();
+  await requireCustomerRead(client, identity); const id = uuid(customerId, 'Customer').toLowerCase();
   if (atRevision !== undefined) integer(atRevision, 'Revision', 1, 2_147_483_647);
   const record = await readCustomer(client, identity, id, atRevision);
   if (!record || atRevision === undefined && record.retired) throw new HttpError(404, 'customer_not_found', 'Customer was not found.');

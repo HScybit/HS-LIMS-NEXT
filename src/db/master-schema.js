@@ -90,6 +90,7 @@ export const customerAddresses = pgTable('customer_addresses', {
   line1: text('line_1'), line2: text('line_2'), city: text('city'), state: text('state'), postalCode: text('postal_code'),
   countryCode: text('country_code'), freeformAddress: text('freeform_address'), isDefault: boolean('is_default').notNull().default(false),
 }, (t) => [key(t), link(t, t.customerId, customers), uniqueIndex('customer_default_address_key').on(t.organizationId, t.customerId, t.addressType).where(sql`${t.isDefault}`),
+  index('customer_address_parent_idx').on(t.organizationId, t.customerId, t.addressType, t.id),
   check('customer_address_type', sql`${t.addressType} in ('billing', 'shipping', 'registered', 'other') and length(${t.countryCode}) = 2`),
   check('customer_address_representation', sql`(${t.freeformAddress} is not null and length(trim(${t.freeformAddress})) between 1 and 4000
     and num_nonnulls(${t.attentionTo}, ${t.line1}, ${t.line2}, ${t.city}, ${t.state}, ${t.postalCode}, ${t.countryCode}) = 0)
@@ -99,6 +100,7 @@ export const customerContacts = pgTable('customer_contacts', {
   ...identity(), customerId: uuid('customer_id').notNull(), name: text('name').notNull(), email: text('email'), phone: text('phone'),
   designation: text('designation'), isPrimary: boolean('is_primary').notNull().default(false),
 }, (t) => [key(t), link(t, t.customerId, customers), uniqueIndex('customer_primary_contact_key').on(t.organizationId, t.customerId).where(sql`${t.isPrimary}`),
+  index('customer_contact_parent_idx').on(t.organizationId, t.customerId, t.id),
   check('customer_contact_details', sql`length(trim(${t.name})) between 1 and 200 and (nullif(trim(${t.email}), '') is not null or nullif(trim(${t.phone}), '') is not null)`)]);
 
 // Quotation selection is a bounded reference dependency, not a billing module.

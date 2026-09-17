@@ -73,6 +73,6 @@ export function clearSessionCookies(response) {
 
 export async function currentIdentity() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  try { return await withSession(token, (_client, identity) => publicIdentity(identity), { readOnly: true, accountAction: true }); }
+  try { return await withSession(token, (client, identity) => publicIdentity(client, identity), { readOnly: true, accountAction: true }); }
   catch (error) { if (error.status === 401) return null; throw error; }
 }

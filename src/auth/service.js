@@ -43,7 +43,8 @@ export async function signIn(input) {
   return { token, csrfToken, expiresAt: result.rows[0].expires_at };
 }
 
-export function publicIdentity(identity) {
+export async function publicIdentity(client, identity) {
+  const masterModules = (await client.query("SELECT masters_can_read_party('customer') AS customer,masters_can_read_party('vendor') AS vendor")).rows[0];
   return {
     userId: identity.user_id,
     organizationId: identity.organization_id,
@@ -56,6 +57,7 @@ export function publicIdentity(identity) {
     mfaEnabled: identity.mfa_enabled,
     roles: identity.role_names,
     permissions: identity.permission_codes,
+    masterModules,
   };
 }
 

@@ -5,6 +5,7 @@ const stores = Object.freeze({
   product: Object.freeze({ label: 'Product', alias: 'product', fieldTable: 'product_version_custom_fields', valueTable: 'product_version_custom_field_values', idColumn: 'product_id' }),
   parameter: Object.freeze({ label: 'Parameter', alias: 'parameter', fieldTable: 'parameter_version_custom_fields', valueTable: 'parameter_version_custom_field_values', idColumn: 'parameter_id' }),
   method: Object.freeze({ label: 'Method', alias: 'method', fieldTable: 'method_version_custom_fields', valueTable: 'method_version_custom_field_values', idColumn: 'method_id' }),
+  customer: Object.freeze({ label: 'Customer', alias: 'customer', fieldTable: 'customer_version_custom_fields', valueTable: 'customer_version_custom_field_values', idColumn: 'customer_id' }),
 });
 function storeFor(kind) {
   if (!Object.hasOwn(stores, kind)) throw new TypeError('Unsupported Custom Field master.');
