@@ -1,0 +1,317 @@
+.smplfy-modal-dialog:has(.coa-modal--parameters) {
+  --smplfy-modal-custom-width: 920px;
+}
+
+.smplfy-modal-dialog:has(.coa-modal--print-config) {
+  --smplfy-modal-custom-width: 760px;
+}
+
+.smplfy-modal-content.coa-modal {
+  --smplfy-modal-max-block-size: min(92vh, 860px);
+  border: 1px solid #d9e2ee;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.coa-modal .smplfy-modal-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid #e3e9f2;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.coa-modal .smplfy-modal-title-row {
+  align-items: flex-start;
+}
+
+.coa-modal .smplfy-modal-title-icon {
+  padding: 6px;
+  border-radius: 10px;
+  background: #eaf3ff;
+  color: #0f5fb8;
+}
+
+.coa-modal .smplfy-modal-title {
+  color: #111827;
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 850;
+}
+
+.coa-modal__body.smplfy-modal-body {
+  padding: 18px;
+  background: #f8fafc;
+}
+
+.coa-modal__footer.smplfy-modal-footer {
+  padding: 14px 18px 16px;
+  border-top: 1px solid #e3e9f2;
+  background: #ffffff;
+}
+
+.coa-modal-actions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.coa-modal .coa-modal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.coa-modal .coa-parameter-groups {
+  display: grid;
+  gap: 12px;
+  max-height: min(58vh, 560px);
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.coa-modal .coa-parameter-group {
+  overflow: hidden;
+  border: 1px solid #d9e2ee;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.coa-modal .coa-parameter-group h3 {
+  margin: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e3e9f2;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.25;
+  font-weight: 850;
+}
+
+.coa-modal .coa-parameter-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.coa-modal .coa-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.coa-modal .coa-config-grid > .coa-checkbox-row {
+  align-self: end;
+}
+
+.coa-modal .coa-config-checks {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #d9e2ee;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.coa-modal .coa-form-field {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  color: #263449;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.coa-modal .coa-form-field > span {
+  color: #263449;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.coa-modal .coa-form-field .smplfy-select-field {
+  width: 100%;
+}
+
+.coa-modal .coa-form-field input,
+.coa-modal .coa-form-field select,
+.coa-modal .coa-form-field textarea,
+.coa-modal .coa-form-field .smplfy-form-select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  font-size: 13px;
+  box-shadow: none;
+}
+
+.coa-modal .coa-form-field .smplfy-form-select {
+  padding-right: 36px;
+}
+
+.coa-modal .coa-form-field textarea {
+  min-height: 118px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.coa-modal .coa-form-field input:disabled,
+.coa-modal .coa-form-field select:disabled,
+.coa-modal .coa-form-field textarea:disabled,
+.coa-modal .coa-form-field .smplfy-form-select:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.coa-modal .coa-form-field input:focus,
+.coa-modal .coa-form-field select:focus,
+.coa-modal .coa-form-field textarea:focus,
+.coa-modal .coa-form-field .smplfy-form-select:focus {
+  border-color: #1379f0;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(19, 121, 240, 0.14);
+}
+
+.coa-modal .coa-checkbox-row {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #263449;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.coa-modal .coa-checkbox-row:has(input:checked) {
+  border-color: #a7cdf8;
+  background: #eef6ff;
+  color: #0f5fb8;
+}
+
+.coa-modal .coa-checkbox-row input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: #1379f0;
+}
+
+.coa-modal .coa-checkbox-row input:focus-visible {
+  outline: 2px solid #1379f0;
+  outline-offset: 2px;
+}
+
+.coa-modal .coa-checkbox-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.coa-modal--parameters .coa-modal__body.smplfy-modal-body {
+  background: #ffffff;
+}
+
+.coa-modal--parameters .coa-modal-toolbar {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.coa-modal--parameters .coa-parameter-groups {
+  gap: 0;
+  max-height: min(58vh, 540px);
+  padding-right: 0;
+  border: 1px solid #e3e9f2;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.coa-modal--parameters .coa-parameter-group {
+  border: 0;
+  border-bottom: 1px solid #edf1f7;
+  border-radius: 0;
+}
+
+.coa-modal--parameters .coa-parameter-group:last-child {
+  border-bottom: 0;
+}
+
+.coa-modal--parameters .coa-parameter-group h3 {
+  padding: 10px 12px;
+  border-bottom-color: #edf1f7;
+  background: #f8fafc;
+  font-size: 13px;
+}
+
+.coa-modal--parameters .coa-parameter-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  padding: 4px 12px 8px;
+  background: #ffffff;
+}
+
+.coa-modal--parameters .coa-checkbox-row {
+  min-height: 34px;
+  padding: 7px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.coa-modal--parameters .coa-checkbox-row:has(input:checked) {
+  background: transparent;
+  color: #111827;
+}
+
+.coa-modal--parameters .coa-checkbox-row input {
+  width: 15px;
+  height: 15px;
+}
+
+@media (max-width: 720px) {
+  .coa-modal__body.smplfy-modal-body {
+    padding: 14px;
+  }
+
+  .coa-modal .coa-parameter-list,
+  .coa-modal .coa-config-grid,
+  .coa-modal .coa-config-checks {
+    grid-template-columns: 1fr;
+  }
+
+  .coa-modal .coa-modal-toolbar,
+  .coa-modal-actions {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .coa-modal .coa-modal-toolbar > *,
+  .coa-modal-actions > * {
+    flex: 1 1 auto;
+  }
+}

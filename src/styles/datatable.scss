@@ -1,0 +1,475 @@
+.dt-page {
+  min-height: 100%;
+  padding: 24px;
+  background: #f5f6f7;
+}
+
+.dt-toolbar {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dt-search-shell {
+  width: min(420px, 100%);
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #cad3df;
+  border-radius: 8px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #6d737e;
+}
+
+.dt-search {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1c2126;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dt-search::placeholder {
+  color: #6d737e;
+}
+
+.dt-filter-toggle,
+.dt-clear-button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #cad3df;
+  border-radius: 8px;
+  background: #fff;
+  color: #4d5561;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dt-filter-toggle:hover,
+.dt-filter-toggle.is-active,
+.dt-clear-button:hover {
+  border-color: #1379f0;
+  color: #1379f0;
+}
+
+.dt-filter-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #1379f0;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.dt-filter-panel {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #dfe5ec;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dt-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.dt-filter-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.dt-filter-field label {
+  margin: 0;
+  color: #4d5561;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.dt-filter-field input,
+.dt-filter-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #cad3df;
+  border-radius: 8px;
+  background: #fff;
+  color: #1c2126;
+  font-size: 14px;
+  outline: none;
+}
+
+.dt-filter-field input:focus,
+.dt-filter-field select:focus {
+  border-color: #1379f0;
+  box-shadow: 0 0 0 3px rgba(19, 121, 240, 0.12);
+}
+
+.dt-filter-field__range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dt-filter-empty {
+  color: #6d737e;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dt-filter-actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.dt-filter-reset,
+.dt-filter-apply {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dt-filter-reset {
+  border: 1px solid #cad3df;
+  background: #fff;
+  color: #4d5561;
+}
+
+.dt-filter-apply {
+  background: #1379f0;
+  color: #fff;
+}
+
+.dt-active-filters {
+  margin: -4px 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dt-filter-pill {
+  min-height: 32px;
+  padding: 0 10px 0 12px;
+  border: 1px solid #cad3df;
+  border-radius: 999px;
+  background: #fff;
+  color: #4d5561;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dt-filter-pill:hover {
+  border-color: #1379f0;
+  color: #1379f0;
+}
+
+.dt-table-card {
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(28, 33, 38, 0.04);
+}
+
+.dt-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.dt-table {
+  width: 100%;
+  min-width: 100%;
+  // table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.dt-table thead th {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-card);
+  background: #f8fafc;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.dt-table tbody td {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 20px;
+  vertical-align: middle;
+  overflow-wrap: break-word;
+}
+
+.dt-table thead th button,
+.dt-table tbody td button,
+.dt-table thead th .btn,
+.dt-table tbody td .btn {
+  white-space: nowrap;
+}
+
+.dt-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.dt-table tbody tr:hover td {
+  background: #fafcff;
+}
+
+.dt-table__col--recorded-by {
+  width: 180px;
+}
+
+.dt-table__col--recorded-at {
+  width: 180px;
+  white-space: nowrap;
+}
+
+.dt-table__col--temperature {
+  width: 120px;
+  white-space: nowrap;
+}
+
+.dt-table__col--humidity {
+  width: 160px;
+  white-space: nowrap;
+}
+
+.dt-table__col--location {
+  width: auto;
+}
+
+.dt-table__col--actions {
+  width: 88px;
+  text-align: center;
+}
+
+.dt-table tbody .dt-table__col--actions {
+  display: table-cell;
+}
+
+.dt-table .smplfy-btn.btn-sm:has(> svg:only-child),
+.dt-table .smplfy-btn.btn-sm:has(> .smplfy-icon:only-child) {
+  margin-inline: auto;
+}
+
+.smplfy-table-link {
+  color: var(--smplfy-color-primary, #1a73e8);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.smplfy-table-link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+@media (max-width: 767.98px) {
+  .dt-page {
+    padding: 16px;
+  }
+
+  .dt-toolbar,
+  .dt-filter-actions {
+    align-items: stretch;
+  }
+
+  .dt-search-shell,
+  .dt-filter-toggle,
+  .dt-clear-button,
+  .dt-filter-reset,
+  .dt-filter-apply {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dt-filter-field__range {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.dt-multiselect-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 8px;
+  box-shadow: 0 4px 18px rgba(28, 33, 38, 0.08);
+  max-height: 260px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: dtDropdownFadeIn 0.15s ease-out;
+}
+
+.dt-multiselect-search {
+  padding: 8px 10px;
+  border-bottom: 1px solid #dfe5ec;
+  background: #f8fafc;
+
+  input {
+    min-height: 32px !important;
+    padding: 0 10px !important;
+    font-size: 13px !important;
+    border-radius: 6px !important;
+  }
+}
+
+.dt-multiselect-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.dt-multiselect-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #1c2126;
+  font-weight: 500;
+  transition: background 0.1s ease, color 0.1s ease;
+
+  &:hover {
+    background: #f5f6f7;
+  }
+
+  &.is-selected {
+    background: #fafcff;
+    color: #1379f0;
+  }
+}
+
+.dt-multiselect-checkbox {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #cad3df;
+  border-radius: 4px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+
+  &::after {
+    content: "";
+    width: 4px;
+    height: 8px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-0.5px, -0.5px);
+    opacity: 0;
+    transition: opacity 0.1s ease;
+  }
+
+  .is-selected & {
+    background: #1379f0;
+    border-color: #1379f0;
+
+    &::after {
+      opacity: 1;
+    }
+  }
+}
+
+.dt-multiselect-empty {
+  padding: 16px;
+  color: #6d737e;
+  font-size: 13px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.dt-multiselect-footer {
+  padding: 8px 12px;
+  border-top: 1px solid #dfe5ec;
+  background: #f8fafc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6d737e;
+
+  button {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 600;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.dt-th-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dt-sort-icon {
+  opacity: 0.3;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+
+  &.is-active {
+    opacity: 1;
+  }
+}
+
+th:hover .dt-sort-icon {
+  opacity: 0.7;
+}
+
+@keyframes dtDropdownFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -1,0 +1,91 @@
+// Admin Hub page, ported verbatim from PERN's admin-hub-page.scss (same class names, same
+// rules), swapping only its hex fallbacks for this codebase's own --smplfy-primitive-*/
+// --smplfy-field-* tokens (the same tokens power both apps' design systems). The page has no
+// AppShell/.global-header ancestor, so its own header rules below are self-contained; the
+// profile dropdown (.header-profile-shell/.user-dropdown/.header-user-avatar) instead relies on
+// the *unscoped* base rules in base.scss, which is why those classes don't need a .global-header
+// wrapper here the way AppShell's own header does.
+.smplfy-admin-hub-page {
+  --admin-hub-padding: 24px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--smplfy-primitive-neutral-100);
+  color: var(--smplfy-semantic-color-text-default);
+  font-family: var(--smplfy-field-font-family);
+}
+
+.smplfy-admin-hub-page > header {
+  min-height: 64px;
+  padding: 12px var(--admin-hub-padding);
+  border-bottom: 1px solid var(--smplfy-primitive-neutral-300);
+  background: #fff;
+}
+
+.smplfy-admin-hub-dashboard {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--smplfy-primitive-neutral-800);
+  font-size: 15px;
+  text-decoration: none;
+}
+.smplfy-admin-hub-dashboard:hover { color: var(--smplfy-primitive-neutral-900); }
+
+.smplfy-admin-hub-search { position: relative; width: 100%; max-width: 500px; margin: 0 auto; z-index: 20; }
+.smplfy-admin-hub-search > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--smplfy-field-border-default);
+  border-radius: var(--smplfy-field-radius);
+  background: #fff;
+  color: var(--smplfy-field-icon-color);
+}
+.smplfy-admin-hub-search > label:focus-within { border-color: var(--smplfy-field-border-focused); box-shadow: 0 0 0 3px rgb(19 121 240 / 12%); }
+.smplfy-admin-hub-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--smplfy-field-text); font-size: 14px; }
+.smplfy-admin-hub-shortcut { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.smplfy-admin-hub-shortcut kbd { padding: 3px 5px; border: 1px solid var(--smplfy-primitive-neutral-400); border-radius: 4px; background: var(--smplfy-primitive-neutral-200); color: var(--smplfy-primitive-neutral-800); font-family: inherit; box-shadow: none; }
+.smplfy-admin-hub-results { position: absolute; inset: calc(100% + 8px) 0 auto; max-height: 288px; overflow-y: auto; padding: 8px; border: 1px solid var(--smplfy-primitive-neutral-400); border-radius: 8px; background: #fff; box-shadow: var(--smplfy-shadow-floating-panel); }
+.smplfy-admin-hub-results > div:first-child { padding: 6px 8px 8px; color: var(--smplfy-field-icon-color); font-size: 12px; }
+.smplfy-admin-hub-results > p { margin: 0; padding: 12px 8px; color: var(--smplfy-field-icon-color); }
+.smplfy-admin-hub-result { display: grid; gap: 2px; padding: 7px 8px; border-top: 1px solid var(--smplfy-primitive-neutral-200); }
+.smplfy-admin-hub-result small { color: var(--smplfy-field-icon-color); font-size: 11px; }
+
+.smplfy-admin-hub-page > main { padding: var(--admin-hub-padding); }
+.smplfy-admin-hub-intro { min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.smplfy-admin-hub-intro > div { display: inline-flex; align-items: center; gap: 12px; }
+.smplfy-admin-hub-intro h1 { margin: 0; color: var(--smplfy-primitive-neutral-800); font-size: 40px; line-height: 1.2; font-weight: 400; letter-spacing: -.05em; }
+.smplfy-admin-hub-intro p { margin: 12px 0 0; color: var(--smplfy-field-icon-color); font-size: 14px; }
+.smplfy-admin-hub-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; width: min(100%, 1278px); margin: 0 auto; }
+.smplfy-admin-hub-column { display: flex; flex-direction: column; gap: 40px; }
+.smplfy-admin-hub-group { display: flex; flex-direction: column; gap: 8px; }
+.smplfy-admin-hub-group__heading { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.smplfy-admin-hub-group__heading > span {
+  width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px;
+  border: 1px solid var(--smplfy-primitive-blue-300); border-radius: 4px;
+  background: var(--smplfy-primitive-blue-100); color: var(--smplfy-primitive-blue-500);
+}
+.smplfy-admin-hub-group h2 { margin: 0; color: var(--smplfy-primitive-neutral-800); font-size: 16px; line-height: 24px; font-weight: 600; letter-spacing: -.03em; }
+.smplfy-admin-hub-group__links { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-left: 48px; }
+.smplfy-admin-hub-link { color: var(--smplfy-primitive-blue-500); font-size: 14px; line-height: 20px; text-decoration: none; }
+.smplfy-admin-hub-link:hover { text-decoration: underline; }
+.smplfy-admin-hub-link.is-disabled { color: var(--smplfy-primitive-neutral-500); cursor: not-allowed; }
+.smplfy-admin-hub-link small { margin-left: 6px; color: var(--smplfy-primitive-orange-600); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.smplfy-admin-profile-shell { position: relative; display: flex; justify-content: flex-end; }
+.smplfy-admin-profile-shell .user-dropdown { z-index: 40; }
+
+@media (max-width: 1199.98px) { .smplfy-admin-hub-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767.98px) {
+  .smplfy-admin-hub-page { --admin-hub-padding: 16px; }
+  .smplfy-admin-hub-grid { grid-template-columns: 1fr; }
+  .smplfy-admin-hub-intro { min-height: 160px; }
+  .smplfy-admin-hub-intro h1 { font-size: 32px; }
+  .smplfy-admin-profile-shell, .smplfy-admin-profile-shell > button { width: 100%; }
+}
+
+@media (max-width: 575.98px) { .smplfy-admin-hub-shortcut { display: none; } }

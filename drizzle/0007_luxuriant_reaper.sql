@@ -1,0 +1,2 @@
+ALTER TABLE "template_versions" ADD COLUMN "template_type" text;--> statement-breakpoint
+ALTER TABLE "template_versions" ADD CONSTRAINT "template_source_type" CHECK ("template_versions"."template_type" is null or ("template_versions"."template_type" = 'sample_coa' and "template_versions"."kind" = 'report') or ("template_versions"."template_type" in ('job_template', 'test_request') and "template_versions"."kind" = 'datasheet'));

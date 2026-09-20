@@ -1,0 +1,90 @@
+.smplfy-card.card.btn {
+  --bs-card-bg: var(--smplfy-card-bg);
+  --bs-card-color: var(--smplfy-card-text);
+  --bs-card-border-width: var(--smplfy-card-border-width);
+  --bs-card-border-color: var(--smplfy-card-border);
+  --bs-card-border-radius: var(--smplfy-card-radius);
+  --bs-btn-color: var(--smplfy-card-text);
+  --bs-btn-bg: var(--smplfy-card-bg);
+  --bs-btn-border-color: var(--smplfy-card-border);
+  --bs-btn-hover-color: var(--smplfy-card-text);
+  --bs-btn-hover-bg: var(--smplfy-card-bg);
+  --bs-btn-hover-border-color: var(--smplfy-card-hover-border);
+  --bs-btn-active-color: var(--smplfy-card-text);
+  --bs-btn-active-bg: var(--smplfy-card-bg);
+  --bs-btn-active-border-color: var(--smplfy-card-active-border);
+  --bs-btn-focus-box-shadow: var(--smplfy-card-current-focus-shadow);
+  --smplfy-card-current-gap: var(--smplfy-card-gap);
+  --smplfy-card-current-desc-indent: var(--smplfy-card-desc-indent);
+  --smplfy-card-current-focus-border-width: var(--smplfy-card-border-width);
+  --smplfy-card-current-focus-shadow: inset 0 0 0 var(--smplfy-card-border-width) var(--smplfy-card-focus-border);
+  --smplfy-card-current-active-border-width: var(--smplfy-card-border-width);
+  --smplfy-card-current-active-shadow: inset 0 0 0 var(--smplfy-card-border-width) var(--smplfy-card-active-border);
+
+  // width previously had no cap, so if --smplfy-card-width resolves to a
+  // fixed px value in the design tokens, the card can't shrink inside a
+  // narrower column (e.g. the now-scrollable sidebar) and causes horizontal
+  // overflow. max-width: 100% lets it still respect the token as a target
+  // width but never exceed its parent.
+  width: var(--smplfy-card-width);
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: var(--smplfy-card-min-height);
+  padding: var(--smplfy-card-padding);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--smplfy-card-current-gap);
+  text-align: left;
+  transition:
+    border-color var(--smplfy-card-motion-standard),
+    box-shadow var(--smplfy-card-motion-standard);
+}
+
+.smplfy-card.card.btn:hover {
+  border-color: var(--smplfy-card-hover-border);
+}
+
+.smplfy-card.card.btn:focus-visible {
+  border-width: var(--smplfy-card-current-focus-border-width);
+  border-color: var(--smplfy-card-focus-border);
+  box-shadow: var(--smplfy-card-current-focus-shadow);
+  outline: none;
+}
+
+.smplfy-card.card.btn.active {
+  border-width: var(--smplfy-card-current-active-border-width);
+  border-color: var(--smplfy-card-active-border);
+  box-shadow: var(--smplfy-card-current-active-shadow);
+}
+
+.smplfy-card.card.btn > .card-body {
+  padding: var(--smplfy-button-space-0);
+  display: flex;
+  align-items: center;
+  gap: var(--smplfy-card-header-gap);
+  min-width: 0;
+}
+
+.smplfy-card.card.btn .card-title {
+  margin: var(--smplfy-button-space-0);
+  color: var(--smplfy-card-text);
+  font-size: var(--smplfy-card-title-font-size);
+  line-height: var(--smplfy-card-title-line-height);
+  font-weight: var(--smplfy-card-title-font-weight);
+  letter-spacing: var(--smplfy-card-title-letter-spacing);
+  // allow the title to wrap/shrink instead of forcing the card wider
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.smplfy-card.card.btn > .card-text {
+  margin: var(--smplfy-button-space-0);
+  padding-left: var(--smplfy-card-current-desc-indent);
+  color: var(--smplfy-card-muted-text);
+  font-size: var(--smplfy-card-description-font-size);
+  line-height: var(--smplfy-card-description-line-height);
+  font-weight: var(--smplfy-card-description-font-weight);
+  white-space: pre-line;
+  overflow-wrap: break-word;
+}

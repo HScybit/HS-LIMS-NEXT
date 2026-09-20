@@ -1,0 +1,1 @@
+ALTER TABLE "template_occurrences" ADD CONSTRAINT "template_occurrence_position_finite" CHECK ("template_occurrences"."position" not in ('NaN'::numeric, 'Infinity'::numeric, '-Infinity'::numeric));

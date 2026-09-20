@@ -1,0 +1,86 @@
+.smplfy-report-selector {
+  width: 248px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 0;
+  background: #fff;
+  color: #1c2126;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition:
+    background-color 180ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 180ms cubic-bezier(0.2, 0, 0, 1),
+    color 180ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.smplfy-report-selector--default {
+  background: #fff;
+  border-color: #d1d5db;
+}
+
+.smplfy-report-selector--hover {
+  background: #f5f6f7;
+  border-color: #d1d5db;
+}
+
+.smplfy-report-selector--focussed {
+  background: #f5f6f7;
+  border-color: #d1d5db;
+  box-shadow: inset 0 0 0 1px #5fb3f6;
+}
+
+.smplfy-report-selector--active {
+  background: #1379f0;
+  border-color: #1379f0;
+  color: #fff;
+}
+
+.smplfy-report-selector:hover {
+  background: #f5f6f7;
+}
+
+.smplfy-report-selector--active:hover {
+  background: #1379f0;
+}
+
+.smplfy-report-selector__icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.smplfy-report-selector__icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.smplfy-report-selector__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.smplfy-report-selector__pill {
+  flex: 0 0 auto;
+}
+
+.smplfy-report-selector--active .smplfy-status-pill {
+  background: #e9f6ea;
+  border-color: #a9dca9;
+  color: #3f9443;
+}

@@ -1,0 +1,87 @@
+.smplfy-form-check-input.form-check-input[type='radio'] {
+  position: relative;
+  width: var(--smplfy-form-check-hit-size);
+  min-width: var(--smplfy-form-check-hit-size);
+  height: var(--smplfy-form-check-hit-size);
+  margin: var(--smplfy-button-space-0);
+  padding: var(--smplfy-button-space-0);
+  border: var(--smplfy-button-space-0);
+  border-radius: var(--smplfy-form-check-radius-round);
+  background-color: transparent;
+  background-image: none;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  box-shadow: none;
+  appearance: none;
+  display: inline-block;
+  float: none;
+  flex: 0 0 var(--smplfy-form-check-hit-size);
+  color: var(--smplfy-form-check-color-default);
+  vertical-align: middle;
+  cursor: pointer;
+  transition:
+    background-image var(--smplfy-form-check-motion-standard),
+    box-shadow var(--smplfy-form-check-motion-standard),
+    color var(--smplfy-form-check-motion-standard),
+    opacity var(--smplfy-form-check-motion-standard);
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  width: var(--smplfy-form-check-radio-ring-size);
+  height: var(--smplfy-form-check-radio-ring-size);
+  border: var(--smplfy-form-check-radio-border-width) solid currentColor;
+  border-radius: var(--smplfy-form-check-radius-round);
+  box-sizing: border-box;
+  transform: translate(-50%, -50%);
+  transition: border-color var(--smplfy-form-check-motion-standard);
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  width: var(--smplfy-form-check-radio-dot-size);
+  height: var(--smplfy-form-check-radio-dot-size);
+  border-radius: var(--smplfy-form-check-radius-round);
+  background-color: var(--smplfy-form-check-color-selected);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity var(--smplfy-form-check-motion-standard);
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']:checked {
+  color: var(--smplfy-form-check-color-selected);
+  background-color: transparent;
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']:checked::after {
+  opacity: 1;
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']:hover:not(:disabled) {
+  background-image: var(--smplfy-form-check-radio-hover-image);
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']:active:not(:disabled) {
+  background-image: var(--smplfy-form-check-radio-active-image);
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']:focus {
+  box-shadow: none;
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']:focus-visible {
+  box-shadow: var(--smplfy-form-check-focus-ring);
+  outline: none;
+}
+
+.smplfy-form-check-input.form-check-input[type='radio']:disabled {
+  opacity: var(--smplfy-form-check-disabled-opacity);
+  cursor: not-allowed;
+}

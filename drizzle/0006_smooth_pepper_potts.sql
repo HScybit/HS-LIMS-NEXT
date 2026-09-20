@@ -1,0 +1,1 @@
+ALTER TABLE "template_occurrences" ALTER COLUMN "position" SET DATA TYPE numeric;

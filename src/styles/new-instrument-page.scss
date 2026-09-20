@@ -1,0 +1,70 @@
+.smplfy-new-instrument-page {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.smplfy-new-instrument-page > main {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  padding: 32px 24px;
+  display: flex;
+  overflow: hidden;
+  background: var(--smplfy-primitive-neutral-200, var(--page-bg));
+}
+
+.smplfy-new-instrument-page > main > .smplfy-card.card {
+  width: min(1230px, 100%);
+  height: 100%;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.smplfy-new-instrument-page > main > .smplfy-card.card > .d-grid {
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.smplfy-new-instrument-page > main > .smplfy-card.card > .d-grid > aside {
+  width: auto;
+  max-width: none;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.smplfy-new-instrument-page > main > .smplfy-card.card > .d-grid > .d-flex {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.smplfy-new-instrument-page > main > .smplfy-card.card > .d-grid > .d-flex > .flex-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.smplfy-new-instrument-page > main > .smplfy-card.card > .d-grid > .d-flex > .d-flex:last-child {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 991.98px) {
+  .smplfy-new-instrument-page > main {
+    padding: 16px;
+  }
+
+  .smplfy-new-instrument-page > main > .smplfy-card.card > .d-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .smplfy-new-instrument-page > main > .smplfy-card.card > .d-grid > aside {
+    max-height: 180px;
+    overflow: auto;
+  }
+}

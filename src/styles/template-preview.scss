@@ -1,0 +1,103 @@
+.template-print-preview {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #eef3f8;
+  color: #111827;
+}
+
+.template-print-preview__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #d9e2ee;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+
+.template-print-preview__title { min-width: 0; }
+.template-print-preview__toolbar p { margin: 0 0 2px; color: #0f5fb8; font-size: 11px; font-weight: 850; text-transform: uppercase; }
+.template-print-preview__toolbar h1 { margin: 0; overflow: hidden; font-size: 18px; line-height: 1.2; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.template-print-preview__controls,
+.template-print-preview__segmented { display: flex; align-items: center; gap: 8px; }
+.template-print-preview__segmented { gap: 0; overflow: hidden; border: 1px solid #cfd8e3; border-radius: 8px; background: #fff; }
+.template-print-preview__inline-field { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; margin: 0; padding: 0 10px; border: 1px solid #cfd8e3; border-radius: 8px; background: #fff; color: #263449; font-size: 12px; font-weight: 850; }
+.template-print-preview__inline-field select { min-height: 28px; border: 0; background: transparent; color: #111827; font: inherit; outline: none; }
+.template-print-preview button { min-height: 36px; padding: 0 14px; border: 1px solid #cfd8e3; border-radius: 8px; background: #fff; color: #172033; font-size: 13px; font-weight: 800; }
+.template-print-preview button:disabled { cursor: not-allowed; opacity: .58; }
+.template-print-preview__segmented button { border: 0; border-radius: 0; }
+.template-print-preview__segmented button + button { border-left: 1px solid #cfd8e3; }
+.template-print-preview__segmented button.is-active,
+.template-print-preview__controls > button.is-active { border-color: #0f68d5; background: #1379f0; color: #fff; }
+.template-print-preview__refresh-hint { display: inline-flex; align-items: center; min-height: 32px; padding: 0 10px; border: 1px solid #f6d58a; border-radius: 8px; background: #fff7df; color: #8a5b00; font-size: 12px; font-weight: 800; white-space: nowrap; }
+
+.template-print-preview__workspace { position: relative; height: 100%; min-height: 0; overflow: auto; padding: 18px; background: #eef3f8; }
+.template-print-preview__html.is-active { display: block; min-height: 100%; }
+.template-print-preview__html.is-measuring { position: absolute; top: 18px; left: -120vw; width: min(1120px, calc(100vw - 36px)); visibility: hidden; pointer-events: none; }
+.template-preview-document { width: min(1120px, 100%); min-height: calc(100vh - 112px); margin: 0 auto; padding: 24px; border: 1px solid #d7e0eb; border-radius: 8px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, .1); }
+.template-preview-document__header,
+.template-preview-document__footer { width: 100%; margin: 0 0 16px; }
+.template-preview-document__footer { margin: 16px 0 0; }
+.template-preview-document #template-designer { width: 100%; height: auto !important; min-height: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; background: #fff; }
+.template-preview-document .athena-runtime-template { display: block !important; gap: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+.template-preview-document .athena-runtime-section { display: block !important; gap: 0 !important; margin: 0 !important; padding: 0 !important; }
+.template-preview-document .athena-runtime-row { display: flex !important; flex-wrap: wrap; gap: 0 !important; margin: 0 !important; }
+.template-preview-document .athena-runtime-column { gap: 0 !important; }
+.template-preview-document .athena-runtime-row + .athena-runtime-row,
+.template-preview-document .athena-runtime-section + .athena-runtime-section { margin-top: -1px !important; }
+.template-preview-document .action-row,
+.template-preview-document .template-edit-toolbar,
+.template-preview-document .template-column-move-bar,
+.template-preview-document .template-column-warning { display: none !important; }
+
+.template-print-preview__pdf { display: grid; min-height: calc(100vh - 112px); }
+.template-print-preview__frame { width: 100%; height: calc(100vh - 112px); min-height: calc(100vh - 112px); border: 0; border-radius: 8px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, .1); }
+.template-print-preview__state { display: inline-flex; align-items: center; justify-content: center; gap: 12px; width: min(420px, calc(100vw - 32px)); margin: auto; padding: 18px 20px; border: 1px solid #d9e2ee; border-radius: 12px; background: #fff; box-shadow: 0 14px 34px rgba(15, 23, 42, .1); }
+.template-print-preview__state--error { display: grid; justify-items: center; color: #b42318; text-align: center; }
+.template-print-preview__spinner { width: 24px; height: 24px; border: 3px solid #dbeafe; border-top-color: #1379f0; border-radius: 999px; animation: template-preview-spin .85s linear infinite; }
+
+.template-print-config-panel { position: fixed; top: 68px; right: 18px; z-index: 40; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(480px, calc(100vw - 36px)); max-height: calc(100vh - 86px); overflow: hidden; border: 1px solid #d9e2ee; border-radius: 12px; background: #fff; box-shadow: 0 24px 70px rgba(15, 23, 42, .2); }
+.template-print-config-panel__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #d9e2ee; }
+.template-print-config-panel__header p,
+.template-print-config-panel__header h2 { margin: 0; }
+.template-print-config-panel__header p { color: #0f5fb8; font-size: 11px; font-weight: 850; text-transform: uppercase; }
+.template-print-config-panel__header h2 { margin-top: 2px; color: #111827; font-size: 18px; line-height: 1.2; font-weight: 850; }
+.template-print-config-panel__body { display: grid; gap: 12px; min-height: 0; overflow: auto; padding: 14px; }
+.template-print-config-grid { display: grid; gap: 10px; }
+.template-print-config-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.template-print-config-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.template-print-config-section-label { margin: 2px 0 -4px; color: #0f5fb8; font-size: 11px; font-weight: 850; text-transform: uppercase; }
+.template-print-config-field { display: grid; gap: 7px; margin: 0; color: #263449; font-size: 12px; font-weight: 800; }
+.template-print-config-field input,
+.template-print-config-field select { min-height: 38px; width: 100%; border: 1px solid #cfd8e3; border-radius: 8px; padding: 0 10px; background: #fff; color: #111827; font: inherit; font-size: 13px; }
+.template-print-config-check-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.template-print-config-check { display: flex; align-items: center; gap: 8px; min-height: 38px; margin: 0; padding: 9px 10px; border: 1px solid #dbe4ef; border-radius: 8px; background: #f8fafc; color: #263449; cursor: pointer; font-size: 12px; line-height: 1.2; font-weight: 800; }
+.template-print-config-check input { width: 16px; height: 16px; flex: 0 0 auto; margin: 0; accent-color: #1379f0; }
+.template-print-config-status { padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 800; }
+.template-print-config-status.is-success { background: #ecfdf3; color: #166534; }
+.template-print-config-status.is-error { background: #fff1f0; color: #b42318; }
+.template-print-config-save { width: 100%; border-color: #0f68d5 !important; background: #1379f0 !important; color: #fff !important; }
+
+@keyframes template-preview-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 720px) {
+  .template-print-preview__toolbar { align-items: flex-start; flex-direction: column; }
+  .template-print-preview__controls { flex-wrap: wrap; }
+  .template-print-config-grid--two,
+  .template-print-config-grid--three,
+  .template-print-config-check-grid { grid-template-columns: 1fr; }
+}
+
+@media print {
+  .template-print-preview__toolbar,
+  .template-print-preview__pdf,
+  .template-print-preview__html.is-measuring,
+  .template-print-config-panel { display: none !important; }
+  .template-print-preview,
+  .template-print-preview__workspace { display: block; height: auto; min-height: 0; overflow: visible; padding: 0; background: #fff; }
+  .template-preview-document { width: 100%; min-height: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+}

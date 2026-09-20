@@ -1,0 +1,2 @@
+ALTER TABLE "custom_field_lookup_lines" DROP CONSTRAINT "custom_lookup_line_position";--> statement-breakpoint
+ALTER TABLE "custom_field_lookup_lines" ADD CONSTRAINT "custom_lookup_line_position" UNIQUE("position","organization_id","source_id","revision");
