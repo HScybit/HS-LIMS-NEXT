@@ -1,2 +1,0 @@
-ALTER TABLE "job_workflow_effects" ADD COLUMN "parent_run_revision" integer NOT NULL;--> statement-breakpoint
-ALTER TABLE "job_workflow_effects" ADD CONSTRAINT "job_effect_parent_revision" CHECK ("job_workflow_effects"."parent_run_revision">1);

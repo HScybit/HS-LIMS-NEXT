@@ -1,8 +1,0 @@
-ALTER TABLE "sample_events" DROP CONSTRAINT "sample_event_type";--> statement-breakpoint
-ALTER TABLE "analytical_specifications" ADD COLUMN "basis_specification_id" uuid;--> statement-breakpoint
-ALTER TABLE "sample_events" ADD COLUMN "datasheet_id" uuid;--> statement-breakpoint
-ALTER TABLE "analytical_specifications" ADD CONSTRAINT "analytical_spec_basis_fk" FOREIGN KEY ("organization_id","basis_specification_id") REFERENCES "public"."analytical_specifications"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sample_events" ADD CONSTRAINT "sample_event_datasheet_fk" FOREIGN KEY ("organization_id","test_request_id","datasheet_id") REFERENCES "public"."datasheets"("organization_id","test_request_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "analytical_specifications" ADD CONSTRAINT "analytical_spec_basis_identity" CHECK ("analytical_specifications"."basis_specification_id" is distinct from "analytical_specifications"."id");--> statement-breakpoint
-ALTER TABLE "sample_events" ADD CONSTRAINT "sample_event_datasheet_owner" CHECK (("sample_events"."datasheet_id" is null or "sample_events"."test_request_id" is not null) and ("sample_events"."event_type" not in ('datasheet_method_added','datasheet_method_voided') or "sample_events"."datasheet_id" is not null));--> statement-breakpoint
-ALTER TABLE "sample_events" ADD CONSTRAINT "sample_event_type" CHECK ("sample_events"."event_type" in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted', 'reports_generated', 'datasheet_method_added', 'datasheet_method_voided'));

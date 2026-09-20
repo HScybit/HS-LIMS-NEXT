@@ -1,2 +1,0 @@
-ALTER TABLE "sample_events" DROP CONSTRAINT "sample_event_type";--> statement-breakpoint
-ALTER TABLE "sample_events" ADD CONSTRAINT "sample_event_type" CHECK ("sample_events"."event_type" in ('sample_registered', 'test_requests_generated', 'test_request_assigned', 'datasheet_created', 'datasheet_submitted', 'reports_generated', 'datasheet_method_added', 'datasheet_method_voided', 'test_request_job_created'));
