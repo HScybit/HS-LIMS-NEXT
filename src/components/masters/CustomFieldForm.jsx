@@ -6,8 +6,8 @@ import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
 import SearchableSelect from '../ui/SearchableSelect.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import { showToast } from '../ui/toast.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import { customFieldInput } from '../../masters/custom-field-input.js';
@@ -132,39 +132,41 @@ export default function CustomFieldForm({ field }) {
       router.push(returnPath);
     } catch (failure) { setError(failure.message); showToast(failure.message, 'error'); busy.current = false; setSaving(false); }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
+  // The configuration decides each control, so spans follow the control type:
+  // an options grid, a role picker or a long text take the full width.
+  const span = (config) => (['options', 'role', 'textarea'].includes(config.type) ? 12 : 6);
+  return <FormPage title={field ? 'Edit Project Field' : 'New Project Field'} backTo={returnPath} backLabel="Back to project fields"
+    formId="custom-field-form" onSubmit={save} saving={saving} submitLabel={field ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton type="button" leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    <FormSection title="Field Details" last>
       {customFieldFormFields.map((config) => {
         if (config.showWhen) {
           const [name, expected] = config.showWhen;
           if (Array.isArray(expected) ? !expected.includes(draft[name]) : draft[name] !== expected) return null;
         }
         const value = draft[config.name]; const id = `custom-field-${config.name}`;
-        if (config.type === 'boolean') return <div key={config.name}>
-          <div className="mb-3"><div className="smplfy-checkbox-field"><Checkbox id={id} name={config.name} checked={value}
+        if (config.type === 'boolean') return <FormField key={config.name}>
+          <div className="smplfy-checkbox-field"><Checkbox id={id} name={config.name} checked={value}
             disabled={saving} ariaLabel={config.label} onChange={(value) => change(config.name, value)} />
             <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor={id}>{config.label}</label></div>
-          </div></div>
-          {config.helper ? <div className="smplfy-form-text form-text mb-3">{config.helper}</div> : null}
-        </div>;
-        if (config.type === 'options') return <OptionsField key={config.name} config={config} options={value} disabled={saving}
-          error={fieldErrors.options} onChange={(value) => change(config.name, value)} />;
-        if (config.type === 'role') return <RoleField key={config.name} config={config} value={value} disabled={saving}
+          </div>
+          {config.helper ? <div className="smplfy-form-text form-text">{config.helper}</div> : null}
+        </FormField>;
+        if (config.type === 'options') return <FormField span={12} key={config.name}><OptionsField config={config} options={value} disabled={saving}
+          error={fieldErrors.options} onChange={(value) => change(config.name, value)} /></FormField>;
+        if (config.type === 'role') return <FormField span={12} key={config.name}><RoleField config={config} value={value} disabled={saving}
           selectedRoles={roleLabels.filter((role) => (Array.isArray(value) ? value : [value]).includes(role.id))}
-          onChange={(value, labels) => { change(config.name, value); setRoleLabels((current) => [...current.filter((role) => !labels.some((next) => next.id === role.id)), ...labels]); }} />;
+          onChange={(value, labels) => { change(config.name, value); setRoleLabels((current) => [...current.filter((role) => !labels.some((next) => next.id === role.id)), ...labels]); }} /></FormField>;
         let options = config.options;
         if (config.name === 'associatedWith' && customFieldLegacyAssociations.some((option) => option.value === field?.associatedWith)) {
           options = [...customFieldAssociations, ...customFieldLegacyAssociations.filter((option) => option.value === field.associatedWith)];
         }
-        return <div className="mb-3" key={config.name}><FormElement type={config.type === 'select' ? 'dropdown' : config.type === 'textarea' ? 'textarea' : 'text'}
+        return <FormField span={span(config)} key={config.name}><FormElement type={config.type === 'select' ? 'dropdown' : config.type === 'textarea' ? 'textarea' : 'text'}
           label={config.label} mandatory={config.required} helperText={config.helper} message={fieldErrors[config.name]} messageTone="error"
           inputProps={{ id, name: config.name, type: config.type === 'number' ? 'number' : undefined, value, options, placeholder: config.placeholder,
             maxLength: config.maxLength, min: config.min, max: config.max, rows: config.type === 'textarea' ? 3 : undefined,
-            disabled: saving, onChange: (event) => change(config.name, event.target.value) }} /></div>;
+            disabled: saving, onChange: (event) => change(config.name, event.target.value) }} /></FormField>;
       })}
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton type="button" leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={saving}>{saving ? 'Saving...' : field ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+    </FormSection>
+  </FormPage>;
 }

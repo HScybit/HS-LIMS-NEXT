@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
 import SearchableSelect from '../ui/SearchableSelect.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage from '../ui/FormPage.jsx';
 import AppIcon from '../ui/AppIcon.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 
@@ -127,11 +127,11 @@ export default function DecisionRuleForm({ rule }) {
   }
 
   const inherited = Boolean(draft.parentDecisionRuleId);
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-9 col-lg-11">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
+  return <FormPage title={rule ? 'Edit Decision Rule' : 'New Decision Rule'} backTo={returnPath} backLabel="Back to decision rules"
+    formId="decision-rule-form" onSubmit={save} saving={saving} submitLabel={rule ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
 
-      <h6 className="text-uppercase text-muted small fw-semibold mb-3">Test Group</h6>
+      <div className="smplfy-form-heading">Test Group</div>
       <div className="mb-3"><div className="smplfy-checkbox-field"><Checkbox id="dr-is-parent" checked={draft.isTestGroupParent} ariaLabel="Is Test Group Parent"
         disabled={saving || inherited} onChange={(checked) => setDraft((current) => ({ ...current, isTestGroupParent: checked }))} />
         <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="dr-is-parent">Is Test Group Parent</label></div>
@@ -145,7 +145,7 @@ export default function DecisionRuleForm({ rule }) {
         <SearchableSelect placeholder="None" clearable value={draft.parentDecisionRuleId} options={options.parent} loadOptions={loadParents} cacheOptions={false} disabled={saving} onChange={selectParent} />
       </div>}
 
-      <h6 className="text-uppercase text-muted small fw-semibold mb-3 mt-4">Scope</h6>
+      <div className="smplfy-form-heading">Scope</div>
       {!draft.isTestGroupParent ? <div className="mb-3"><FormElement label="Name" inputProps={{ value: draft.name, onChange: change('name'), maxLength: 200, disabled: saving }} /></div> : null}
       <div className="row">
         <div className="col-md-4 mb-3 smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label">Product</label></div>
@@ -169,7 +169,7 @@ export default function DecisionRuleForm({ rule }) {
           onChange={(values, opts) => { setDraft((current) => ({ ...current, sampleCategoryIds: values })); setOptions((current) => ({ ...current, categories: opts })); }} />
       </div>
 
-      <h6 className="text-uppercase text-muted small fw-semibold mb-3 mt-4">Scientific Rule</h6>
+      <div className="smplfy-form-heading">Scientific Rule</div>
       <div className="row">
         <div className="col-md-4 mb-3"><FormElement label="Cut Off Value" inputProps={{ type: 'number', value: draft.cutoffValue, onChange: changeNumber('cutoffValue'), disabled: saving }} /></div>
         <div className="col-md-4 mb-3"><FormElement label="Min" inputProps={{ value: draft.minimum, onChange: change('minimum'), maxLength: 150, disabled: saving }} /></div>
@@ -215,7 +215,7 @@ export default function DecisionRuleForm({ rule }) {
           onChange={(values, opts) => { setDraft((current) => ({ ...current, instrumentIds: values })); setOptions((current) => ({ ...current, instruments: opts })); }} />
       </div>
 
-      <h6 className="text-uppercase text-muted small fw-semibold mb-3 mt-4">Formula</h6>
+      <div className="smplfy-form-heading">Formula</div>
       <div className="mb-3"><div className="smplfy-checkbox-field"><Checkbox id="dr-has-formula" checked={draft.hasFormula} ariaLabel="Has Formula" disabled={saving} onChange={changeChecked('hasFormula')} />
         <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="dr-has-formula">Has Formula</label></div>
       </div></div>
@@ -238,7 +238,7 @@ export default function DecisionRuleForm({ rule }) {
       {draft.hasDerivedFormula ? <div className="mb-3"><FormElement label="Custom Formula" mandatory message={fieldErrors.customFormula} messageTone="error"
         inputProps={{ value: draft.customFormula, onChange: change('customFormula'), maxLength: 5000, disabled: saving }} /></div> : null}
 
-      <h6 className="text-uppercase text-muted small fw-semibold mb-3 mt-4">Limits</h6>
+      <div className="smplfy-form-heading">Limits</div>
       <div className="d-flex justify-content-end mb-2"><SecondaryButton type="button" leftIcon="plus" disabled={saving} onClick={addLimit}>Add Limit</SecondaryButton></div>
       {draft.limits.map((limit, index) => <div className="border rounded p-3 mb-3" key={index}>
         {fieldErrors[`limit-${index}`] ? <div className="alert alert-danger py-1 px-2 mb-2">{fieldErrors[`limit-${index}`]}</div> : null}
@@ -257,8 +257,5 @@ export default function DecisionRuleForm({ rule }) {
         </div>
       </div>)}
 
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={saving}>{saving ? 'Saving...' : rule ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+  </FormPage>;
 }
