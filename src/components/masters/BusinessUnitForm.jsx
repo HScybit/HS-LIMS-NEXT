@@ -4,8 +4,8 @@ import { useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 
 export default function BusinessUnitForm({ unit }) {
@@ -27,19 +27,24 @@ export default function BusinessUnitForm({ unit }) {
       router.push(returnPath);
     } catch (failure) { setError(failure.message); pending.current = false; setSaving(false); }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      {[['name', 'Name', 200], ['description', 'Description', 2000], ['code', 'Code', 64]].map(([key, label, maxLength]) => <div className="mb-3" key={key}>
+  return <FormPage title={unit ? 'Edit Unit' : 'New Unit'} backTo={returnPath} backLabel="Back to units"
+    formId="business-unit-form" onSubmit={save} saving={saving} submitLabel={unit ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    <FormSection title="Unit Details" last>
+      {[['name', 'Name', 200], ['code', 'Code', 64]].map(([key, label, maxLength]) => <FormField key={key}>
         <FormElement label={label} mandatory message={invalid[key]} messageTone="error" inputProps={{ name: key, value: draft[key], maxLength, disabled: saving,
           onChange: event => { setDraft(current => ({ ...current, [key]: event.target.value })); setInvalid(current => ({ ...current, [key]: '' })); } }} />
-      </div>)}
-      <div className="mb-3 smplfy-checkbox-field"><Checkbox id="unit-active" checked={draft.active} ariaLabel="Active" disabled={saving}
-        onChange={checked => setDraft(current => ({ ...current, active: checked }))} />
-        <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="unit-active">Active</label></div>
-      </div>
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={saving}>{saving ? 'Saving...' : unit ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+      </FormField>)}
+      <FormField span={12}>
+        <FormElement label="Description" mandatory message={invalid.description} messageTone="error" inputProps={{ name: 'description', value: draft.description, maxLength: 2000, disabled: saving,
+          onChange: event => { setDraft(current => ({ ...current, description: event.target.value })); setInvalid(current => ({ ...current, description: '' })); } }} />
+      </FormField>
+      <FormField span={12}>
+        <div className="smplfy-checkbox-field"><Checkbox id="unit-active" checked={draft.active} ariaLabel="Active" disabled={saving}
+          onChange={checked => setDraft(current => ({ ...current, active: checked }))} />
+          <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="unit-active">Active</label></div>
+        </div>
+      </FormField>
+    </FormSection>
+  </FormPage>;
 }

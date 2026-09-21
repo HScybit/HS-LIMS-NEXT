@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import { vendorFormFields } from '../../masters/vendor-fields.js';
 import { vendorFormDraft, vendorFormErrors } from '../../masters/vendor-form.js';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import MasterCustomFields from './MasterCustomFields.jsx';
 import { customFieldSubmittedValue, customFieldValidationError, customFieldNeedsGeneration } from '../../custom-fields/form-values.js';
@@ -121,23 +121,27 @@ export default function VendorForm({ vendor }) {
       setSaveUnknown(saveRequest.current.pending); setError(failure.message); setSaving(false);
     } finally { fieldWork.current = false; }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      {vendor && vendor.contacts.length > 1
-        ? <p className="text-muted small">These fields edit the displayed contact. Additional contacts are retained.</p> : null}
-      {vendorFormFields.map(field => <div className="mb-3" key={field.key}>
+  return <FormPage title={vendor ? 'Edit Vendor' : 'New Vendor'} backTo={returnPath} backLabel="Back to vendors"
+    formId="vendor-form" onSubmit={save} saving={saving} disabled={blocked || customLoading || Boolean(customLoadError)}
+    submitLabel={vendor ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    {vendor && vendor.contacts.length > 1
+      ? <p className="text-muted small">These fields edit the displayed contact. Additional contacts are retained.</p> : null}
+    <FormSection title="Vendor Details">
+      {vendorFormFields.map(field => <FormField key={field.key}>
         <FormElement type="text"
           label={field.label} mandatory={field.required} helperText={field.helperText} message={fieldErrors[field.key]} messageTone="error"
           inputProps={{ id: field.source, name: field.source, value: draft[field.key], onChange: change(field.key), disabled: blocked,
             placeholder: field.placeholder ?? field.label, maxLength: field.maximum, type: field.type === 'number' || field.type === 'email' ? field.type : undefined,
             step: field.type === 'number' ? 'any' : undefined }} />
-      </div>)}
-      <MasterCustomFields kind="vendor" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
-        errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
-        onReload={reloadFields} />
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={blocked || customLoading || Boolean(customLoadError)}>{saving ? 'Saving...' : vendor ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+      </FormField>)}
+    </FormSection>
+    <FormSection last>
+      <FormField span={12}>
+        <MasterCustomFields kind="vendor" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
+          errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
+          onReload={reloadFields} />
+      </FormField>
+    </FormSection>
+  </FormPage>;
 }

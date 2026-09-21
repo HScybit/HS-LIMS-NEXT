@@ -4,8 +4,8 @@ import { useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import UserReferenceField from '../users/UserReferenceField.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 
@@ -39,26 +39,34 @@ export default function LaboratoryForm({ laboratory }) {
     catch (failure) { setError(failure.message); pending.current = false; setSaving(false); }
   }
   function textField(key, label, maximum, required = false) {
-    return <div className="mb-3" key={key}><FormElement label={label} mandatory={required} message={invalid[key]} messageTone="error"
-      inputProps={{ name: key, value: draft[key], maxLength: Math.max(maximum, laboratory?.[key]?.length ?? 0), disabled: saving, onChange: event => change(key, event.target.value) }} /></div>;
+    return <FormElement label={label} mandatory={required} message={invalid[key]} messageTone="error" key={key}
+      inputProps={{ name: key, value: draft[key], maxLength: Math.max(maximum, laboratory?.[key]?.length ?? 0), disabled: saving, onChange: event => change(key, event.target.value) }} />;
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      {textField('name', 'Name', 200, true)}{textField('abbreviation', 'Abbreviation', 20)}
-      <UserReferenceField kind="managers" name="headUserId" label="Head of Lab" placeholder="Select HoD" includeInactive value={draft.headUserId} savedLabel={laboratory?.headUserName}
-        disabled={saving} onChange={value => change('headUserId', value || null)} />
-      <UserReferenceField kind="managers" name="delegateUserId" label="Delegate Authority to" placeholder="Select Delegate Authority" includeInactive value={draft.delegateUserId} savedLabel={laboratory?.delegateUserName}
-        disabled={saving} onChange={value => change('delegateUserId', value || null)} />
-      {ranges.map(([key, label]) => textField(key, label, 2000, !laboratory || Boolean(laboratory[key]) || draft[key] !== ''))}
-      {textField('code', 'Code', 64, true)}
-      <UserReferenceField kind="businessUnits" name="businessUnitId" label="Business unit" placeholder="Select Business unit" value={draft.businessUnitId} savedLabel={laboratory?.businessUnitName}
-        disabled={saving} onChange={value => change('businessUnitId', value || null)} />
-      {textField('description', 'Description', 2000)}
-      <div className="mb-3 smplfy-checkbox-field"><Checkbox id="lab-active" checked={draft.active} ariaLabel="Active" disabled={saving} onChange={value => change('active', value)} />
-        <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="lab-active">Active</label></div></div>
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={saving}>{saving ? 'Saving...' : laboratory ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+  return <FormPage title={laboratory ? 'Edit Lab' : 'New Lab'} backTo={returnPath} backLabel="Back to labs"
+    formId="laboratory-form" onSubmit={save} saving={saving} submitLabel={laboratory ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    <FormSection title="Lab Details">
+      <FormField>{textField('name', 'Name', 200, true)}</FormField>
+      <FormField>{textField('abbreviation', 'Abbreviation', 20)}</FormField>
+      <FormField>{textField('code', 'Code', 64, true)}</FormField>
+      <FormField><UserReferenceField kind="businessUnits" name="businessUnitId" label="Business unit" placeholder="Select Business unit" value={draft.businessUnitId} savedLabel={laboratory?.businessUnitName}
+        disabled={saving} onChange={value => change('businessUnitId', value || null)} /></FormField>
+      <FormField span={12}>{textField('description', 'Description', 2000)}</FormField>
+    </FormSection>
+
+    <FormSection title="Responsibility">
+      <FormField><UserReferenceField kind="managers" name="headUserId" label="Head of Lab" placeholder="Select HoD" includeInactive value={draft.headUserId} savedLabel={laboratory?.headUserName}
+        disabled={saving} onChange={value => change('headUserId', value || null)} /></FormField>
+      <FormField><UserReferenceField kind="managers" name="delegateUserId" label="Delegate Authority to" placeholder="Select Delegate Authority" includeInactive value={draft.delegateUserId} savedLabel={laboratory?.delegateUserName}
+        disabled={saving} onChange={value => change('delegateUserId', value || null)} /></FormField>
+    </FormSection>
+
+    <FormSection title="Environment Limits" last>
+      {ranges.map(([key, label]) => <FormField key={key}>{textField(key, label, 2000, !laboratory || Boolean(laboratory[key]) || draft[key] !== '')}</FormField>)}
+      <FormField span={12}>
+        <div className="smplfy-checkbox-field"><Checkbox id="lab-active" checked={draft.active} ariaLabel="Active" disabled={saving} onChange={value => change('active', value)} />
+          <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor="lab-active">Active</label></div></div>
+      </FormField>
+    </FormSection>
+  </FormPage>;
 }

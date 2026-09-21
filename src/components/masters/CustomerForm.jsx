@@ -6,8 +6,8 @@ import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
 import { customerFormFields } from '../../masters/customer-fields.js';
 import { customerFormDraft, customerFormErrors, customerFormInput } from '../../masters/customer-form.js';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import MasterCustomFields from './MasterCustomFields.jsx';
 import { customFieldSubmittedValue, customFieldValidationError, customFieldNeedsGeneration } from '../../custom-fields/form-values.js';
@@ -122,12 +122,16 @@ export default function CustomerForm({ customer }) {
       setSaveUnknown(saveRequest.current.pending); setError(failure.message); setSaving(false);
     } finally { fieldWork.current = false; }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      {customer && (customer.contacts.length > 1 || ['shipping', 'billing'].some(type => customer.addresses.filter(address => address.addressType === type).length > 1))
-        ? <p className="text-muted small">These fields edit the displayed contact and default addresses. Additional contacts and addresses are retained.</p> : null}
-      {customerFormFields.map(field => <div className="mb-3" key={field.key}>
+  // A long field earns the full width; the rest pair up.
+  const span = (field) => (['textarea', 'boolean'].includes(field.type) ? 12 : 6);
+  return <FormPage title={customer ? 'Edit Customer' : 'New Customer'} backTo={returnPath} backLabel="Back to customers"
+    formId="customer-form" onSubmit={save} saving={saving} disabled={blocked || customLoading || Boolean(customLoadError)}
+    submitLabel={customer ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    {customer && (customer.contacts.length > 1 || ['shipping', 'billing'].some(type => customer.addresses.filter(address => address.addressType === type).length > 1))
+      ? <p className="text-muted small">These fields edit the displayed contact and default addresses. Additional contacts and addresses are retained.</p> : null}
+    <FormSection title="Customer Details">
+      {customerFormFields.map(field => <FormField span={span(field)} key={field.key}>
         {field.type === 'boolean' ? <div className="smplfy-checkbox-field">
           <Checkbox id={field.source} name={field.source} checked={draft[field.key]} disabled={blocked} ariaLabel={field.label}
             onChange={value => { setDraft(current => ({ ...current, [field.key]: value })); clearFieldError(field.key); }} />
@@ -138,12 +142,14 @@ export default function CustomerForm({ customer }) {
             placeholder: field.placeholder ?? field.label, maxLength: field.maximum, type: field.type === 'number' || field.type === 'email' ? field.type : undefined,
             min: field.min, max: field.max, step: field.type === 'number' ? field.step ?? 'any' : undefined, rows: field.type === 'textarea' ? 3 : undefined,
             ...(field.type === 'select' ? { options: field.options } : {}) }} />}
-      </div>)}
-      <MasterCustomFields kind="customer" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
-        errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
-        onReload={reloadFields} />
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={blocked || customLoading || Boolean(customLoadError)}>{saving ? 'Saving...' : customer ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+      </FormField>)}
+    </FormSection>
+    <FormSection last>
+      <FormField span={12}>
+        <MasterCustomFields kind="customer" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
+          errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
+          onReload={reloadFields} />
+      </FormField>
+    </FormSection>
+  </FormPage>;
 }

@@ -1986,11 +1986,15 @@ button.smplfy-header-breadcrumb-text:active {
 // Organization administration — mirrors the reference application's
 // organization-management styling: one bordered form card, plain section
 // headings, and the seed panel rendered inside the same card.
+// The authoring form shell. Every master form uses it, so the organization
+// form's names are kept as aliases rather than rewritten at each call site.
+.smplfy-form-page,
 .organization-form {
   max-width: 1040px;
   margin: 0 auto;
 }
 
+.smplfy-form-card,
 .organization-form-card {
   padding: 18px;
   border: 1px solid var(--smplfy-primitive-neutral-300, #e6e8eb);
@@ -1998,6 +2002,7 @@ button.smplfy-header-breadcrumb-text:active {
   background: var(--smplfy-primitive-neutral-100, #ffffff);
 }
 
+.smplfy-form-heading,
 .organization-form-heading {
   margin: 0 0 12px;
   color: var(--smplfy-primitive-neutral-800, #1c2126);
@@ -2007,17 +2012,20 @@ button.smplfy-header-breadcrumb-text:active {
   line-height: 1.35;
 }
 
+.smplfy-form-back,
 .organization-form-back {
   min-width: 36px;
   padding-right: 8px;
   padding-left: 8px;
 }
 
+.smplfy-form-back > span:last-child:empty,
 .organization-form-back > span:last-child:empty {
   display: none;
 }
 
 @media (max-width: 767.98px) {
+  .smplfy-form-card,
   .organization-form-card {
     padding: 16px;
   }

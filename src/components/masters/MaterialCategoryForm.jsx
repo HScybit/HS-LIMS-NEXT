@@ -4,8 +4,8 @@ import { useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 
 export default function MaterialCategoryForm({ category }) {
@@ -26,23 +26,22 @@ export default function MaterialCategoryForm({ category }) {
       router.push(returnPath);
     } catch (failure) { setError(failure.message); setSaving(false); }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      <div className="mb-3"><FormElement label="Name" mandatory message={nameError} messageTone="error"
+  return <FormPage title={category ? 'Edit Material Category' : 'New Material Category'} backTo={returnPath} backLabel="Back to material categories"
+    formId="material-category-form" onSubmit={save} saving={saving} submitLabel={category ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    <FormSection title="Category Details" last>
+      <FormField span={12}><FormElement label="Name" mandatory message={nameError} messageTone="error"
         inputProps={{ name: 'name', placeholder: 'Enter material category name', value: draft.name, maxLength: 200, disabled: saving,
-          onChange: event => { setDraft(current => ({ ...current, name: event.target.value })); setNameError(''); } }} /></div>
-      <div className="mb-3"><FormElement type="textarea" label="Description"
+          onChange: event => { setDraft(current => ({ ...current, name: event.target.value })); setNameError(''); } }} /></FormField>
+      <FormField span={12}><FormElement type="textarea" label="Description"
         inputProps={{ name: 'description', placeholder: 'Enter description', value: draft.description, rows: 3, maxLength: 16000, disabled: saving,
-          onChange: event => setDraft(current => ({ ...current, description: event.target.value })) }} /></div>
-      {[['reusable', 'Reusable'], ['expirable', 'Expirable']].map(([key, label]) => <div className="mb-3" key={key}>
+          onChange: event => setDraft(current => ({ ...current, description: event.target.value })) }} /></FormField>
+      {[['reusable', 'Reusable'], ['expirable', 'Expirable']].map(([key, label]) => <FormField key={key}>
         <div className="smplfy-checkbox-field"><Checkbox id={`category-${key}`} checked={draft[key]} ariaLabel={label} disabled={saving}
           onChange={checked => setDraft(current => ({ ...current, [key]: checked }))} />
           <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor={`category-${key}`}>{label}</label></div>
         </div>
-      </div>)}
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={saving}>{saving ? 'Saving...' : category ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+      </FormField>)}
+    </FormSection>
+  </FormPage>;
 }
