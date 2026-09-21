@@ -55,6 +55,7 @@ export default function AppShell({ identity, children }) {
         : pathname.startsWith('/lab_management') ? 'Labs'
         : pathname.startsWith('/user_management') ? 'User Management'
         : pathname.startsWith('/administration/organizations') ? 'Organizations'
+        : pathname.startsWith('/administration/users') ? 'Users'
         : pathname === '/organization_settings' || pathname.startsWith('/administration/') ? 'Organization Settings' : 'My Account';
   const [collapsed, setCollapsed] = useState(() => !MASTER_LISTING_ROUTES.has(pathname));
   const [collapsedForPathname, setCollapsedForPathname] = useState(pathname);
@@ -162,6 +163,7 @@ export default function AppShell({ identity, children }) {
         {identity.permissions.some((permission) => ['settings.read', 'settings.manage', 'roles.read', 'roles.manage', 'users.read', 'users.manage', 'checklists.read', 'checklists.manage', 'workflows.read', 'workflows.manage', 'compliance.read', 'compliance.manage'].includes(permission)) || identity.isPlatformAdministrator ? <section className="sidebar-section"><div className="sidebar-label"><span>Administration</span></div><div className="d-grid gap-1">
           <Link href="/admin_hub" target="_blank" rel="noopener noreferrer" className="sidebar-link btn text-start" aria-label="Admin Hub" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="admin-hub" size={20} /></span><span className="hide-menu">Admin Hub</span></Link>
           {identity.isPlatformAdministrator ? <Link href="/administration/organizations" className={`sidebar-link btn text-start ${pathname.startsWith('/administration/organizations') ? 'is-active' : ''}`} aria-label="Organizations" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="list" size={20} /></span><span className="hide-menu">Organizations</span></Link> : null}
+          {identity.isPlatformAdministrator ? <Link href="/administration/users" className={`sidebar-link btn text-start ${pathname.startsWith('/administration/users') ? 'is-active' : ''}`} aria-label="Users" onClick={() => setMobileOpen(false)}><span className="smplfy-sidebar-link-icon" aria-hidden="true"><AppIcon name="user" size={20} /></span><span className="hide-menu">Users</span></Link> : null}
         </div></section> : null}
         <section className="sidebar-section"><div className="sidebar-label"><span>Account</span></div>
           <div className="d-grid gap-1"><Link href="/me" className={`sidebar-link btn text-start ${pathname === '/me' ? 'is-active' : ''}`} aria-label="My Profile" onClick={() => setMobileOpen(false)}>
