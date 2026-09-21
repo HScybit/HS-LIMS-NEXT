@@ -49,9 +49,9 @@ export function performanceRecords(fixture) {
       formula += ` + ${scope === 'descendants' ? `SUM(${previousResult.alias})` : previousResult.alias}`;
     }
     const result = rowFields[4];
-    records.expressions.push({ id: randomUUID(), fieldId: result.id, purpose: 'calculate', nodes: parseExpression(formula, (alias) => references[alias]) });
+    records.expressions.push({ id: randomUUID(), fieldId: result.id, purpose: 'calculate', ...parseExpression(formula, (alias) => references[alias]) });
     previousResult = result;
-    if (fixture.conditions) for (const field of rowFields.slice(0, 4)) records.expressions.push({ id: randomUUID(), fieldId: field.id, purpose: 'required', nodes: parseExpression(`${field.alias} >= 0`, (alias) => references[alias]) });
+    if (fixture.conditions) for (const field of rowFields.slice(0, 4)) records.expressions.push({ id: randomUUID(), fieldId: field.id, purpose: 'required', ...parseExpression(`${field.alias} >= 0`, (alias) => references[alias]) });
     if (fixture.name === 'large' && index % 20 === 0) {
       const choice = rowFields[3]; choice.widget = 'dropdown_widget'; choice.valueType = 'option'; choice.numeric = null;
       for (let option = 0; option < 10; option += 1) records.options.push({ id: randomUUID(), fieldId: choice.id, position: option, label: `Option ${option + 1}`, value: String(option + 1) });
