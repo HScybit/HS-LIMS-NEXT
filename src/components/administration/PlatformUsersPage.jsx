@@ -13,6 +13,15 @@ import { apiRequest } from '../../lib/api-client.js';
 const actionClass = 'smplfy-btn btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1 flex-shrink-0 text-nowrap';
 const formatWhen = (value) => (value ? new Date(value).toLocaleString() : 'Never');
 
+// The directory groups people by organization, so scoping to one is how an
+// administrator stops reading somebody else's staff list.
+async function organizationChoices(search, { signal }) {
+  const parameters = new URLSearchParams({ search: search ?? '', status: 'all', page: '1', pageSize: '100' });
+  const result = await apiRequest(`/api/administration/organizations?${parameters}`, { signal });
+  return { options: result.items.map((organization) => ({ value: organization.id, label: organization.name })),
+    hasMore: result.total > result.items.length };
+}
+
 export default function PlatformUsersPage() {
   const [target, setTarget] = useState(null);
   const [resetting, setResetting] = useState(false);
@@ -39,6 +48,10 @@ export default function PlatformUsersPage() {
       {row.mustChangePassword ? <span className="badge bg-warning text-dark">Must change</span> : null}
     </div> },
     { key: 'lastSignInAt', header: 'Last sign-in', render: (row) => <span className="text-nowrap">{formatWhen(row.lastSignInAt)}</span> },
+    // DataTable treats any column with a `render` as an action column and keeps
+    // it out of the filter panel, so the organization filter rides on a hidden
+    // column of its own while the visible one keeps its two-line display.
+    { key: 'organizationId', header: 'Organization', hidden: true, filterType: 'relation', loadFilterOptions: organizationChoices },
     { key: 'actions', header: 'Actions', minWidth: 170, render: (row) => <div className="d-flex flex-nowrap align-items-center gap-2">
       <button type="button" className={actionClass} onClick={() => { setTarget(row); setError(''); }}>
         <AppIcon name="fa-key" /><span>Reset password</span>
@@ -46,9 +59,10 @@ export default function PlatformUsersPage() {
     </div> },
   ], []);
 
-  const loadRows = useCallback(async ({ page, pageSize, search }) => {
+  const loadRows = useCallback(async ({ page, pageSize, search, filters }) => {
     void reload;
     const parameters = new URLSearchParams({ search: search ?? '', page: String(page), pageSize: String(pageSize) });
+    for (const organizationId of filters?.organizationId?.value ?? []) parameters.append('organizationId', organizationId);
     const result = await apiRequest(`/api/administration/users?${parameters}`);
     return { rows: result.items, totalCount: result.total };
   }, [reload]);

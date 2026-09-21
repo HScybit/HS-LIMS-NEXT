@@ -13,10 +13,15 @@ async function requirePlatformAdministrator(client) {
 }
 
 function directoryInput(raw = {}) {
-  fieldsOnly(raw, ['search', 'page', 'pageSize']);
+  fieldsOnly(raw, ['search', 'page', 'pageSize', 'organizationIds']);
   const search = text(raw.search ?? '', 'Search', 200, { optional: true }).trim();
   if (!search.isWellFormed() || search.includes('\0')) throw new HttpError(400, 'invalid_input', 'Search must contain valid text.');
-  return { search, page: integer(raw.page ?? 1, 'Page', 1, 1_000_000), pageSize: integer(raw.pageSize ?? 25, 'Page size', 1, 100) };
+  const requested = raw.organizationIds ?? [];
+  if (!Array.isArray(requested)) throw new HttpError(400, 'invalid_input', 'Select organizations to filter by.');
+  if (requested.length > 200) throw new HttpError(400, 'invalid_input', 'Filter by at most 200 organizations at a time.');
+  const organizationIds = [...new Set(requested.map((value) => uuid(value, 'Organization').toLowerCase()))];
+  return { search, organizationIds,
+    page: integer(raw.page ?? 1, 'Page', 1, 1_000_000), pageSize: integer(raw.pageSize ?? 25, 'Page size', 1, 100) };
 }
 
 export async function listPlatformUsers(client, identity, raw = {}) {
@@ -29,8 +34,9 @@ export async function listPlatformUsers(client, identity, raw = {}) {
             organization_id AS "organizationId", organization_code AS "organizationCode",
             organization_name AS "organizationName", organization_count AS "organizationCount",
             last_sign_in_at AS "lastSignInAt", total_count AS "totalCount"
-     FROM platform_list_users($1,$2,$3,$4,$5)`,
-    [identity.organization_id, identity.user_id, input.search, input.page, input.pageSize]);
+     FROM platform_list_users($1,$2,$3,$4,$5,$6)`,
+    [identity.organization_id, identity.user_id, input.search, input.page, input.pageSize,
+      input.organizationIds.length ? input.organizationIds : null]);
   // The total is the same on every row; it rides along so the count and the
   // page come from one scan rather than two.
   return {

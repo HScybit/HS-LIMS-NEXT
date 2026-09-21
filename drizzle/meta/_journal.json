@@ -15,6 +15,13 @@
       "when": 1789141000857,
       "tag": "0001_platform_user_directory",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789141000858,
+      "tag": "0002_platform_user_directory_filter",
+      "breakpoints": true
     }
   ]
 }
