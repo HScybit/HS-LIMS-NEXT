@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import SearchableSelect from '../ui/SearchableSelect.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import MasterCustomFields from './MasterCustomFields.jsx';
 import { customFieldSubmittedValue, customFieldValidationError, customFieldNeedsGeneration } from '../../custom-fields/form-values.js';
@@ -143,36 +143,46 @@ export default function MethodForm({ method }) {
       setSaveUnknown(saveRequest.current.pending); setError(failure.message); setSaving(false);
     } finally { fieldWork.current = false; }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      <div className="mb-3"><FormElement label="Name" mandatory helperText="Name of the Method" message={fieldErrors.name} messageTone="error"
-        inputProps={{ name: 'name', placeholder: 'Method Name', value: draft.name, onChange: change('name'), maxLength: 200, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement label="UUID" mandatory helperText="UUID of the Method" message={fieldErrors.uuid} messageTone="error"
-        inputProps={{ name: 'uuid', placeholder: 'Method Name', value: draft.uuid, onChange: change('uuid'), maxLength: 100, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement type="textarea" label="Description"
-        inputProps={{ name: 'description', placeholder: 'Add Description', value: draft.description, onChange: change('description'), rows: 3, maxLength: 16000, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement label="Decimal Places" helperText="The no of digits after decimal(defaults to 4)" message={fieldErrors.decimalScale} messageTone="error"
-        inputProps={{ type: 'number', name: 'decimalScale', placeholder: 'No of Digits after Decimal', min: 0, max: 12, step: 1, value: draft.decimalScale, onChange: change('decimalScale'), disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement type="dropdown" label="Convert Number"
+  return <FormPage title={method ? 'Edit Method' : 'New Method'} backTo={returnPath} backLabel="Back to methods"
+    formId="method-form" onSubmit={save} saving={saving} disabled={blocked || customLoading || Boolean(customLoadError)}
+    submitLabel={method ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    <FormSection title="Method Details">
+      <FormField><FormElement label="Name" mandatory helperText="Name of the Method" message={fieldErrors.name} messageTone="error"
+        inputProps={{ name: 'name', placeholder: 'Method Name', value: draft.name, onChange: change('name'), maxLength: 200, disabled: blocked }} /></FormField>
+      <FormField><FormElement label="UUID" mandatory helperText="UUID of the Method" message={fieldErrors.uuid} messageTone="error"
+        inputProps={{ name: 'uuid', placeholder: 'Method Name', value: draft.uuid, onChange: change('uuid'), maxLength: 100, disabled: blocked }} /></FormField>
+      <FormField span={12}><FormElement type="textarea" label="Description"
+        inputProps={{ name: 'description', placeholder: 'Add Description', value: draft.description, onChange: change('description'), rows: 3, maxLength: 16000, disabled: blocked }} /></FormField>
+    </FormSection>
+
+    <FormSection title="Result Handling">
+      <FormField><FormElement label="Decimal Places" helperText="The no of digits after decimal(defaults to 4)" message={fieldErrors.decimalScale} messageTone="error"
+        inputProps={{ type: 'number', name: 'decimalScale', placeholder: 'No of Digits after Decimal', min: 0, max: 12, step: 1, value: draft.decimalScale, onChange: change('decimalScale'), disabled: blocked }} /></FormField>
+      <FormField><FormElement type="dropdown" label="Convert Number"
         helperText="If the expected output is a number, marking this as YES will convert the number in the required decimal denomination"
         inputProps={{ name: 'parseNumber', placeholder: 'Select Convert Number', value: draft.parseNumber, onChange: change('parseNumber'),
-          options: [{ value: 'false', label: 'NO' }, { value: 'true', label: 'YES' }], disabled: blocked }} /></div>
-      <div className="mb-3 smplfy-form-element"><div className="smplfy-form-element__label-row">
-        <label className="smplfy-form-element__label" htmlFor="method-users">Allow access to</label></div>
-        <SearchableSelect id="method-users" name="accessUserIds" placeholder="Select users" multiple clearable value={draft.accessUserIds} options={userOptions}
-          loadOptions={loadUsers} cacheOptions={false} disabled={blocked} invalid={Boolean(fieldErrors.accessUserIds || userError)}
-          aria-describedby={fieldErrors.accessUserIds || userError ? 'method-users-error' : moreUsers ? 'method-users-more' : undefined}
-          noOptionsMessage={userError ? 'Users could not be loaded. Try searching again.' : 'No options found'}
-          onChange={(values, options) => { setDraft((current) => ({ ...current, accessUserIds: values })); setUserOptions(options); clearFieldError('accessUserIds'); }} />
-        {moreUsers ? <div id="method-users-more" className="smplfy-form-text form-text">More users match. Refine your search to find a user.</div> : null}
-        {fieldErrors.accessUserIds || userError ? <div id="method-users-error" className="smplfy-form-element__message smplfy-form-element__message--error">{fieldErrors.accessUserIds || userError}</div> : null}
-      </div>
-      <MasterCustomFields kind="method" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
-        errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
-        onReload={reloadFields} />
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={blocked || customLoading || Boolean(customLoadError)}>{saving ? 'Saving...' : method ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+          options: [{ value: 'false', label: 'NO' }, { value: 'true', label: 'YES' }], disabled: blocked }} /></FormField>
+    </FormSection>
+
+    <FormSection title="Access" last>
+      <FormField span={12}>
+        <div className="smplfy-form-element"><div className="smplfy-form-element__label-row">
+          <label className="smplfy-form-element__label" htmlFor="method-users">Allow access to</label></div>
+          <SearchableSelect id="method-users" name="accessUserIds" placeholder="Select users" multiple clearable value={draft.accessUserIds} options={userOptions}
+            loadOptions={loadUsers} cacheOptions={false} disabled={blocked} invalid={Boolean(fieldErrors.accessUserIds || userError)}
+            aria-describedby={fieldErrors.accessUserIds || userError ? 'method-users-error' : moreUsers ? 'method-users-more' : undefined}
+            noOptionsMessage={userError ? 'Users could not be loaded. Try searching again.' : 'No options found'}
+            onChange={(values, options) => { setDraft((current) => ({ ...current, accessUserIds: values })); setUserOptions(options); clearFieldError('accessUserIds'); }} />
+          {moreUsers ? <div id="method-users-more" className="smplfy-form-text form-text">More users match. Refine your search to find a user.</div> : null}
+          {fieldErrors.accessUserIds || userError ? <div id="method-users-error" className="smplfy-form-element__message smplfy-form-element__message--error">{fieldErrors.accessUserIds || userError}</div> : null}
+        </div>
+      </FormField>
+      <FormField span={12}>
+        <MasterCustomFields kind="method" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
+          errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
+          onReload={reloadFields} />
+      </FormField>
+    </FormSection>
+  </FormPage>;
 }

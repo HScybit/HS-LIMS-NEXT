@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import SearchableSelect from '../ui/SearchableSelect.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 import ProductCustomFields from './ProductCustomFields.jsx';
 import { customFieldSubmittedValue, customFieldValidationError, customFieldNeedsGeneration } from '../../custom-fields/form-values.js';
@@ -152,40 +152,49 @@ export default function ProductForm({ product }) {
       setSaveUnknown(saveRequest.current.pending); setError(failure.message); setSaving(false);
     } finally { fieldWork.current = false; }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      <div className="mb-3"><FormElement label="Name" mandatory message={fieldErrors.name} messageTone="error"
-        inputProps={{ name: 'name', placeholder: 'Add name of the product', value: draft.name, onChange: change('name'), maxLength: 200, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement type="textarea" label="Description"
-        inputProps={{ name: 'description', placeholder: 'Add Description of the product', value: draft.description, onChange: change('description'), rows: 3, maxLength: 16000, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement label="Abbreviation"
-        inputProps={{ name: 'abbreviation', placeholder: 'Add Abbreviation of the product', value: draft.abbreviation ?? '', onChange: change('abbreviation'), maxLength: 64, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement label="Unique Key" mandatory message={fieldErrors.key} messageTone="error"
-        inputProps={{ name: 'key', placeholder: 'Unique Key', value: draft.key, onChange: change('key'), maxLength: 64, disabled: blocked }} /></div>
-      <div className="mb-3 smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="product-template">Job Template</label></div>
-        <SearchableSelect id="product-template" name="jobTemplateId" placeholder="Select Job Template" clearable value={draft.jobTemplateId} options={templateOptions}
-          loadOptions={loadTemplates} cacheOptions={false} disabled={blocked} invalid={Boolean(templateError)}
-          aria-describedby={templateError ? 'product-template-error' : moreTemplates ? 'product-template-more' : undefined}
-          noOptionsMessage={templateError ? 'Templates could not be loaded. Try searching again.' : 'No options found'}
-          onChange={(value, option) => { setDraft((current) => ({ ...current, jobTemplateId: value || null })); setTemplateOptions(option ? [option] : []); }} />
-        {moreTemplates ? <div id="product-template-more" className="smplfy-form-text form-text">More templates match. Refine your search to find a template.</div> : null}
-        {templateError ? <div id="product-template-error" className="smplfy-form-element__message smplfy-form-element__message--error">{templateError}</div> : null}
-      </div>
-      <div className="mb-3 smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="product-tags">Tags</label></div>
-        <SearchableSelect id="product-tags" name="tagIds" placeholder="Select Tags you want to associate with this Product" multiple clearable value={draft.tagIds} options={tagOptions}
-          loadOptions={loadTags} cacheOptions={false} disabled={blocked} invalid={Boolean(fieldErrors.tagIds || tagError)}
-          aria-describedby={fieldErrors.tagIds || tagError ? 'product-tags-error' : moreTags ? 'product-tags-more' : undefined}
-          noOptionsMessage={tagError ? 'Tags could not be loaded. Try searching again.' : 'No options found'}
-          onChange={(values, options) => { setDraft((current) => ({ ...current, tagIds: values })); setTagOptions(options); clearFieldError('tagIds'); }} />
-        {moreTags ? <div id="product-tags-more" className="smplfy-form-text form-text">More tags match. Refine your search to find a tag.</div> : null}
-        {fieldErrors.tagIds || tagError ? <div id="product-tags-error" className="smplfy-form-element__message smplfy-form-element__message--error">{fieldErrors.tagIds || tagError}</div> : null}
-      </div>
-      <ProductCustomFields fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
-        errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
-        onReload={reloadFields} />
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={blocked || customLoading || Boolean(customLoadError)}>{saving ? 'Saving...' : product ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+  return <FormPage title={product ? 'Edit Product' : 'New Product'} backTo={returnPath} backLabel="Back to products"
+    formId="product-form" onSubmit={save} saving={saving} disabled={blocked || customLoading || Boolean(customLoadError)}
+    submitLabel={product ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    <FormSection title="Product Details">
+      <FormField><FormElement label="Name" mandatory message={fieldErrors.name} messageTone="error"
+        inputProps={{ name: 'name', placeholder: 'Add name of the product', value: draft.name, onChange: change('name'), maxLength: 200, disabled: blocked }} /></FormField>
+      <FormField><FormElement label="Unique Key" mandatory message={fieldErrors.key} messageTone="error"
+        inputProps={{ name: 'key', placeholder: 'Unique Key', value: draft.key, onChange: change('key'), maxLength: 64, disabled: blocked }} /></FormField>
+      <FormField><FormElement label="Abbreviation"
+        inputProps={{ name: 'abbreviation', placeholder: 'Add Abbreviation of the product', value: draft.abbreviation ?? '', onChange: change('abbreviation'), maxLength: 64, disabled: blocked }} /></FormField>
+      <FormField>
+        <div className="smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="product-template">Job Template</label></div>
+          <SearchableSelect id="product-template" name="jobTemplateId" placeholder="Select Job Template" clearable value={draft.jobTemplateId} options={templateOptions}
+            loadOptions={loadTemplates} cacheOptions={false} disabled={blocked} invalid={Boolean(templateError)}
+            aria-describedby={templateError ? 'product-template-error' : moreTemplates ? 'product-template-more' : undefined}
+            noOptionsMessage={templateError ? 'Templates could not be loaded. Try searching again.' : 'No options found'}
+            onChange={(value, option) => { setDraft((current) => ({ ...current, jobTemplateId: value || null })); setTemplateOptions(option ? [option] : []); }} />
+          {moreTemplates ? <div id="product-template-more" className="smplfy-form-text form-text">More templates match. Refine your search to find a template.</div> : null}
+          {templateError ? <div id="product-template-error" className="smplfy-form-element__message smplfy-form-element__message--error">{templateError}</div> : null}
+        </div>
+      </FormField>
+      <FormField span={12}><FormElement type="textarea" label="Description"
+        inputProps={{ name: 'description', placeholder: 'Add Description of the product', value: draft.description, onChange: change('description'), rows: 3, maxLength: 16000, disabled: blocked }} /></FormField>
+    </FormSection>
+
+    <FormSection title="Classification" last>
+      <FormField span={12}>
+        <div className="smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="product-tags">Tags</label></div>
+          <SearchableSelect id="product-tags" name="tagIds" placeholder="Select Tags you want to associate with this Product" multiple clearable value={draft.tagIds} options={tagOptions}
+            loadOptions={loadTags} cacheOptions={false} disabled={blocked} invalid={Boolean(fieldErrors.tagIds || tagError)}
+            aria-describedby={fieldErrors.tagIds || tagError ? 'product-tags-error' : moreTags ? 'product-tags-more' : undefined}
+            noOptionsMessage={tagError ? 'Tags could not be loaded. Try searching again.' : 'No options found'}
+            onChange={(values, options) => { setDraft((current) => ({ ...current, tagIds: values })); setTagOptions(options); clearFieldError('tagIds'); }} />
+          {moreTags ? <div id="product-tags-more" className="smplfy-form-text form-text">More tags match. Refine your search to find a tag.</div> : null}
+          {fieldErrors.tagIds || tagError ? <div id="product-tags-error" className="smplfy-form-element__message smplfy-form-element__message--error">{fieldErrors.tagIds || tagError}</div> : null}
+        </div>
+      </FormField>
+      <FormField span={12}>
+        <ProductCustomFields fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
+          errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
+          onReload={reloadFields} />
+      </FormField>
+    </FormSection>
+  </FormPage>;
 }

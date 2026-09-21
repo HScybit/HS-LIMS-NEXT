@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
 import Checkbox from '../ui/Checkbox.jsx';
 import SearchableSelect from '../ui/SearchableSelect.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 
 const relationOption = (row) => ({ value: row.id, label: String(row.name ?? row.id) });
@@ -68,53 +68,67 @@ export default function SampleCategoryForm({ category }) {
       router.push(returnPath);
     } catch (failure) { setError(failure.message); setSaving(false); }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-8 col-lg-10">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      <div className="mb-3"><FormElement label="Name" mandatory message={fieldErrors.name} messageTone="error"
-        inputProps={{ name: 'name', placeholder: 'Add name of the Sample Category', value: draft.name, onChange: change('name'), maxLength: 200, disabled: saving }} /></div>
-      <div className="mb-3"><FormElement type="textarea" label="Description"
-        inputProps={{ name: 'description', placeholder: 'Add Description of the Sample Category', value: draft.description, onChange: change('description'), rows: 3, maxLength: 16000, disabled: saving }} /></div>
-      <div className="mb-3"><FormElement label="Abbreviation" mandatory message={fieldErrors.abbreviation} messageTone="error"
-        inputProps={{ name: 'abbreviation', placeholder: 'The abbreviation for the category', value: draft.abbreviation, onChange: change('abbreviation'), maxLength: 64, disabled: saving }} /></div>
-      <div className="row">
-        <div className="col-md-6 mb-3"><FormElement label="Retention Days" mandatory
-          inputProps={{ type: 'number', name: 'retentionDays', min: 0, step: 1, value: draft.retentionDays, onChange: changeNumber('retentionDays'), disabled: saving }} /></div>
-        <div className="col-md-6 mb-3"><FormElement label="Estimated Time in Days"
-          inputProps={{ type: 'number', name: 'estimatedTimeInDays', min: 0, step: 0.5, value: draft.estimatedTimeInDays, onChange: changeNumber('estimatedTimeInDays'), disabled: saving }} /></div>
-      </div>
-      {[['enableEvents', 'Enable Events'], ['enableReissue', 'Enable Reissue']].map(([key, label]) => <div className="mb-3" key={key}>
+  return <FormPage title={category ? 'Edit Sample Category' : 'New Sample Category'} backTo={returnPath} backLabel="Back to sample categories"
+    formId="sample-category-form" onSubmit={save} saving={saving} submitLabel={category ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    <FormSection title="Category Details">
+      <FormField><FormElement label="Name" mandatory message={fieldErrors.name} messageTone="error"
+        inputProps={{ name: 'name', placeholder: 'Add name of the Sample Category', value: draft.name, onChange: change('name'), maxLength: 200, disabled: saving }} /></FormField>
+      <FormField><FormElement label="Abbreviation" mandatory message={fieldErrors.abbreviation} messageTone="error"
+        inputProps={{ name: 'abbreviation', placeholder: 'The abbreviation for the category', value: draft.abbreviation, onChange: change('abbreviation'), maxLength: 64, disabled: saving }} /></FormField>
+      <FormField span={12}><FormElement type="textarea" label="Description"
+        inputProps={{ name: 'description', placeholder: 'Add Description of the Sample Category', value: draft.description, onChange: change('description'), rows: 3, maxLength: 16000, disabled: saving }} /></FormField>
+    </FormSection>
+
+    <FormSection title="Handling">
+      <FormField><FormElement label="Retention Days" mandatory
+        inputProps={{ type: 'number', name: 'retentionDays', min: 0, step: 1, value: draft.retentionDays, onChange: changeNumber('retentionDays'), disabled: saving }} /></FormField>
+      <FormField><FormElement label="Estimated Time in Days"
+        inputProps={{ type: 'number', name: 'estimatedTimeInDays', min: 0, step: 0.5, value: draft.estimatedTimeInDays, onChange: changeNumber('estimatedTimeInDays'), disabled: saving }} /></FormField>
+      {[['enableEvents', 'Enable Events'], ['enableReissue', 'Enable Reissue']].map(([key, label]) => <FormField key={key}>
         <div className="smplfy-checkbox-field"><Checkbox id={`sample-category-${key}`} checked={draft[key]} ariaLabel={label} disabled={saving} onChange={changeChecked(key)} />
           <div className="smplfy-checkbox-field__body"><label className="smplfy-checkbox-field__label mb-0" htmlFor={`sample-category-${key}`}>{label}</label></div>
         </div>
-      </div>)}
-      <div className="mb-3 smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="sample-category-workflow">Workflow</label></div>
-        <SearchableSelect id="sample-category-workflow" name="workflowId" placeholder="Select Workflow" clearable value={draft.workflowId} options={workflowOptions}
-          loadOptions={loadWorkflows} cacheOptions={false} disabled={saving} invalid={Boolean(fieldErrors.workflowId)}
-          onChange={(value, option) => { setDraft((current) => ({ ...current, workflowId: value || null })); setWorkflowOptions(option ? [option] : []); clearFieldError('workflowId'); }} />
-        {fieldErrors.workflowId ? <div className="smplfy-form-element__message smplfy-form-element__message--error">{fieldErrors.workflowId}</div> : null}
-      </div>
-      <div className="mb-3 smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="sample-category-users">Users</label></div>
-        <SearchableSelect id="sample-category-users" name="userIds" placeholder="Select Users" multiple clearable value={draft.userIds} options={userOptions}
-          loadOptions={loadUsers} cacheOptions={false} disabled={saving}
-          onChange={(values, options) => { setDraft((current) => ({ ...current, userIds: values })); setUserOptions(options); }} />
-      </div>
-      <div className="mb-3 smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="sample-category-fields">Custom Fields</label></div>
-        <SearchableSelect id="sample-category-fields" name="includedFieldIds" placeholder="Select Sample-Product Custom Fields" multiple clearable value={draft.includedFieldIds} options={fieldOptions}
-          loadOptions={loadFields} cacheOptions={false} disabled={saving}
-          onChange={(values, options) => { setDraft((current) => ({ ...current, includedFieldIds: values })); setFieldOptions(options); }} />
-      </div>
-      {templatePurposes.map(([purpose, label]) => <div className="mb-3 smplfy-form-element" key={purpose}>
-        <div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor={`sample-category-template-${purpose}`}>{label}</label></div>
-        <SearchableSelect id={`sample-category-template-${purpose}`} name={`templates.${purpose}`} placeholder={`Select ${label}`} clearable
-          value={draft.templates[purpose]} options={templateOptions[purpose]} loadOptions={loadTemplates(purpose)} cacheOptions={false} disabled={saving}
-          onChange={(value, option) => {
-            setDraft((current) => ({ ...current, templates: { ...current.templates, [purpose]: value || null } }));
-            setTemplateOptions((current) => ({ ...current, [purpose]: option ? [option] : [] }));
-          }} />
-      </div>)}
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={saving} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={saving}>{saving ? 'Saving...' : category ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+      </FormField>)}
+    </FormSection>
+
+    <FormSection title="Workflow and Access">
+      <FormField>
+        <div className="smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="sample-category-workflow">Workflow</label></div>
+          <SearchableSelect id="sample-category-workflow" name="workflowId" placeholder="Select Workflow" clearable value={draft.workflowId} options={workflowOptions}
+            loadOptions={loadWorkflows} cacheOptions={false} disabled={saving} invalid={Boolean(fieldErrors.workflowId)}
+            onChange={(value, option) => { setDraft((current) => ({ ...current, workflowId: value || null })); setWorkflowOptions(option ? [option] : []); clearFieldError('workflowId'); }} />
+          {fieldErrors.workflowId ? <div className="smplfy-form-element__message smplfy-form-element__message--error">{fieldErrors.workflowId}</div> : null}
+        </div>
+      </FormField>
+      <FormField>
+        <div className="smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="sample-category-users">Users</label></div>
+          <SearchableSelect id="sample-category-users" name="userIds" placeholder="Select Users" multiple clearable value={draft.userIds} options={userOptions}
+            loadOptions={loadUsers} cacheOptions={false} disabled={saving}
+            onChange={(values, options) => { setDraft((current) => ({ ...current, userIds: values })); setUserOptions(options); }} />
+        </div>
+      </FormField>
+      <FormField span={12}>
+        <div className="smplfy-form-element"><div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor="sample-category-fields">Custom Fields</label></div>
+          <SearchableSelect id="sample-category-fields" name="includedFieldIds" placeholder="Select Sample-Product Custom Fields" multiple clearable value={draft.includedFieldIds} options={fieldOptions}
+            loadOptions={loadFields} cacheOptions={false} disabled={saving}
+            onChange={(values, options) => { setDraft((current) => ({ ...current, includedFieldIds: values })); setFieldOptions(options); }} />
+        </div>
+      </FormField>
+    </FormSection>
+
+    <FormSection title="Templates" last>
+      {templatePurposes.map(([purpose, label]) => <FormField key={purpose}>
+        <div className="smplfy-form-element">
+          <div className="smplfy-form-element__label-row"><label className="smplfy-form-element__label" htmlFor={`sample-category-template-${purpose}`}>{label}</label></div>
+          <SearchableSelect id={`sample-category-template-${purpose}`} name={`templates.${purpose}`} placeholder={`Select ${label}`} clearable
+            value={draft.templates[purpose]} options={templateOptions[purpose]} loadOptions={loadTemplates(purpose)} cacheOptions={false} disabled={saving}
+            onChange={(value, option) => {
+              setDraft((current) => ({ ...current, templates: { ...current.templates, [purpose]: value || null } }));
+              setTemplateOptions((current) => ({ ...current, [purpose]: option ? [option] : [] }));
+            }} />
+        </div>
+      </FormField>)}
+    </FormSection>
+  </FormPage>;
 }

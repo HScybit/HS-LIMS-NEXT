@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FormElement from '../ui/FormElement.jsx';
-import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
+import FormPage, { FormSection, FormField } from '../ui/FormPage.jsx';
 import ParameterUncertainty from './ParameterUncertainty.jsx';
 import { emptyUncertaintyGrid, uncertaintySpreadsheet, updateUncertaintyGrid } from '../../masters/parameter-grid.js';
 import { apiRequest } from '../../lib/api-client.js';
@@ -159,31 +159,39 @@ export default function TestParameterForm({ parameter }) {
       setSaveUnknown(saveRequest.current.pending); setError(failure.message); setSaving(false);
     } finally { fieldWork.current = false; }
   }
-  return <div className="container-fluid py-4"><div className="row justify-content-center"><div className="col-xl-7 col-lg-9">
-    <div className="card border-0 shadow-sm"><div className="card-body p-4"><form onSubmit={save} noValidate>
-      {error ? <div className="alert alert-danger" role="alert">{error}</div> : null}
-      <div className="mb-3"><FormElement label="Order" message={fieldErrors.order} messageTone="error"
-        inputProps={{ type: 'number', name: 'order', placeholder: '1', min: 0, max: 2_147_483_647, step: 1, value: draft.order, onChange: change('order'), disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement label="Parameter Name" mandatory message={fieldErrors.name} messageTone="error"
-        inputProps={{ name: 'name', placeholder: 'Parameter Name', value: draft.name, onChange: change('name'), maxLength: 200, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement type="textarea" label="Description"
-        inputProps={{ name: 'description', placeholder: 'Description', value: draft.description, onChange: change('description'), maxLength: 16000, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement label="Key" mandatory message={fieldErrors.key} messageTone="error"
-        inputProps={{ name: 'key', placeholder: 'PARA_998', value: draft.key, onChange: change('key'), maxLength: 64, disabled: blocked }} /></div>
-      <div className="mb-3"><FormElement type="searchable-select" label="Lab Name" message={labError} messageTone="error"
+  return <FormPage title={parameter ? 'Edit Test Parameter' : 'New Test Parameter'} backTo={returnPath} backLabel="Back to test parameters"
+    formId="test-parameter-form" onSubmit={save} saving={saving}
+    disabled={blocked || customLoading || Boolean(customLoadError) || Boolean(gridError)}
+    submitLabel={parameter ? 'Update' : 'Create'} error={error}
+    actions={<SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>}>
+    <FormSection title="Parameter Details">
+      <FormField><FormElement label="Parameter Name" mandatory message={fieldErrors.name} messageTone="error"
+        inputProps={{ name: 'name', placeholder: 'Parameter Name', value: draft.name, onChange: change('name'), maxLength: 200, disabled: blocked }} /></FormField>
+      <FormField><FormElement label="Key" mandatory message={fieldErrors.key} messageTone="error"
+        inputProps={{ name: 'key', placeholder: 'PARA_998', value: draft.key, onChange: change('key'), maxLength: 64, disabled: blocked }} /></FormField>
+      <FormField><FormElement label="Scheme Abbreviation" mandatory message={fieldErrors.schemeAbbreviation} messageTone="error"
+        inputProps={{ name: 'schemeAbbreviation', placeholder: 'Ni', value: draft.schemeAbbreviation, onChange: change('schemeAbbreviation'), maxLength: 64, disabled: blocked }} /></FormField>
+      <FormField><FormElement label="Order" message={fieldErrors.order} messageTone="error"
+        inputProps={{ type: 'number', name: 'order', placeholder: '1', min: 0, max: 2_147_483_647, step: 1, value: draft.order, onChange: change('order'), disabled: blocked }} /></FormField>
+      <FormField span={12}><FormElement type="searchable-select" label="Lab Name" message={labError} messageTone="error"
         helperText={moreLabs ? 'More labs match. Refine your search to find a lab.' : undefined}
         inputProps={{ name: 'laboratoryId', placeholder: 'Select Lab', value: draft.laboratoryId, options: labOption ? [labOption] : [], loadOptions: loadLabs,
           cacheOptions: false, clearable: true, disabled: blocked, noOptionsMessage: labError ? 'Labs could not be loaded. Try searching again.' : 'No options found',
-          onChange: (value, option) => { setDraft((current) => ({ ...current, laboratoryId: value })); setLabOption(option); } }} /></div>
-      <div className="mb-3"><FormElement label="Scheme Abbreviation" mandatory message={fieldErrors.schemeAbbreviation} messageTone="error"
-        inputProps={{ name: 'schemeAbbreviation', placeholder: 'Ni', value: draft.schemeAbbreviation, onChange: change('schemeAbbreviation'), maxLength: 64, disabled: blocked }} /></div>
-      <ParameterUncertainty name="measurementUncertainty" cfg={uncertaintyConfig} value={uncertaintySpreadsheet(initialGrid)} error={gridError} disabled={blocked} onChange={changeGrid}
-        onInvalid={(message) => { gridProblem.current = message; setGridError(message); }} />
-      <MasterCustomFields kind="parameter" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
-        errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
-        onReload={reloadFields} />
-      <div className="d-flex gap-2 justify-content-end mt-4"><SecondaryButton leftIcon="close" disabled={blocked} onClick={() => router.push(returnPath)}>Cancel</SecondaryButton>
-        <PrimaryButton type="submit" leftIcon="save" disabled={blocked || customLoading || Boolean(customLoadError) || Boolean(gridError)}>{saving ? 'Saving...' : parameter ? 'Update' : 'Create'}</PrimaryButton></div>
-    </form></div></div>
-  </div></div></div>;
+          onChange: (value, option) => { setDraft((current) => ({ ...current, laboratoryId: value })); setLabOption(option); } }} /></FormField>
+      <FormField span={12}><FormElement type="textarea" label="Description"
+        inputProps={{ name: 'description', placeholder: 'Description', value: draft.description, onChange: change('description'), maxLength: 16000, disabled: blocked }} /></FormField>
+    </FormSection>
+
+    <FormSection title="Measurement Uncertainty" last>
+      <FormField span={12}>
+        <ParameterUncertainty name="measurementUncertainty" cfg={uncertaintyConfig} value={uncertaintySpreadsheet(initialGrid)} error={gridError} disabled={blocked} onChange={changeGrid}
+          onInvalid={(message) => { gridProblem.current = message; setGridError(message); }} />
+      </FormField>
+      <FormField span={12}>
+        <MasterCustomFields kind="parameter" fields={customFields} loading={customLoading} loadError={customLoadError} values={customValues} storedFields={storedFields} lookupSources={lookupSources}
+          errors={fieldErrors} disabled={blocked} generatingId={generatingId} onChange={changeCustomField} onBusy={onUploadBusy} onGenerate={generateField}
+          onReload={reloadFields} />
+      </FormField>
+    </FormSection>
+  </FormPage>;
 }
