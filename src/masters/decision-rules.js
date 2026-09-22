@@ -124,20 +124,35 @@ export async function loadDecisionRule(client, identity, ruleId, { atRevision } 
     detectable_lower_limit AS "detectableLowerLimit",detectable_upper_limit_text AS "detectableUpperLimitText",detectable_lower_limit_text AS "detectableLowerLimitText",
     show_detectable_limit_text AS "showDetectableLimitText",show_standard_limit_text AS "showStandardLimitText",conformance_limit AS "conformanceLimit",
     discipline,rule_group AS "group",unique_key AS "uniqueKey",has_formula AS "hasFormula",formula,formula_text AS "formulaText",
-    has_derived_formula AS "hasDerivedFormula",custom_formula AS "customFormula",formula_expression AS "formulaExpression",active
+    has_derived_formula AS "hasDerivedFormula",custom_formula AS "customFormula",formula_expression AS "formulaExpression",active,
+    names.product_name AS "productName",names.parameter_name AS "parameterName",names.method_name AS "methodName",names.template_name AS "templateName",
+    names.parent_name AS "parentDecisionRuleName"
     ${history ? ',saved_by AS "savedBy",saved_at AS "savedAt",previous_revision AS "previousRevision",operation' : ',created_at AS "createdAt",updated_at AS "updatedAt"'}
-    FROM ${history ? 'decision_rule_versions' : 'decision_rules'} WHERE organization_id=$1 AND ${history ? 'decision_rule_id' : 'id'}=$2
-    ${history ? 'AND revision=$3' : 'AND active'}`, history ? [identity.organization_id, ruleId, atRevision] : [identity.organization_id, ruleId])).rows[0];
+    FROM ${history ? 'decision_rule_versions' : 'decision_rules'} rule
+    LEFT JOIN LATERAL (SELECT
+      (SELECT name FROM products WHERE organization_id=rule.organization_id AND id=rule.product_id) AS product_name,
+      (SELECT name FROM test_parameters WHERE organization_id=rule.organization_id AND id=rule.test_parameter_id) AS parameter_name,
+      (SELECT name FROM methods_of_analysis WHERE organization_id=rule.organization_id AND id=rule.method_id) AS method_name,
+      (SELECT name FROM product_template_labels WHERE organization_id=rule.organization_id AND template_id=rule.template_id) AS template_name,
+      (SELECT test_group_name FROM decision_rules WHERE organization_id=rule.organization_id AND id=rule.parent_decision_rule_id) AS parent_name
+    ) names ON true
+    WHERE rule.organization_id=$1 AND ${history ? 'decision_rule_id' : 'rule.id'}=$2
+    ${history ? 'AND rule.revision=$3' : 'AND rule.active'}`, history ? [identity.organization_id, ruleId, atRevision] : [identity.organization_id, ruleId])).rows[0];
   if (!record) throw new HttpError(404, 'decision_rule_not_found', 'Decision Rule was not found.');
+  // Selected relations carry their current names so the form and view show names, never identifiers.
   const [categories, instruments, formulaVariables, limits] = await Promise.all([
-    client.query('SELECT sample_category_id AS id FROM decision_rule_sample_categories WHERE organization_id=$1 AND decision_rule_id=$2 ORDER BY sample_category_id', [identity.organization_id, ruleId]),
-    client.query('SELECT instrument_id AS id FROM decision_rule_instruments WHERE organization_id=$1 AND decision_rule_id=$2 ORDER BY instrument_id', [identity.organization_id, ruleId]),
+    client.query(`SELECT link.sample_category_id AS id,category.name FROM decision_rule_sample_categories link
+      LEFT JOIN sample_categories category ON category.organization_id=link.organization_id AND category.id=link.sample_category_id
+      WHERE link.organization_id=$1 AND link.decision_rule_id=$2 ORDER BY link.sample_category_id`, [identity.organization_id, ruleId]),
+    client.query(`SELECT link.instrument_id AS id,instrument.name FROM decision_rule_instruments link
+      LEFT JOIN instruments instrument ON instrument.organization_id=link.organization_id AND instrument.id=link.instrument_id
+      WHERE link.organization_id=$1 AND link.decision_rule_id=$2 ORDER BY link.instrument_id`, [identity.organization_id, ruleId]),
     client.query('SELECT key,label FROM decision_rule_formula_variables WHERE organization_id=$1 AND decision_rule_id=$2 ORDER BY display_order', [identity.organization_id, ruleId]),
     client.query(`SELECT lower_limit AS "lowerLimit",upper_limit AS "upperLimit",lower_inclusive AS "lowerInclusive",upper_inclusive AS "upperInclusive",outcome,narration
       FROM decision_rule_limits WHERE organization_id=$1 AND decision_rule_id=$2 ORDER BY display_order`, [identity.organization_id, ruleId]),
   ]);
-  return { ...record, sampleCategoryIds: categories.rows.map((row) => row.id), instrumentIds: instruments.rows.map((row) => row.id),
-    formulaVariables: formulaVariables.rows, limits: limits.rows };
+  return { ...record, sampleCategoryIds: categories.rows.map((row) => row.id), sampleCategories: categories.rows,
+    instrumentIds: instruments.rows.map((row) => row.id), instruments: instruments.rows, formulaVariables: formulaVariables.rows, limits: limits.rows };
 }
 
 async function priorSave(client, identity, id, revision, requestId, operation) {

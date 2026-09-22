@@ -5,12 +5,15 @@ import DecisionRuleForm from './DecisionRuleForm.jsx';
 import { apiRequest } from '../../lib/api-client.js';
 
 function DecisionRuleView({ rule }) {
+  const names = (rows, ids) => (rows ?? ids?.map((id) => ({ id })))?.map((row) => row.name ?? row.id).join(', ');
   const rows = [['Name', rule.name], ['Test Group', rule.isTestGroupParent ? `${rule.testGroupName} (${rule.testGroupUid})` : null],
-    ['Product', rule.productId], ['Parameter', rule.testParameterId], ['MoA', rule.methodId],
-    ['Sample Categories', rule.sampleCategoryIds?.join(', ')], ['Cut Off Value', rule.cutoffValue], ['Min', rule.minimum], ['Max', rule.maximum],
+    ['Parent Decision Rule', rule.parentDecisionRuleId ? rule.parentDecisionRuleName ?? rule.parentDecisionRuleId : null],
+    ['Product', rule.productId ? rule.productName ?? rule.productId : null], ['Parameter', rule.testParameterId ? rule.parameterName ?? rule.testParameterId : null],
+    ['MoA', rule.methodId ? rule.methodName ?? rule.methodId : null], ['Template', rule.templateId ? rule.templateName ?? rule.templateId : null],
+    ['Sample Categories', names(rule.sampleCategories, rule.sampleCategoryIds)], ['Cut Off Value', rule.cutoffValue], ['Min', rule.minimum], ['Max', rule.maximum],
     ['UoM', rule.unitOfMeasure], ['Min Size', rule.minimumSize], ['Estimated Time in Days', rule.estimatedTimeInDays], ['Estimated Charges', rule.estimatedCharges],
     ['Express Time in Days', rule.expressTime], ['Express Charges', rule.expressCharges], ['Is NABL', rule.isNabl ? 'Yes' : 'No'],
-    ['Discipline', rule.discipline], ['Group', rule.group], ['Unique Key', rule.uniqueKey], ['Instruments', rule.instrumentIds?.join(', ')],
+    ['Discipline', rule.discipline], ['Group', rule.group], ['Unique Key', rule.uniqueKey], ['Instruments', names(rule.instruments, rule.instrumentIds)],
     ['Has Formula', rule.hasFormula ? 'Yes' : 'No'], ['Formula', rule.formula],
     ['Formula Variables', rule.formulaVariables?.map((variable) => `${variable.key} (${variable.label})`).join(', ')],
     ['Has Derived Formula', rule.hasDerivedFormula ? 'Yes' : 'No'], ['Custom Formula', rule.customFormula],

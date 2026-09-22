@@ -40,13 +40,13 @@ export default function DecisionRuleForm({ rule }) {
   const router = useRouter(); const search = useSearchParams(); const newId = useRef(null); const saveRequest = useRef(null);
   const [draft, setDraft] = useState(() => draftFrom(rule));
   const [options, setOptions] = useState(() => ({
-    parent: rule?.parentDecisionRuleId ? [relationOption({ id: rule.parentDecisionRuleId, name: rule.parentDecisionRuleId })] : [],
-    product: rule?.productId ? [relationOption({ id: rule.productId, name: rule.productName ?? rule.productId })] : [],
-    parameter: rule?.testParameterId ? [relationOption({ id: rule.testParameterId, name: rule.parameterName ?? rule.testParameterId })] : [],
-    method: rule?.methodId ? [relationOption({ id: rule.methodId, name: rule.methodName ?? rule.methodId })] : [],
-    categories: rule?.sampleCategoryIds?.map((id) => relationOption({ id, name: id })) ?? [],
-    instruments: rule?.instrumentIds?.map((id) => relationOption({ id, name: id })) ?? [],
-    template: rule?.templateId ? [relationOption({ id: rule.templateId, name: rule.templateId })] : [],
+    parent: rule?.parentDecisionRuleId ? [relationOption({ id: rule.parentDecisionRuleId, name: rule.parentDecisionRuleName })] : [],
+    product: rule?.productId ? [relationOption({ id: rule.productId, name: rule.productName })] : [],
+    parameter: rule?.testParameterId ? [relationOption({ id: rule.testParameterId, name: rule.parameterName })] : [],
+    method: rule?.methodId ? [relationOption({ id: rule.methodId, name: rule.methodName })] : [],
+    categories: (rule?.sampleCategories ?? rule?.sampleCategoryIds?.map((id) => ({ id })))?.map(relationOption) ?? [],
+    instruments: (rule?.instruments ?? rule?.instrumentIds?.map((id) => ({ id })))?.map(relationOption) ?? [],
+    template: rule?.templateId ? [relationOption({ id: rule.templateId, name: rule.templateName })] : [],
   }));
   const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [fieldErrors, setFieldErrors] = useState({});
   const queries = useRef({});
@@ -75,8 +75,8 @@ export default function DecisionRuleForm({ rule }) {
     try {
       const parent = await apiRequest(`/api/masters/decision-rules/${value}`);
       setDraft((current) => ({ ...current, productId: parent.productId, methodId: parent.methodId }));
-      setOptions((current) => ({ ...current, product: [relationOption({ id: parent.productId, name: parent.productName ?? parent.productId })],
-        method: [relationOption({ id: parent.methodId, name: parent.methodName ?? parent.methodId })] }));
+      setOptions((current) => ({ ...current, product: [relationOption({ id: parent.productId, name: parent.productName })],
+        method: [relationOption({ id: parent.methodId, name: parent.methodName })] }));
     } catch (failure) { setError(failure.message); }
   }
 

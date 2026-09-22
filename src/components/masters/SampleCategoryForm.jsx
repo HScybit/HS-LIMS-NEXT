@@ -22,7 +22,8 @@ export default function SampleCategoryForm({ category }) {
   const [workflowOptions, setWorkflowOptions] = useState(() => category?.workflowId ? [relationOption({ id: category.workflowId, name: category.workflowName })] : []);
   const [userOptions, setUserOptions] = useState(() => category?.users?.map((user) => relationOption({ id: user.id, name: user.name })) ?? []);
   const [fieldOptions, setFieldOptions] = useState(() => category?.includedFields?.map((field) => relationOption({ id: field.id, name: field.label })) ?? []);
-  const [templateOptions, setTemplateOptions] = useState({ sample: [], datasheet: [], report: [], label: [] });
+  const [templateOptions, setTemplateOptions] = useState(() => Object.fromEntries(templatePurposes.map(([purpose]) =>
+    [purpose, category?.templates?.[purpose] ? [relationOption({ id: category.templates[purpose], name: category.templateNames?.[purpose] })] : []])));
   const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [fieldErrors, setFieldErrors] = useState({});
   const from = search.get('from'); const returnPath = from && /^\/sample_categories(?:\?[^#]*)?$/.test(from) ? from : '/sample_categories';
   const queries = useRef({});

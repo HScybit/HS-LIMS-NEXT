@@ -10,6 +10,8 @@ function SampleCategoryView({ category }) {
     ['Enable Events', category.enableEvents ? 'Yes' : 'No'], ['Enable Reissue', category.enableReissue ? 'Yes' : 'No'],
     ['Workflow', category.workflowName], ['Users', category.users?.map((user) => user.name).join(', ')],
     ['Custom Fields', category.includedFields?.map((field) => field.label).join(', ')],
+    ...[['sample', 'Sample Template'], ['datasheet', 'Datasheet Template'], ['report', 'Report Template'], ['label', 'Label Template']]
+      .map(([purpose, label]) => [label, category.templates?.[purpose] ? category.templateNames?.[purpose] ?? category.templates[purpose] : null]),
     ['Created At', category.createdAt ? new Date(category.createdAt).toLocaleDateString('en-GB') : null]];
   return <div className="container-fluid py-4"><div className="card border-0 shadow-sm"><div className="card-body p-4">
     <div className="table-responsive"><table className="table table-sm table-striped table-hover align-middle mb-0 table-bordered"><tbody>

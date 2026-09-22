@@ -55,18 +55,21 @@ export async function loadSampleCategory(client, identity, categoryId, { atRevis
     ${history ? 'AND revision=$3' : 'AND active'}`, history ? [identity.organization_id, categoryId, atRevision] : [identity.organization_id, categoryId])).rows[0];
   if (!record) throw new HttpError(404, 'sample_category_not_found', 'Sample Category was not found.');
   // Workflow/template/user/field associations are current-state only, like sample_category_templates already was.
-  const workflow = (await client.query(`SELECT workflow_id AS id FROM sample_category_workflows
-    WHERE organization_id=$1 AND sample_category_id=$2 AND applies_to='sample' AND is_default`, [identity.organization_id, categoryId])).rows[0];
-  const templateRows = (await client.query(`SELECT purpose,template_id AS id FROM sample_category_templates
-    WHERE organization_id=$1 AND sample_category_id=$2 AND is_default`, [identity.organization_id, categoryId])).rows;
+  const workflow = (await client.query(`SELECT link.workflow_id AS id,workflow.name FROM sample_category_workflows link
+    LEFT JOIN workflows workflow ON workflow.organization_id=link.organization_id AND workflow.id=link.workflow_id
+    WHERE link.organization_id=$1 AND link.sample_category_id=$2 AND link.applies_to='sample' AND link.is_default`, [identity.organization_id, categoryId])).rows[0];
+  const templateRows = (await client.query(`SELECT link.purpose,link.template_id AS id,label.name FROM sample_category_templates link
+    LEFT JOIN product_template_labels label ON label.organization_id=link.organization_id AND label.template_id=link.template_id
+    WHERE link.organization_id=$1 AND link.sample_category_id=$2 AND link.is_default`, [identity.organization_id, categoryId])).rows;
   const templates = Object.fromEntries(templatePurposes.map((purpose) => [purpose, templateRows.find((row) => row.purpose === purpose)?.id ?? null]));
+  const templateNames = Object.fromEntries(templatePurposes.map((purpose) => [purpose, templateRows.find((row) => row.purpose === purpose)?.name ?? null]));
   const users = (await client.query(`SELECT user_id AS id, member.username, member.display_name AS name, member.active FROM sample_category_users link
     JOIN sample_category_user_labels member ON member.organization_id=link.organization_id AND member.id=link.user_id
     WHERE link.organization_id=$1 AND link.sample_category_id=$2 ORDER BY lower(member.display_name),link.user_id`, [identity.organization_id, categoryId])).rows;
   const includedFields = (await client.query(`SELECT field_definition_id AS id, field.label, field.active FROM sample_category_included_fields link
     JOIN custom_field_definitions field ON field.organization_id=link.organization_id AND field.id=link.field_definition_id
     WHERE link.organization_id=$1 AND link.sample_category_id=$2 ORDER BY field.display_order,link.field_definition_id`, [identity.organization_id, categoryId])).rows;
-  return { ...record, workflowId: workflow?.id ?? null, templates, userIds: users.map((user) => user.id), users,
+  return { ...record, workflowId: workflow?.id ?? null, workflowName: workflow?.name ?? null, templates, templateNames, userIds: users.map((user) => user.id), users,
     includedFieldIds: includedFields.map((field) => field.id), includedFields };
 }
 
