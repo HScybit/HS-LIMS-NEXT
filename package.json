@@ -7,7 +7,7 @@
     "node": ">=22.23.0 <23"
   },
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
+    "dev": "npm run build:report-renderer && next dev --hostname 127.0.0.1",
     "build": "npm run build:report-renderer && next build",
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint .",

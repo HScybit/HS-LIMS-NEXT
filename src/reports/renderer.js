@@ -37,6 +37,7 @@ export async function loadReportStylesheet(rendererId) {
 
 export async function loadReportRenderer() {
   const rendererId = await currentRendererId(); const { directory, stylesheet } = await rendererFiles(rendererId);
-  const renderer = await import(pathToFileURL(path.join(directory, 'renderer.mjs')).href);
+  // The renderer is a built artifact outside the application bundle; the web server loads it at runtime like the worker script does.
+  const renderer = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ pathToFileURL(path.join(directory, 'renderer.mjs')).href);
   return { rendererId, stylesheet, renderReportDocument: renderer.renderReportDocument, renderReportPdf: renderer.renderReportPdf };
 }

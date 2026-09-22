@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import PageHeader from '../layout/PageHeader.jsx';
+import PrimaryButton from '../ui/PrimaryButton.jsx';
 import SecondaryButton from '../ui/SecondaryButton.jsx';
 import StatusPill from '../ui/StatusPill.jsx';
 import WorkflowPanel from '../workflows/WorkflowPanel.jsx';
 import { AppLoader } from '../ui/AppLoader.jsx';
 import TemplateCanvas from '../templates/TemplateCanvas.jsx';
-import { apiRequest } from '../../lib/api-client.js';
+import { apiBlobRequest, apiRequest } from '../../lib/api-client.js';
+import { buildPreviewDocument } from '../templates/template-preview-document.js';
 import { valueKey } from '../../templates/calculations.js';
 import { MethodSwitcher, AddMethodModal, DeleteMethodModal } from './MethodControls.jsx';
 import '../../styles/template-designer.scss';
@@ -27,6 +29,8 @@ export default function TestRequestDetails({ requestId, sampleId, initialDatashe
   const [methodError, setMethodError] = useState('');
   const [methodBusy, setMethodBusy] = useState(false);
   const mutationRunning = useRef(false);
+  const templateRoot = useRef(null);
+  const [printing, setPrinting] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
@@ -62,6 +66,21 @@ export default function TestRequestDetails({ requestId, sampleId, initialDatashe
       if ([403, 404, 409].includes(failure.status)) setReload((value) => value + 1);
     } finally { mutationRunning.current = false; setMethodBusy(false); }
   }
+  // The source Print action opens the rendered datasheet as a PDF in a new tab.
+  async function printDatasheet() {
+    if (!templateRoot.current || !data?.runtime || printing) return;
+    const printWindow = window.open('', '_blank');
+    setPrinting(true); setError('');
+    try {
+      const blob = await apiBlobRequest(`/api/datasheets/${data.runtime.datasheet.id}/print-pdf`, { body: {
+        html: buildPreviewDocument(templateRoot.current, data.request.requestNumber), title: data.request.requestNumber, sampleId } });
+      const url = URL.createObjectURL(blob);
+      if (printWindow) printWindow.location.href = url; else window.open(url, '_blank');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (failure) {
+      printWindow?.close(); setError(failure.message);
+    } finally { setPrinting(false); }
+  }
   if (!data) return error ? <div className="alert alert-danger m-3" role="alert">{error}<button type="button" className="btn btn-link" onClick={() => setReload((value) => value + 1)}>Retry</button></div> : <AppLoader message="Loading test request..." />;
   const { request, runtime, workflow } = data;
   const created = new Date(request.createdAt);
@@ -83,13 +102,14 @@ export default function TestRequestDetails({ requestId, sampleId, initialDatashe
     </div><div className="tr-details-page-header__actions">
       {canChangeMethods ? <SecondaryButton leftIcon="plus" onClick={() => { setMethodDraft(''); setMethodError(''); setMethodModal('add'); }}>Add Method</SecondaryButton> : null}
       {!loading && runtime?.canExecute && request.canWork ? <SecondaryButton leftIcon="plus" to={`/samples/${sampleId}/data_sheets/${runtime.datasheet.id}`}>Add Results</SecondaryButton> : null}
+      {!loading && runtime ? <PrimaryButton leftIcon="file-text" disabled={printing} onClick={printDatasheet}>{printing ? 'Preparing PDF...' : 'Print'}</PrimaryButton> : null}
     </div></section></PageHeader>
     <main className="smplfy-tr-details-page bg-body-tertiary min-vh-100"><div className="row g-3 align-items-stretch"><section className="col-12 col-xl min-w-0"><div className="tr-details-workspace">
       {error ? <div className="alert alert-danger" role="alert">{error}<button type="button" className="btn btn-link" onClick={() => setReload((value) => value + 1)}>Retry</button></div> : null}
       {methods.length > 1 ? <MethodSwitcher methods={methods} selectedMethodId={selectedMethod?.id} canDeleteMethod={canDelete}
         onSelectMethod={setSelectedId} onDeleteMethod={() => { setMethodToDelete(selectedMethod); setMethodError(''); setMethodModal('delete'); }} /> : null}
       <section className="tr-details-page__content"><div className={`smplfy-card card smplfy-tr-details-content flex-fill ${runtime ? 'smplfy-tr-details-content--template' : 'align-items-center justify-content-center text-center text-secondary'}`}>
-        {loading ? <AppLoader message="Loading method..." /> : runtime ? <div className="tr-details-template"><TemplateCanvas model={runtime.model} mode="view" occurrences={runtime.capture.occurrences} dataContext={runtime.dataContext}
+        {loading ? <AppLoader message="Loading method..." /> : runtime ? <div ref={templateRoot} className="tr-details-template"><TemplateCanvas model={runtime.model} mode="view" occurrences={runtime.capture.occurrences} dataContext={runtime.dataContext}
           values={Object.fromEntries(runtime.capture.values.map((value) => [valueKey(value.fieldId, value.occurrenceId), value]))} validation={runtime.validation} /></div>
           : <div className="tr-details-page__placeholder">No methods have been added for this test request yet.</div>}
       </div></section>
