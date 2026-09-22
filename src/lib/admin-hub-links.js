@@ -32,7 +32,7 @@ const rawSections = [
   ] },
   { title: 'System Settings', icon: 'system-settings', links: [
     ['Organization Settings', '/organization_settings'],
-    ['Data Transfer', null],
+    ['Data Transfer', '/data_transfer'],
     ['Custom Css', '/custom_css'],
     ['Workflow Management', '/workflow_management'],
     ['Template Management', '/master_template_management'],

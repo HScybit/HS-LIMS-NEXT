@@ -1,0 +1,91 @@
+// Data Transfer page styling, ported from the PERN app's data-transfer.scss.
+.data-transfer-page {
+  --data-transfer-border: var(--smplfy-primitive-neutral-300);
+  --data-transfer-surface: var(--smplfy-primitive-neutral-100);
+  --data-transfer-muted: var(--smplfy-semantic-color-text-muted);
+  --data-transfer-text: var(--smplfy-semantic-color-text-default);
+  width: 100%; min-height: 100%; padding: 16px; background: var(--smplfy-primitive-neutral-200);
+  display: flex; flex: 0 0 auto; flex-direction: column; gap: 10px; color: var(--data-transfer-text);
+}
+.data-transfer-page h2, .data-transfer-page h3, .data-transfer-page p { margin: 0; }
+.data-transfer-loading { min-height: 280px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--data-transfer-muted); }
+.data-transfer-commandbar {
+  width: 100%; min-height: 72px; padding: 12px 16px; border-color: var(--data-transfer-border) !important;
+  background: var(--data-transfer-surface); display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+}
+.data-transfer-commandbar__identity, .data-transfer-workspace__title { min-width: 0; display: flex; align-items: center; gap: 13px; }
+.data-transfer-commandbar__identity { margin-right: auto; flex: 1 1 auto; }
+.data-transfer-commandbar__actions { display: flex; align-items: flex-end; gap: 8px; }
+.data-transfer-icon, .data-transfer-entity-summary__icon, .data-transfer-upload-zone__icon {
+  width: 40px; height: 40px; border: 1px solid var(--smplfy-primitive-blue-300); border-radius: 10px;
+  background: var(--smplfy-primitive-blue-50); color: var(--smplfy-primitive-blue-600);
+  display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center;
+}
+.data-transfer-eyebrow, .data-transfer-panel__step {
+  display: block; margin-bottom: 2px; color: var(--smplfy-primitive-blue-600); font-size: 11px;
+  line-height: 15px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+.data-transfer-commandbar h2, .data-transfer-workspace__header h2 { color: var(--data-transfer-text); font-size: 19px; line-height: 24px; font-weight: 650; letter-spacing: -.02em; }
+.data-transfer-commandbar h2 { font-size: 17px; line-height: 22px; }
+.data-transfer-commandbar p, .data-transfer-workspace__header p, .data-transfer-panel__header p { margin-top: 2px; color: var(--data-transfer-muted); font-size: 13px; line-height: 18px; }
+.data-transfer-mode-tabs { padding: 4px; border: 1px solid var(--data-transfer-border); border-radius: 9px; background: var(--smplfy-primitive-neutral-200); display: inline-flex; gap: 3px; }
+.data-transfer-mode-tabs button {
+  min-width: 108px; height: 36px; padding: 0 13px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--smplfy-primitive-neutral-700); display: inline-flex; align-items: center; justify-content: center;
+  gap: 7px; font-size: 13px; line-height: 18px; font-weight: 600;
+}
+.data-transfer-mode-tabs button.is-selected { background: var(--data-transfer-surface); color: var(--smplfy-primitive-blue-600); box-shadow: 0 1px 3px rgba(11, 18, 24, .12); }
+.data-transfer-mode-tabs button:focus-visible { outline: none; box-shadow: var(--smplfy-field-shadow-focused, 0 0 0 3px var(--smplfy-primitive-blue-200)); }
+.data-transfer-mode-tabs button:disabled { cursor: not-allowed; opacity: .6; }
+.data-transfer-workspace { min-width: 0; flex: 0 0 auto; overflow: hidden; border-color: var(--data-transfer-border) !important; background: var(--data-transfer-surface); }
+.data-transfer-workspace__header { min-height: 72px; padding: 12px 16px; border-bottom: 1px solid var(--data-transfer-border); display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.data-transfer-workspace__body { padding: 16px; }
+.data-transfer-workspace__content { display: flex; flex-direction: column; gap: 12px; }
+.data-transfer-entity-summary { overflow: hidden; border: 1px solid var(--smplfy-primitive-blue-200); border-radius: 10px; background: var(--smplfy-primitive-blue-50); }
+.data-transfer-entity-summary__header { padding: 10px 12px; display: grid; grid-template-columns: 40px minmax(280px, 520px) minmax(0, 1fr); align-items: center; gap: 12px; }
+.data-transfer-entity-summary__header > .smplfy-status-pill { justify-self: end; }
+.data-transfer-type-field { width: 100%; }
+.data-transfer-type-field .form-label { margin-bottom: 4px; font-size: 12px; font-weight: 600; }
+.data-transfer-export-field code, .data-transfer-field-key { border: 1px solid var(--data-transfer-border); border-radius: 5px; background: var(--data-transfer-surface); color: var(--smplfy-primitive-neutral-700); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; line-height: 16px; }
+.data-transfer-panel { padding: 14px; border: 1px solid var(--data-transfer-border); border-radius: 10px; background: var(--data-transfer-surface); display: flex; flex-direction: column; gap: 12px; }
+.data-transfer-panel__header, .data-transfer-mapping-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.data-transfer-panel__header > div:first-child, .data-transfer-mapping-heading > div:first-child { min-width: 0; }
+.data-transfer-panel__header h3, .data-transfer-mapping-heading h3 { color: var(--data-transfer-text); font-size: 16px; line-height: 21px; font-weight: 650; letter-spacing: -.015em; }
+.data-transfer-panel__actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 8px; }
+.data-transfer-panel__actions .form-select { width: auto; min-width: 138px; }
+.data-transfer-upload-zone { min-height: 88px; padding: 12px; border: 1px dashed var(--smplfy-primitive-blue-350); border-radius: 10px; background: var(--smplfy-primitive-blue-50); display: flex; align-items: center; gap: 14px; }
+.data-transfer-upload-zone__icon { width: 46px; height: 46px; background: var(--data-transfer-surface); }
+.data-transfer-upload-zone__field { width: min(100%, 680px); }
+.data-transfer-mapping-heading { align-items: center; padding-top: 2px; }
+.data-transfer-mapping-table { max-height: 520px; border: 1px solid var(--data-transfer-border); border-radius: 10px; overflow: auto; }
+.data-transfer-mapping-table .smplfy-table { --smplfy-table-min-width: 820px; --smplfy-table-head-padding-y: 11px; --smplfy-table-cell-padding-y: 12px; --smplfy-table-cell-padding-x: 14px; }
+.data-transfer-mapping-table thead th { position: sticky; top: 0; z-index: 1; background: var(--data-transfer-surface); }
+.data-transfer-mapping-table th:first-child { width: 24%; } .data-transfer-mapping-table th:nth-child(2) { width: 26%; } .data-transfer-mapping-table th:nth-child(3) { width: 36%; } .data-transfer-mapping-table th:last-child { width: 14%; }
+.data-transfer-field-key { display: inline-block; max-width: 100%; padding: 4px 7px; overflow-wrap: anywhere; }
+.data-transfer-field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.data-transfer-export-field { min-height: 68px; padding: 12px; border: 1px solid var(--data-transfer-border); border-radius: 8px; display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.data-transfer-export-field:hover, .data-transfer-export-field.is-selected { border-color: var(--smplfy-primitive-blue-400); background: var(--smplfy-primitive-blue-50); }
+.data-transfer-export-field.is-selected { box-shadow: inset 0 0 0 1px var(--smplfy-primitive-blue-300); }
+.data-transfer-export-field__copy { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.data-transfer-export-field__copy strong { font-size: 13px; line-height: 18px; font-weight: 650; }
+.data-transfer-export-field code { width: fit-content; max-width: 100%; padding: 2px 6px; overflow-wrap: anywhere; }
+.data-transfer-message.alert { padding: 11px 13px; border-radius: 8px; font-size: 13px; line-height: 18px; }
+.data-transfer-message .progress { height: 16px; }
+.data-transfer-action-bar { padding: 13px 14px; border: 1px solid var(--data-transfer-border); border-radius: 9px; background: var(--smplfy-primitive-neutral-200); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.data-transfer-action-bar > div { min-width: 0; display: flex; align-items: flex-start; gap: 9px; color: var(--data-transfer-muted); font-size: 12px; line-height: 17px; }
+.data-transfer-action-bar span { display: flex; flex-direction: column; }
+.data-transfer-action-bar strong { color: var(--data-transfer-text); font-size: 13px; line-height: 18px; font-weight: 650; }
+@media (max-width: 767.98px) {
+  .data-transfer-page { padding: 12px; gap: 12px; }
+  .data-transfer-commandbar, .data-transfer-workspace__header { padding: 16px; align-items: stretch; flex-direction: column; }
+  .data-transfer-commandbar__actions { align-items: stretch; flex-direction: column; }
+  .data-transfer-entity-summary__header { grid-template-columns: 40px minmax(0, 1fr); }
+  .data-transfer-entity-summary__header > .smplfy-status-pill { grid-column: 2; justify-self: start; }
+  .data-transfer-panel__header, .data-transfer-mapping-heading, .data-transfer-action-bar { align-items: stretch; flex-direction: column; }
+  .data-transfer-action-bar .smplfy-btn { width: 100%; }
+}
+@media (max-width: 575.98px) {
+  .data-transfer-mode-tabs, .data-transfer-mode-tabs button { width: 100%; }
+  .data-transfer-upload-zone { align-items: flex-start; flex-direction: column; }
+  .data-transfer-field-grid { grid-template-columns: minmax(0, 1fr); }
+}

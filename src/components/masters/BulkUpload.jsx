@@ -18,6 +18,21 @@ export async function downloadBulkWorkbook(path, fileName) {
   link.href = url; link.download = fileName; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// One staged upload per request id: retrying the same command after an unknown result finds the earlier batch.
+export function bulkUploadCommand(resource, file) {
+  return { id: crypto.randomUUID(), resource, file, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+}
+
+export async function stageBulkUpload(command, signal) {
+  const csrf = document.cookie.split('; ').find(item => item.startsWith('sampleify_csrf='))?.slice('sampleify_csrf='.length) ?? '';
+  const response = await fetch(`/api/master-bulk?resource=${command.resource}`, { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal,
+    headers: { 'Content-Type': 'application/octet-stream', 'X-CSRF-Token': csrf, 'X-File-Name': encodeURIComponent(command.file.name),
+      'X-Upload-Request-Id': command.id, 'X-Upload-Time-Zone': command.timeZone }, body: command.file });
+  const result = await response.json();
+  if (!response.ok) { const failure = new Error(result.error?.message ?? 'Upload failed.'); failure.status = response.status; throw failure; }
+  return result;
+}
+
 export function BulkUploadModal({ resource, resources = [resource], open, onClose }) {
   const [model, setModel] = useState(resource);
   const router = useRouter(); const [file, setFile] = useState(null); const [busy, setBusy] = useState('');
@@ -33,16 +48,11 @@ export function BulkUploadModal({ resource, resources = [resource], open, onClos
   async function upload(event) {
     event.preventDefault(); if (running.current) return;
     if (!file) { setError('Choose a CSV or XLSX file.'); return; }
-    if (!pending.current) pending.current = { id: crypto.randomUUID(), resource: model, file, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+    if (!pending.current) pending.current = bulkUploadCommand(model, file);
     running.current = true; setBusy('upload'); setError(''); const command = pending.current;
     controller.current = new AbortController();
     try {
-      const csrf = document.cookie.split('; ').find(item => item.startsWith('sampleify_csrf='))?.slice('sampleify_csrf='.length) ?? '';
-      const response = await fetch(`/api/master-bulk?resource=${command.resource}`, { method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: controller.current.signal,
-        headers: { 'Content-Type': 'application/octet-stream', 'X-CSRF-Token': csrf, 'X-File-Name': encodeURIComponent(command.file.name),
-          'X-Upload-Request-Id': command.id, 'X-Upload-Time-Zone': command.timeZone }, body: command.file });
-      const result = await response.json();
-      if (!response.ok) { const failure = new Error(result.error?.message ?? 'Upload failed.'); failure.status = response.status; throw failure; }
+      const result = await stageBulkUpload(command, controller.current.signal);
       pending.current = null;
       if (mounted.current) { setUncertain(false); onClose(); router.push(`/bulk_uploads/${result.id}`); }
     } catch (failure) {
