@@ -2,9 +2,9 @@
  * Workflow masters, ported from PERN's `workflowV3Catalog.js`.
  *
  * Role codes are the shared catalog's role refs with underscores replaced, so
- * `qa_approver` is named here as `qa-approver`. A transition that lists
- * approver roles raises a real approval request when it is asked for; one that
- * lists none applies as soon as its creator asks.
+ * `qa_approver` is named here as `qa-approver`. Every transition asks any one
+ * of its approver roles (plus the organization's administrators) for approval
+ * and requires a comment, exactly as PERN seeds them.
  */
 export const workflowDefinitions = Object.freeze([
   {
@@ -14,8 +14,7 @@ export const workflowDefinitions = Object.freeze([
     appliesTo: 'sample',
     states: [
       { code: 'RECEIVED', name: 'Sample Received', type: 'initial' },
-      // Test requests are generated once a sample is under analysis.
-      { code: 'ANALYSIS', name: 'Under Analysis', type: 'normal', generateTestRequests: true },
+      { code: 'ANALYSIS', name: 'Under Analysis', type: 'normal' },
       { code: 'RELEASED', name: 'Report Released', type: 'final' },
     ],
     transitions: [
@@ -60,6 +59,43 @@ export const workflowDefinitions = Object.freeze([
     ],
   },
 ]);
+
+/**
+ * Per-state behaviour and role capabilities, mirroring PERN's
+ * `seededWorkflowStatePolicy`: administrators can do everything at every
+ * state, sample custodians and lab heads edit active samples, lab heads,
+ * analysts and custodians allocate, analysts and lab heads record results, and
+ * QA approvers, lab heads and custodians print reports once a sample is past
+ * receipt. Node layout follows the same left-to-right zigzag as PERN.
+ */
+export function workflowStatePolicy(appliesTo, state, index, count, { roles = {}, administratorRoleIds = [] } = {}) {
+  const unique = (...lists) => [...new Set(lists.flat().filter(Boolean))];
+  const roleIds = (...codes) => codes.map((code) => roles[code]).filter(Boolean);
+  const sampleState = appliesTo === 'sample'; const requestState = appliesTo === 'test_request';
+  const activeState = state.type !== 'final';
+  const allocationRoles = roleIds('lab-head', 'analyst', 'sample-manager');
+  const resultRoles = roleIds('analyst', 'lab-head');
+  const editRoles = roleIds('sample-manager', 'lab-head');
+  const printRoles = roleIds('qa-approver', 'lab-head', 'sample-manager');
+  return {
+    displayOrder: index, canvasX: 80 + index * 260, canvasY: 100 + (index % 2) * 170,
+    inputCount: index === 0 ? 0 : 1, outputCount: index === count - 1 ? 0 : 1, badgeStyle: 'light',
+    showSampleEdit: sampleState && activeState,
+    showSampleRetest: sampleState && state.type === 'final',
+    showSampleReissue: sampleState && state.type === 'final',
+    showAddResult: sampleState ? state.code === 'ANALYSIS' : requestState && state.code !== 'APPROVED',
+    generateTestRequests: sampleState && ['RECEIVED', 'ANALYSIS'].includes(state.code),
+    requireAllTestRequestsAllocated: false, requireAllTestRequestsApproved: false,
+    fetchEnvironmentData: sampleState && state.code === 'ANALYSIS',
+    canWorkOnTestRequest: (sampleState || requestState) && activeState,
+    isPositiveTermination: state.type === 'final', enableJobCard: false,
+    accessRoleIds: unique(administratorRoleIds, Object.values(roles)),
+    editRoleIds: unique(administratorRoleIds, sampleState && activeState ? editRoles : []),
+    allocateRoleIds: unique(administratorRoleIds, (sampleState || requestState) && activeState ? allocationRoles : []),
+    addResultRoleIds: unique(administratorRoleIds, (sampleState || requestState) && activeState ? resultRoles : []),
+    printCoaRoleIds: unique(administratorRoleIds, sampleState && state.code !== 'RECEIVED' ? printRoles : []),
+  };
+}
 
 export const workflowByEntity = Object.freeze(Object.fromEntries(
   workflowDefinitions.map((definition) => [definition.appliesTo, definition]),

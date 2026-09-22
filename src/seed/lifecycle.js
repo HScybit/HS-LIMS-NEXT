@@ -192,10 +192,13 @@ async function nextSampleTransition(client, identity, runId) {
     WHERE r.organization_id=$1 AND r.id=$2 AND r.status='active'
     ORDER BY t.display_order LIMIT 1`, [identity.organization_id, runId])).rows[0];
   if (!found) return null;
-  const creators = (await client.query(`SELECT DISTINCT mr.user_id AS "userId"
+  // Administrators may ask for every transition; the seeded story prefers the working roles.
+  const creators = (await client.query(`SELECT mr.user_id AS "userId"
     FROM workflow_transition_creator_roles cr
     JOIN membership_roles mr ON mr.organization_id=cr.organization_id AND mr.role_id=cr.role_id
-    WHERE cr.organization_id=$1 AND cr.transition_id=$2`, [identity.organization_id, found.transitionId])).rows;
+    JOIN roles role ON role.organization_id=mr.organization_id AND role.id=mr.role_id
+    WHERE cr.organization_id=$1 AND cr.transition_id=$2
+    GROUP BY mr.user_id ORDER BY bool_and(role.protected), mr.user_id`, [identity.organization_id, found.transitionId])).rows;
   return { ...found, creatorUserIds: creators.map((row) => row.userId) };
 }
 
@@ -203,7 +206,9 @@ async function pendingAssignee(client, identity, approvalCaseId) {
   return (await client.query(`SELECT a.assigned_user_id AS "assignedUserId"
     FROM approval_assignments a
     JOIN approval_stages s ON s.organization_id=a.organization_id AND s.id=a.approval_stage_id
-    WHERE a.organization_id=$1 AND s.approval_case_id=$2 AND s.status='pending' AND a.status='pending' LIMIT 1`,
+    WHERE a.organization_id=$1 AND s.approval_case_id=$2 AND s.status='pending' AND a.status='pending'
+    ORDER BY EXISTS (SELECT 1 FROM membership_roles mr JOIN roles role ON role.organization_id=mr.organization_id AND role.id=mr.role_id
+      WHERE mr.organization_id=a.organization_id AND mr.user_id=a.assigned_user_id AND role.protected), a.id LIMIT 1`,
   [identity.organization_id, approvalCaseId])).rows[0] ?? null;
 }
 

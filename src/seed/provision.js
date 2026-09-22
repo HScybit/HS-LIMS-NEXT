@@ -25,7 +25,7 @@ import { saveServiceAgreement } from '../masters/service-agreements.js';
 import { registerSample } from '../samples/register.js';
 import { generateTestRequests } from '../test-requests/generate.js';
 import { allocateTestRequest } from '../test-requests/allocate.js';
-import { workflowDefinitions } from './workflow-catalog.js';
+import { workflowDefinitions, workflowStatePolicy } from './workflow-catalog.js';
 import { templateDefinitions } from './template-catalog.js';
 import { ANALYST_REFS, buildOrganizationSlug, buildUserEmailDomain, LAB_ENVIRONMENT, LAB_HEADS, MATERIAL_SUPPLIERS } from './industry-catalog.js';
 
@@ -207,32 +207,30 @@ export async function provisionTemplates(client, identity) {
   return byCode;
 }
 
-async function provisionWorkflow(client, identity, definition, roleIdByCode) {
+async function provisionWorkflow(client, identity, definition, roleIdByCode, administratorRoleIds) {
   const existing = await client.query(`SELECT workflow.id AS "workflowId", version.id AS "versionId"
     FROM workflows workflow JOIN workflow_versions version ON version.organization_id=workflow.organization_id AND version.workflow_id=workflow.id AND version.status='published'
-    WHERE workflow.organization_id=$1 AND workflow.name=$2 ORDER BY version.number DESC LIMIT 1`, [identity.organization_id, definition.name]);
+    WHERE workflow.organization_id=$1 AND (workflow.code=$2 OR workflow.name=$3) ORDER BY version.number DESC LIMIT 1`, [identity.organization_id, definition.code, definition.name]);
   if (existing.rowCount) return { id: existing.rows[0].workflowId, versionId: existing.rows[0].versionId };
 
-  const created = await createWorkflow(client, identity, { code: randomUUID(), name: definition.name, appliesTo: definition.appliesTo });
+  const created = await createWorkflow(client, identity, { code: definition.code, name: definition.name, description: definition.description, appliesTo: definition.appliesTo });
   let revision = created.revision;
   const stateIds = {};
-  for (const state of definition.states) {
+  for (const [index, state] of definition.states.entries()) {
     const saved = await saveWorkflowState(client, identity, created.versionId, revision, {
-      code: state.code, name: state.name, stateType: state.type, showSampleEdit: state.type === 'initial',
-      showAddResult: definition.appliesTo !== 'instrument_service', canWorkOnTestRequest: true,
-      generateTestRequests: Boolean(state.generateTestRequests), isPositiveTermination: state.type === 'final',
+      code: state.code, name: state.name, stateType: state.type,
+      ...workflowStatePolicy(definition.appliesTo, state, index, definition.states.length, { roles: roleIdByCode, administratorRoleIds }),
     });
     stateIds[state.code] = saved.id; revision = saved.revision;
   }
-  const roles = (codes) => (codes ?? []).map((code) => roleIdByCode[code]).filter(Boolean);
+  const roles = (codes) => [...new Set([...administratorRoleIds, ...(codes ?? []).map((code) => roleIdByCode[code]).filter(Boolean)])];
   const transitionIds = {};
-  for (const transition of definition.transitions) {
-    const approvers = roles(transition.approverRoles);
+  for (const [index, transition] of definition.transitions.entries()) {
     const saved = await saveWorkflowTransition(client, identity, created.versionId, revision, {
-      code: transition.code, name: transition.name,
+      code: transition.code, name: transition.name, displayOrder: index,
       sourceStateId: stateIds[transition.from], targetStateId: stateIds[transition.to],
-      creatorRoleIds: roles(transition.creatorRoles),
-      ...(approvers.length ? { approvalMode: 'any', approverStages: [{ stageNumber: 1, roleIds: approvers }] } : {}),
+      creatorRoleIds: roles(transition.creatorRoles), requireComment: true,
+      approvalMode: 'any', approverStages: [{ stageNumber: 1, roleIds: roles(transition.approverRoles) }],
     });
     transitionIds[transition.code] = saved.id; revision = saved.revision;
   }
@@ -246,9 +244,12 @@ async function provisionWorkflow(client, identity, definition, roleIdByCode) {
 export async function provisionWorkflows(client, identity, { catalog, roleIds } = {}) {
   const roleIdByCode = Object.fromEntries((catalog?.roleDefinitions ?? [])
     .map((role) => [role.code, roleIds?.[role.ref]]).filter(([, id]) => id));
+  // The organization's own (protected) administrator roles join every transition and capability, as in PERN.
+  const administratorRoleIds = (await client.query('SELECT id FROM roles WHERE organization_id=$1 AND protected AND active ORDER BY id',
+    [identity.organization_id])).rows.map((row) => row.id);
   const byEntity = {};
   for (const definition of workflowDefinitions) {
-    byEntity[definition.appliesTo] = await provisionWorkflow(client, identity, definition, roleIdByCode);
+    byEntity[definition.appliesTo] = await provisionWorkflow(client, identity, definition, roleIdByCode, administratorRoleIds);
   }
   return { sample: byEntity.sample, testRequest: byEntity.test_request, instrumentService: byEntity.instrument_service, byEntity };
 }
